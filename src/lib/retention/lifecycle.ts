@@ -134,6 +134,34 @@ export async function filterHeldPrivacyRequests(
 }
 
 /**
+ * Filters user IDs to exclude those under an active USER legal hold.
+ */
+export async function filterHeldUsers(
+  txOrPrisma: Prisma.TransactionClient | typeof prisma,
+  userIds: string[]
+): Promise<{ deletableIds: string[]; heldCount: number }> {
+  if (userIds.length === 0) return { deletableIds: [], heldCount: 0 };
+  if (!txOrPrisma?.dataRetentionHold?.findMany) {
+    return { deletableIds: userIds, heldCount: 0 };
+  }
+
+  const holds = await txOrPrisma.dataRetentionHold.findMany({
+    where: {
+      scopeType: 'USER',
+      scopeId: { in: userIds },
+      releasedAt: null,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+    },
+    select: { scopeId: true },
+  });
+
+  const heldIds = new Set(holds.map(h => h.scopeId));
+  const deletableIds = userIds.filter(id => !heldIds.has(id));
+
+  return { deletableIds, heldCount: heldIds.size };
+}
+
+/**
  * Gets all incident IDs that are held and thus protected from cleanup.
  */
 export async function getHeldIncidentIds(
@@ -144,6 +172,25 @@ export async function getHeldIncidentIds(
   const holds = await txOrPrisma.dataRetentionHold.findMany({
     where: {
       scopeType: 'INCIDENT',
+      releasedAt: null,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+    },
+    select: { scopeId: true },
+  });
+  return holds.map(h => h.scopeId);
+}
+
+/**
+ * Gets all user IDs under an active USER legal hold.
+ */
+export async function getHeldUserIds(
+  txOrPrisma: Prisma.TransactionClient | typeof prisma
+): Promise<string[]> {
+  if (!txOrPrisma?.dataRetentionHold?.findMany) return [];
+
+  const holds = await txOrPrisma.dataRetentionHold.findMany({
+    where: {
+      scopeType: 'USER',
       releasedAt: null,
       OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
     },

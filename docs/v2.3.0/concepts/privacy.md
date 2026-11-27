@@ -25,7 +25,11 @@ manual-review flags before executing erasure.
 
 A retention hold takes precedence over scheduled cleanup for the resources in
 scope. Releasing a hold restores normal eligibility but does not promise
-immediate deletion. Encryption-key retirement, database backups, third-party
+immediate deletion. A hold on a user also keeps that person's audit trail through
+retention cleanup: the audit entries they performed and the entries about their
+account. Audit entries that are identified only by an email address (failed
+sign-ins and other sign-in attempts) carry no user and are not covered by the
+hold. Encryption-key retirement, database backups, third-party
 systems, and exported artifacts each have their own lifecycle and must be
 included in the deployment's privacy procedure.
 

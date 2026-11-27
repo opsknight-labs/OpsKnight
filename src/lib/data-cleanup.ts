@@ -6,8 +6,10 @@ import { cleanupOldRollups } from './metric-rollup';
 import {
   filterHeldIncidents,
   filterHeldPrivacyRequests,
+  filterHeldUsers,
   getHeldIncidentIds,
   getHeldPrivacyRequestIds,
+  getHeldUserIds,
 } from './retention/lifecycle';
 import { acquireRetentionResourceLock } from './retention/resource-lock';
 
@@ -16,6 +18,24 @@ export const CLEANUP_MUTEX_LEASE_MS = 15 * 60 * 1000; // 15 minutes
 // The audit trail outlives short log retention so one admin cannot erase it (and the record
 // of the policy change) by setting logRetentionDays to a day.
 export const AUDIT_LOG_MIN_RETENTION_DAYS = 365;
+
+/**
+ * Audit rows that belong to nobody under a USER legal hold: rows the held person performed
+ * (actorId) or that describe them (entity USER). Nulls are kept explicitly because a bare
+ * NOT/notIn drops NULL rows in SQL.
+ */
+export function auditRowsOutsideHeldUsers(
+  heldUserIds: readonly string[]
+): Prisma.AuditLogWhereInput {
+  if (heldUserIds.length === 0) return {};
+  const held = [...heldUserIds];
+  return {
+    AND: [
+      { OR: [{ actorId: null }, { actorId: { notIn: held } }] },
+      { OR: [{ entityType: { not: 'USER' } }, { entityId: null }, { entityId: { notIn: held } }] },
+    ],
+  };
+}
 
 /**
  * Acquires the distributed cleanup mutex lease on RateLimit.
@@ -234,9 +254,10 @@ export async function performDataCleanup(
 
   try {
     // Fetch active held IDs first for hold-aware candidate discovery and standalone exclusions
-    const [allHeldIncidentIds, allHeldPrivacyRequestIds] = await Promise.all([
+    const [allHeldIncidentIds, allHeldPrivacyRequestIds, allHeldUserIds] = await Promise.all([
       getHeldIncidentIds(prisma),
       getHeldPrivacyRequestIds(prisma),
+      getHeldUserIds(prisma),
     ]);
 
     // 1. Find all eligible IDs first, then filter out held resources
@@ -328,7 +349,9 @@ export async function performDataCleanup(
           ...(allHeldIncidentIds.length > 0 ? { incidentId: { notIn: allHeldIncidentIds } } : {}),
         },
       }),
-      prisma.auditLog.count({ where: { createdAt: { lt: auditCutoff } } }),
+      prisma.auditLog.count({
+        where: { createdAt: { lt: auditCutoff }, ...auditRowsOutsideHeldUsers(allHeldUserIds) },
+      }),
       prisma.incidentMetricRollup?.count
         ? prisma.incidentMetricRollup.count({ where: { date: { lt: metricsCutoff } } })
         : Promise.resolve(0),
@@ -652,6 +675,8 @@ export async function performDataCleanup(
     interface ChildRecordWithParent {
       id: string;
       parentId: string | null;
+      /** More parents the child belongs to; it is deleted only when none of them is held. */
+      extraParentIds?: string[];
     }
 
     /**
@@ -665,7 +690,7 @@ export async function performDataCleanup(
      * 3. Records newly discovered held parents so subsequent batches and subsequent steps skip them.
      */
     const deleteChildrenWithParentHoldLock = async (
-      resourceType: 'INCIDENT' | 'PRIVACY_REQUEST',
+      resourceType: 'INCIDENT' | 'PRIVACY_REQUEST' | 'USER',
       initialHeldParentIds: string[],
       fetchCandidates: (excludedParentIds: string[]) => Promise<ChildRecordWithParent[]>,
       deleteBatch: (
@@ -684,10 +709,14 @@ export async function performDataCleanup(
           break;
         }
 
+        const parentsOf = (child: ChildRecordWithParent): string[] => [
+          ...(child.parentId === null ? [] : [child.parentId]),
+          ...(child.extraParentIds ?? []),
+        ];
         const uniqueParentIds = Array.from(
           new Set(
             candidates
-              .map(c => c.parentId)
+              .flatMap(parentsOf)
               .filter((id): id is string => typeof id === 'string' && id.length > 0)
           )
         ).sort();
@@ -707,7 +736,9 @@ export async function performDataCleanup(
               const { deletableIds } =
                 resourceType === 'INCIDENT'
                   ? await filterHeldIncidents(tx, uniqueParentIds)
-                  : await filterHeldPrivacyRequests(tx, uniqueParentIds);
+                  : resourceType === 'USER'
+                    ? await filterHeldUsers(tx, uniqueParentIds)
+                    : await filterHeldPrivacyRequests(tx, uniqueParentIds);
 
               unheldParentIdsSet = new Set(deletableIds);
 
@@ -725,7 +756,7 @@ export async function performDataCleanup(
             }
 
             const deletableChildIds = candidates
-              .filter(c => c.parentId === null || unheldParentIdsSet.has(c.parentId))
+              .filter(c => parentsOf(c).every(parentId => unheldParentIdsSet.has(parentId)))
               .map(c => c.id);
 
             if (deletableChildIds.length > 0) {
@@ -960,16 +991,29 @@ export async function performDataCleanup(
       heldIncidentCount += newlyHeldFromEvents.length;
     }
 
-    auditLogCount = await deleteInBatches(
-      () =>
-        prisma.auditLog.findMany({
-          where: { createdAt: { lt: auditCutoff } },
-          select: { id: true },
+    // A USER legal hold keeps the person's audit trail: rows they performed (actorId) and rows
+    // about them (entity USER). Same lock-and-recheck as incident holds, so a hold placed while
+    // this runs is honoured. shortcut: email-keyed auth rows (failed sign-ins, SSO attempts)
+    // carry no user id and are not covered; match them by email if that is ever required.
+    const { deletedCount: deletedAuditLogs } = await deleteChildrenWithParentHoldLock(
+      'USER',
+      allHeldUserIds,
+      async excludedUserIds => {
+        const rows = await prisma.auditLog.findMany({
+          where: { createdAt: { lt: auditCutoff }, ...auditRowsOutsideHeldUsers(excludedUserIds) },
+          select: { id: true, actorId: true, entityType: true, entityId: true },
           orderBy: { id: 'asc' },
           take: BATCH_SIZE,
-        }),
-      ids => prisma.auditLog.deleteMany({ where: { id: { in: ids } } })
+        });
+        return rows.map(row => ({
+          id: row.id,
+          parentId: row.actorId ?? null,
+          extraParentIds: row.entityType === 'USER' && row.entityId ? [row.entityId] : [],
+        }));
+      },
+      (tx, ids) => tx.auditLog.deleteMany({ where: { id: { in: ids } } })
     );
+    auditLogCount = deletedAuditLogs;
 
     logCount = await deleteInBatches(
       () =>
