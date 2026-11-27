@@ -532,6 +532,13 @@ export function updateDataForCommand(
     }
 
     case 'SNOOZE':
+      // The snooze wakes as OPEN, so an acknowledgement taken before it must not outlive it
+      // (the same operational reset as UNACKNOWLEDGE; the first-ACK SLA sample is kept).
+      if (incident.status === 'ACKNOWLEDGED') {
+        data.acknowledgedAt = null;
+        data.acknowledgedById = null;
+        data.acknowledgedVia = null;
+      }
       data.escalationStatus = 'PAUSED';
       data.nextEscalationAt = null;
       if (input.snoozedUntil !== undefined) data.snoozedUntil = input.snoozedUntil;
