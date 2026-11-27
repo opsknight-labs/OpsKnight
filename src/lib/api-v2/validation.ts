@@ -3,6 +3,7 @@ import { STATUS_ANNOUNCEMENT_TYPES } from '@/lib/validation';
 import { APP_ROLES, isApiScope } from '@/lib/authorization';
 import { INTEGRATION_TYPES } from '@/lib/integrations/catalog';
 import { isValidTimeZone } from '@/lib/timezone';
+import { MAX_ESCALATION_DELAY_MINUTES } from '@/lib/escalation/policy-validation';
 
 const IanaTimeZoneSchema = z
   .string()
@@ -190,7 +191,7 @@ export const EscalationStepConditionSchema = z.object({
 });
 
 export const EscalationStepSchema = z.object({
-  delayMinutes: z.number().int().min(0).max(1440),
+  delayMinutes: z.number().int().min(0).max(MAX_ESCALATION_DELAY_MINUTES),
   targetType: z.enum(['USER', 'SCHEDULE', 'TEAM']),
   targetId: z.string().trim().min(1),
   notificationChannels: z

@@ -2242,7 +2242,7 @@
     "routeSha256": "dec1048602565bb7ed6ff36d7715e7fec03a6ebf45b4829c809891bc862c2780",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-approval-natural.test.ts",
-    "contractSha256": "f7bb14d667c543848d0052c77d80492dc6f4aa50dfed99e5dc4569b41faf8ca4",
+    "contractSha256": "6a11e7e73e4a26fd8df54338d6f834f9bfa91cc5ef87bbcc81496e8e3f6197ed",
     "actions": ["escalation_policy.manage"]
   },
   "acknowledgeIncident": {

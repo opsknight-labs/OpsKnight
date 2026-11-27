@@ -3,6 +3,7 @@
  */
 
 import { finalizeOpenApiSpec } from './openapi-finalize';
+import { MAX_ESCALATION_DELAY_MINUTES } from '@/lib/escalation/policy-validation';
 
 function buildBaseSpec(): Record<string, unknown> {
   return {
@@ -1838,7 +1839,7 @@ function buildBaseSpec(): Record<string, unknown> {
                         type: 'object',
                         required: ['delayMinutes', 'targetType', 'targetId'],
                         properties: {
-                          delayMinutes: { type: 'integer', minimum: 0, maximum: 1440 },
+                          delayMinutes: { type: 'integer', minimum: 0, maximum: MAX_ESCALATION_DELAY_MINUTES },
                           targetType: { type: 'string', enum: ['USER', 'SCHEDULE', 'TEAM'] },
                           targetId: { type: 'string' },
                           notificationChannels: { type: 'array', items: { type: 'string' } },
