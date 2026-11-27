@@ -167,7 +167,10 @@ describe('database capacity query', () => {
       .map(([strings]) => strings.join('?'))
       .find(text => text.includes('longTransactions'));
     expect(sql).toBeDefined();
-    const longTransactions = sql?.slice(sql.indexOf('WHERE datname'), sql.indexOf('"longTransactions"'));
+    const longTransactions = sql?.slice(
+      sql.indexOf('WHERE datname'),
+      sql.indexOf('"longTransactions"')
+    );
     expect(longTransactions).toContain("state = 'active'");
     expect(longTransactions).toContain("'pg_dump'");
     expect(longTransactions).toContain("'pg_basebackup'");
