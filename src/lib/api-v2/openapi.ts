@@ -1103,18 +1103,12 @@ function buildBaseSpec(): Record<string, unknown> {
                     serviceNotificationChannels: {
                       type: 'array',
                       uniqueItems: true,
-                      maxItems: 7,
+                      maxItems: 3,
+                      description:
+                        'Service-level channels support Slack, Teams and webhooks only; use escalation policies or user preferences for email, SMS, push and WhatsApp. A legacy EMAIL, SMS, PUSH or WHATSAPP value read from the service must be removed from the list before it is sent back.',
                       items: {
                         type: 'string',
-                        enum: [
-                          'SLACK',
-                          'WEBHOOK',
-                          'EMAIL',
-                          'SMS',
-                          'PUSH',
-                          'WHATSAPP',
-                          'MICROSOFT_TEAMS',
-                        ],
+                        enum: ['SLACK', 'WEBHOOK', 'MICROSOFT_TEAMS'],
                       },
                     },
                     serviceNotifyOnTriggered: { type: 'boolean' },

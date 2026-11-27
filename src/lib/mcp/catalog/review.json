@@ -3461,7 +3461,7 @@
     "risk": "R2",
     "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
-    "routeSha256": "88c1240c298c6a86679a639ed791993f10761f56c128fa1ec0812b64aabeddbe",
+    "routeSha256": "43489036c9d84b56fe41425da744ca343a7db251df23d1448079d8ad4abc0909",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
     "contractSha256": "ea5c2aae3731c70d525b2c2e4c29f8372de1992cc0341d941d8801a55817a182",
@@ -3472,10 +3472,10 @@
     "risk": "R2",
     "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
-    "routeSha256": "88c1240c298c6a86679a639ed791993f10761f56c128fa1ec0812b64aabeddbe",
+    "routeSha256": "43489036c9d84b56fe41425da744ca343a7db251df23d1448079d8ad4abc0909",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-approval-services.test.ts",
-    "contractSha256": "92c54dc6a2bd4efd1ef244aa5d88f8f749133abac5d5d01b217127f64960a69f",
+    "contractSha256": "d1fe8017dceed4d88ca1399743ad767a1795a015d9040a5cd87c6d58c73235e8",
     "actions": ["service.update"]
   },
   "getServiceSupportHours": {

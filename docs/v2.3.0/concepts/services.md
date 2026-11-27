@@ -218,6 +218,15 @@ destinations, and outbound webhook integrations, subject to the corresponding
 workspace connection. Slack channels must be joined/connected where required;
 Teams discovery and linking require a valid tenant installation and permissions.
 
+Service-level channels support Slack, Teams and webhooks only. Use escalation
+policies or user notification preferences for email, SMS, push and WhatsApp: the
+UI, the v2 API (`PATCH /api/v2/services/{id}/notification-settings`) and MCP
+refuse to save those four channels, because a service notification never sends
+them. A service that still lists one from before is read as stored, sends nothing
+to it (the dispatcher logs one warning), shows a notice on the Notifications tab,
+and drops the value the next time the form is saved. Over the API, remove a
+legacy value from the list before sending it back.
+
 Disabling Slack as a service notification channel disables enabled Slack
 destinations for that service. Saving a channel name is not proof of delivery.
 For each selected event, perform a controlled incident transition and inspect

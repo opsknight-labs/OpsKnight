@@ -13,7 +13,11 @@ import { logAudit } from '@/lib/audit';
 import { assertAdmin, assertCanModifyService } from '@/lib/rbac';
 import { assertServiceNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
 import { assertJiraIssueType, assertJiraProjectKey, parseLabels } from '@/lib/jira-validation';
-import { parseServiceNotificationChannels } from '@/lib/service-notification-settings';
+import {
+  isDispatchableServiceChannel,
+  parseServiceNotificationChannels,
+  unsupportedServiceChannels,
+} from '@/lib/service-notification-settings';
 import { setServiceWarRoomPolicy } from '@/lib/incident-collaboration/policy';
 import { revokeSubscriptionsLosingLastSelection } from '@/lib/status-pages/subscriber-administration';
 import type {
@@ -217,7 +221,21 @@ function isSlackWebhookUrl(value: string) {
 
 export async function updateServiceNotificationSettings(serviceId: string, formData: FormData) {
   const currentUser = await assertCanModifyService(serviceId);
-  const channels = parseServiceNotificationChannels(formData);
+  let channels = parseServiceNotificationChannels(formData);
+  const unsupported = unsupportedServiceChannels(channels);
+  if (unsupported.length > 0) {
+    // EMAIL, SMS, PUSH and WHATSAPP never deliver at service level. A value that is already stored
+    // (legacy row, older form) is dropped on this save; adding a new one is refused.
+    const stored = await prisma.service.findUnique({
+      where: { id: serviceId },
+      select: { serviceNotificationChannels: true },
+    });
+    const storedChannels = new Set<string>(stored?.serviceNotificationChannels ?? []);
+    if (unsupported.some(channel => !storedChannels.has(channel))) {
+      return redirect(`/services/${serviceId}?tab=notifications&error=unsupported-channel`);
+    }
+    channels = channels.filter(channel => isDispatchableServiceChannel(channel));
+  }
   const isSlackEnabled = channels.includes('SLACK');
   const slackChannel = isSlackEnabled
     ? formData.has('slackChannel')

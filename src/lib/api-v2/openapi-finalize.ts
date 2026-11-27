@@ -1859,6 +1859,8 @@ const extraSchemas: Json = {
       revision: { type: 'integer' },
       serviceNotificationChannels: {
         type: 'array',
+        description:
+          'Stored channels. Only SLACK, WEBHOOK and MICROSOFT_TEAMS are delivered; a legacy EMAIL, SMS, PUSH or WHATSAPP value is ignored and cannot be written back.',
         items: {
           type: 'string',
           enum: ['SLACK', 'WEBHOOK', 'EMAIL', 'SMS', 'PUSH', 'WHATSAPP', 'MICROSOFT_TEAMS'],

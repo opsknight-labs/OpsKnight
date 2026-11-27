@@ -2,6 +2,7 @@
 import prisma from './prisma';
 import { incidentNotificationPriority } from './notification-priority';
 import { logger } from './logger';
+import { unsupportedServiceChannels } from './service-notification-settings';
 import { enqueueCentralNotification } from './notification-control-plane';
 import { getBaseUrl } from './env-validation';
 import type { SlackCardEvent } from './slack/incident-card';
@@ -179,6 +180,13 @@ export async function sendServiceNotifications(
     const rollUp = rollUpParentId ? { rollUpParentId } : {};
     const incidentSourceId = `${service.id}:${rollUpParentId ?? incidentId}`;
     const serviceChannels = service.serviceNotificationChannels || [];
+    const ignoredChannels = unsupportedServiceChannels(serviceChannels);
+    if (ignoredChannels.length > 0) {
+      logger.warn('service_notifications.unsupported_channels_ignored', {
+        serviceId: service.id,
+        channels: ignoredChannels,
+      });
+    }
     const errors: string[] = [];
     const incidentPresentation = {
       id: incident.id,

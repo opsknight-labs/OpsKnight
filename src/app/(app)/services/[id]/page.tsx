@@ -28,6 +28,10 @@ import { logger } from '@/lib/logger';
 import { resolveIntegrationKeysForDisplay } from '@/lib/integrations/display-key';
 import { getAppUrl } from '@/lib/app-url';
 import {
+  isDispatchableServiceChannel,
+  SERVICE_CHANNEL_UNSUPPORTED_MESSAGE,
+} from '@/lib/service-notification-settings';
+import {
   getWebhookUrl,
   INTEGRATION_KEY_HEADER,
   URL_ONLY_INTEGRATION_TYPES,
@@ -1111,13 +1115,20 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
 
   // Count of configured notification channels / webhooks
   const activeNotificationDestinationsCount =
-    (service.serviceNotificationChannels?.length || 0) +
+    ((service.serviceNotificationChannels as string[] | undefined)?.filter(
+      isDispatchableServiceChannel
+    ).length || 0) +
     (service.webhookIntegrations?.filter((w: WebhookIntegration) => w.enabled)?.length || 0);
 
   // --- TAB 4: NOTIFICATIONS CONTENT ---
   const notificationsContent = (
     <div className="space-y-3.5">
       {isSaved && <ServiceSettingsFlashToast serviceId={id} />}
+      {errorCode === 'unsupported-channel' && (
+        <InlineNotice tone="error" title="Channel not supported">
+          {SERVICE_CHANNEL_UNSUPPORTED_MESSAGE} Nothing was saved.
+        </InlineNotice>
+      )}
       {errorCode === 'invalid-slack-webhook' && (
         <InlineNotice tone="error" title="Invalid Slack webhook URL">
           Use an incoming-webhook URL from Slack (https://hooks.slack.com/...). Nothing was saved.

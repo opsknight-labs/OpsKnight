@@ -39,6 +39,11 @@ import Link from 'next/link';
 import { SlackLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
 import AddWebhookDialog from '@/components/service/AddWebhookDialog';
 import { updateServiceNotificationSettings } from '@/app/(app)/services/actions';
+import { InlineNotice } from '@/components/ui/InlineNotice';
+import {
+  isDispatchableServiceChannel,
+  unsupportedServiceChannels,
+} from '@/lib/service-notification-settings';
 
 type ServiceNotificationSettingsProps = {
   serviceId: string;
@@ -79,7 +84,11 @@ export default function ServiceNotificationSettings({
   children,
 }: ServiceNotificationSettingsProps) {
   const saveNotificationSettings = updateServiceNotificationSettings.bind(null, serviceId);
-  const [channels, setChannels] = useState<string[]>(serviceNotificationChannels || []);
+  // Legacy EMAIL/SMS/PUSH/WHATSAPP values never deliver; they are left out of the form and dropped on save.
+  const ignoredStoredChannels = unsupportedServiceChannels(serviceNotificationChannels || []);
+  const [channels, setChannels] = useState<string[]>(
+    (serviceNotificationChannels || []).filter(isDispatchableServiceChannel)
+  );
   const [notifyOnTriggered, setNotifyOnTriggered] = useState(serviceNotifyOnTriggered ?? true);
   const [notifyOnAck, setNotifyOnAck] = useState(serviceNotifyOnAck ?? true);
   const [notifyOnResolved, setNotifyOnResolved] = useState(serviceNotifyOnResolved ?? true);
@@ -511,6 +520,14 @@ export default function ServiceNotificationSettings({
           </span>
         </div>
       </div>
+
+      {ignoredStoredChannels.length > 0 && (
+        <InlineNotice tone="warning" title="Some stored channels are never sent">
+          This service still lists {ignoredStoredChannels.join(', ')}. Service-level channels support
+          Slack, Teams and webhooks only, so these send nothing. Saving this form removes them; use
+          escalation policies or user notification preferences for email, SMS, push and WhatsApp.
+        </InlineNotice>
+      )}
 
       {/* FORM: Notification Channels and Event Triggers */}
       <form

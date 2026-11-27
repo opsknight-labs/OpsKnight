@@ -7,15 +7,21 @@ import { etagHeaders, preconditionFailed, requireRevisionIfMatch } from '@/lib/a
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { serviceReadWhere } from '@/lib/authorization-filters';
 import { AppError } from '@/lib/errors';
-import { SERVICE_NOTIFICATION_CHANNEL_VALUES } from '@/lib/service-notification-settings';
+import {
+  SERVICE_CHANNEL_UNSUPPORTED_MESSAGE,
+  SERVICE_DISPATCHABLE_CHANNEL_VALUES,
+} from '@/lib/service-notification-settings';
 
 const paramsSchema = z.object({ id: z.string().trim().min(1).max(100) }).strict();
-const channelSchema = z.enum(SERVICE_NOTIFICATION_CHANNEL_VALUES);
+// Reads still return legacy EMAIL/SMS/PUSH/WHATSAPP values; writes accept only what the dispatcher sends.
+const channelSchema = z.enum(SERVICE_DISPATCHABLE_CHANNEL_VALUES, {
+  errorMap: () => ({ message: SERVICE_CHANNEL_UNSUPPORTED_MESSAGE }),
+});
 const settingsSchema = z
   .object({
     serviceNotificationChannels: z
       .array(channelSchema)
-      .max(7)
+      .max(3)
       .refine(channels => new Set(channels).size === channels.length, 'Channels must be unique')
       .optional(),
     serviceNotifyOnTriggered: z.boolean().optional(),

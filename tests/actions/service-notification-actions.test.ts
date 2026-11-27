@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   assertCanModifyService: vi.fn(),
   serviceUpdate: vi.fn(),
+  serviceFindUnique: vi.fn(),
   slackDestinationUpdateMany: vi.fn(),
   logAudit: vi.fn(),
   revalidatePath: vi.fn(),
@@ -18,6 +19,7 @@ vi.mock('@/lib/prisma', () => ({
   default: {
     service: {
       update: mocks.serviceUpdate,
+      findUnique: mocks.serviceFindUnique,
     },
     slackDestination: {
       updateMany: mocks.slackDestinationUpdateMany,
@@ -44,6 +46,7 @@ describe('updateServiceNotificationSettings', () => {
     vi.clearAllMocks();
     mocks.assertCanModifyService.mockResolvedValue({ id: 'user-1' });
     mocks.serviceUpdate.mockResolvedValue({});
+    mocks.serviceFindUnique.mockResolvedValue({ serviceNotificationChannels: [] });
   });
 
   it('explicitly nullifies slackChannel and slackWebhookUrl when SLACK is unchecked', async () => {
@@ -106,5 +109,31 @@ describe('updateServiceNotificationSettings', () => {
       '/services/svc-1?tab=notifications&error=invalid-slack-webhook'
     );
     expect(mocks.serviceUpdate).not.toHaveBeenCalled();
+  });
+
+  it('refuses a newly added channel the dispatcher never sends to', async () => {
+    const formData = new FormData();
+    formData.set('serviceNotificationChannelsJson', JSON.stringify(['WEBHOOK', 'EMAIL']));
+
+    await updateServiceNotificationSettings('svc-1', formData);
+
+    expect(mocks.redirect).toHaveBeenCalledWith(
+      '/services/svc-1?tab=notifications&error=unsupported-channel'
+    );
+    expect(mocks.serviceUpdate).not.toHaveBeenCalled();
+  });
+
+  it('drops a legacy stored EMAIL or SMS value on save instead of failing the form', async () => {
+    mocks.serviceFindUnique.mockResolvedValue({ serviceNotificationChannels: ['WEBHOOK', 'SMS'] });
+    const formData = new FormData();
+    formData.set('serviceNotificationChannelsJson', JSON.stringify(['WEBHOOK', 'SMS']));
+
+    await updateServiceNotificationSettings('svc-1', formData);
+
+    expect(mocks.serviceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ serviceNotificationChannels: ['WEBHOOK'] }),
+      })
+    );
   });
 });
