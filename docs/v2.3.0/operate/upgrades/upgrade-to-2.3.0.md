@@ -55,6 +55,10 @@ not UTC (Prisma 5 could miss rows or shift raw-SQL writes by the offset). No act
 ### Failed connections are retried consistently
 Every connection failure now carries a code, and a first-connection failure during a database outage is
 classified retryable, like later outages. Escalation steps retry instead of failing permanently.
+## Password hashes remain compatible
+bcryptjs 3 writes new local-password hashes with the `$2b$` prefix instead of `$2a$`.
+Existing password hashes remain valid; no password reset or database rewrite is required.
+The hashing cost stays at 12, and the password policy keeps its 72-byte UTF-8 limit.
 ## Prerequisites
 - You run OpsKnight 2.2.x. From earlier versions, upgrade to 2.2.x first.
 - A restored-and-verified backup with the matching encryption keys and secrets.

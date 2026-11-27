@@ -20,6 +20,14 @@ describe('product docs search', () => {
     expect(await searchProductDocs('how do I')).toEqual([]);
   });
 
+  it('returns password hash compatibility guidance for the 2.3 upgrade', async () => {
+    const hits = await searchProductDocs('password hashes remain compatible bcryptjs upgrade');
+    const upgrade = hits.find(hit => hit.url.includes('/upgrades/upgrade-to-2.3.0/'));
+    expect(upgrade?.heading).toBe('Password hashes remain compatible');
+    expect(upgrade?.text).toContain('bcryptjs');
+    expect(upgrade?.text).toContain('72');
+  });
+
   it('stems and drops stop words', () => {
     expect(docsTerms('How do I configure the escalations?')).toEqual(['configure', 'escalation']);
   });

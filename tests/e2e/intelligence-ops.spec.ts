@@ -507,7 +507,7 @@ test.describe('operations intelligence surfaces', () => {
       // On a phone the strip is reachable without scrolling past the header.
       expect((await strip.boundingBox())!.y).toBeLessThan(viewport.height);
       await strip.getByRole('link', { name: 'Likely cause: checkout v57 rollout' }).click();
-      const inspector = page.getByRole('dialog', { name: 'Insights' });
+      const inspector = page.getByRole('dialog', { name: 'Investigation' });
       await expect(inspector.getByRole('region', { name: 'Possible causes' })).toBeVisible();
       await expect(page).toHaveURL(/[?&]insights=why/);
       for (const theme of ['light', 'dark'] as const) {

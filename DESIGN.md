@@ -6,7 +6,7 @@ colors:
   surface-card: '#ffffff'
   surface-muted: '#f1f5f9'
   ink-foreground: '#0f172a'
-  ink-muted: '#64748b'
+  ink-muted: '#475569'
   hairline: '#e2e8f0'
   action-slate: '#334155'
   action-slate-foreground: '#f8fafc'
@@ -190,7 +190,7 @@ light and a dark value, and components use the role through Tailwind, never the 
 - **Card** (`#ffffff` / dark `#121214`; `bg-card`, `bg-popover`): cards, tables, popovers, dialogs.
 - **Muted** (`#f1f5f9` / dark `#27272a`; `bg-muted`, `bg-accent`, `bg-secondary`): hover rows, subtle fills, secondary buttons.
 - **Foreground** (`#0f172a` / dark `#f8fafc`; `text-foreground`): primary text.
-- **Muted Foreground** (`#64748b` / dark `#a1a1aa`; `text-muted-foreground`): secondary text, meta, placeholders.
+- **Muted Foreground** (`#475569` / dark `#a1a1aa`; `text-muted-foreground`): secondary text, meta, placeholders. The light value meets AA on muted and tinted surfaces as well as white cards.
 - **Hairline** (`#e2e8f0` / dark `#27272a`; `border-border`, `border-input`): every divider and control
   stroke, and the default `border` colour of every element.
 - **Ink ramp** (`ink-50…950`): a theme-aware neutral scale. It equals Tailwind `slate` in light and is

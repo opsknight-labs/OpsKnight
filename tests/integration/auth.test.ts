@@ -108,6 +108,28 @@ describeIfRealDB('Authentication Logic (Real DB)', () => {
   });
 
   describe('CredentialsProvider authorize', () => {
+    it.each(['2a', '2b'])(
+      'accepts an existing $%s$ credential without rewriting it',
+      async prefix => {
+        const password = 'a legacy local passphrase';
+        // Fixed bcryptjs 2.4.3 fixture: do not generate it with the upgraded dependency.
+        const passwordHash = `$${prefix}$04$abcdefghijklmnopqrstuuqm/4r2x8xBU5ChKfWF43Hj4TZDVhPkK`;
+        const user = await createTestUser({
+          email: 'legacy-password@example.com',
+          passwordHash,
+          role: 'ADMIN',
+        });
+        const authorize = getCredentialsAuthorize(await getAuthOptions());
+
+        expect(await authorize({ email: user.email, password })).toEqual(
+          expect.objectContaining({ id: user.id, email: user.email })
+        );
+        expect(
+          (await testPrisma.user.findUniqueOrThrow({ where: { id: user.id } })).passwordHash
+        ).toBe(passwordHash);
+      }
+    );
+
     it('should return user for correct credentials', async () => {
       const authOptions = await getAuthOptions();
       const authorize = getCredentialsAuthorize(authOptions);

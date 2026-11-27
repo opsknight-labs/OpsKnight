@@ -10,6 +10,14 @@ type Handler = {
 // Static imports: a client cannot select a module or a URL.
 export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
   [
+    'getServiceReviewSettings',
+    async () => (await import('@/app/api/v2/settings/service-reviews/route')).GET,
+  ],
+  [
+    'listServiceReviewRuns',
+    async () => (await import('@/app/api/v2/service-reviews/runs/route')).GET,
+  ],
+  [
     'getTeamMember',
     async () => (await import('@/app/api/v2/teams/[id]/members/[userId]/route')).GET,
   ],

@@ -196,7 +196,7 @@ test.describe.serial('intelligence on incidents and incident lists', () => {
     await expect(page.getByTestId('incident-group-view')).toHaveCount(0);
 
     await line.getByRole('link', { name: 'View group' }).click();
-    const inspector = page.getByRole('dialog', { name: 'Insights' });
+    const inspector = page.getByRole('dialog', { name: 'Investigation' });
     const group = inspector.getByTestId('incident-group-view');
     await expect(group.getByRole('heading', { name: 'Part of a group' })).toBeVisible();
     await expect(
@@ -214,7 +214,9 @@ test.describe.serial('intelligence on incidents and incident lists', () => {
     await expect(line).toContainText('Parent of 1 grouped incident and 1 grouped alert');
     await expectAccessible(page, '[data-testid="incident-group-line"]');
     await line.getByRole('link', { name: 'View group' }).click();
-    const group = page.getByRole('dialog', { name: 'Insights' }).getByTestId('incident-group-view');
+    const group = page
+      .getByRole('dialog', { name: 'Investigation' })
+      .getByTestId('incident-group-view');
     await expect(group.getByRole('heading', { name: 'Grouped under this incident' })).toBeVisible();
     await expect(group.getByRole('img', { name: /Mini timeline/ })).toBeVisible();
     await expect(group.getByRole('link', { name: 'db-7 CPU saturated' })).toBeVisible();
