@@ -58,6 +58,8 @@ Two optional reminders post a reply on the incident's card. Set them under **Set
 - **Nudge when unacknowledged (minutes):** while an incident is open and nobody has acknowledged it, OpsKnight replies "No one has acknowledged this yet" after this many minutes, and again every interval up to six times.
 - **Nudge when there is no update (minutes):** while an incident is open or acknowledged and has had no update for this long, OpsKnight replies "No update in N minutes", repeating up to six times. A note, an acknowledgement, a reassignment, a role change, a status change, a comment, or a captured chat message counts as an update. A status-page update does not.
 
+![The ChatOps settings for the two reminders, the Slack Connect email list, and the on-call responder switch](/docs/v2.3.0/assets/slack-chatops-war-room-options.png)
+
 Each reminder checks the incident when it fires. An incident that has been acknowledged, resolved, snoozed, or suppressed in the meantime gets nothing, and turning a setting off stops the reminders. Values run from 1 to 1,440 minutes.
 
 ## Notification settings
