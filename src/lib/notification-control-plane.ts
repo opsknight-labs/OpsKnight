@@ -2738,21 +2738,38 @@ async function deliverCentralNotificationOwned(
     }
 
     if (result.errorCode === 'AUTH_SECURITY_POLICY_UNAVAILABLE') {
+      const policyError = 'Authentication recipient policy unavailable.';
+      // Nothing was sent. Close the IN_FLIGHT marker, or recovery would park the row as UNKNOWN.
+      const settled = await finishAttempt({
+        notificationId: candidate.id,
+        ordinal,
+        outcome: 'NOT_DISPATCHED',
+        startedAt,
+        attemptId: preCreatedAttemptId,
+        provider: currentProvider,
+        errorCode: result.errorCode,
+        errorMessage: policyError,
+      });
+      if (!settled) return { success: false, claimed: true, error: policyError };
       await prisma.notification.updateMany({
-        where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+        where: {
+          id: candidate.id,
+          status: 'PENDING',
+          lastAttemptAt: now,
+          claimToken: ownershipToken,
+        },
         data: {
           status: 'PENDING',
           attempts: { decrement: 1 },
           lastAttemptAt: null,
+          claimToken: null,
+          claimedBy: null,
+          claimHeartbeatAt: null,
           nextAttemptAt: new Date(Date.now() + notificationRetryDelayMs(1)),
           errorMsg: 'Authentication recipient policy unavailable; delivery deferred.',
         },
       });
-      return {
-        success: false,
-        claimed: true,
-        error: 'Authentication recipient policy unavailable.',
-      };
+      return { success: false, claimed: true, error: policyError };
     }
     if (result.success) {
       const finishedAt = new Date();

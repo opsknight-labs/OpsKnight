@@ -677,6 +677,48 @@ describe('central notification control plane', () => {
     expect(prisma.notificationDeliveryAttempt.create).not.toHaveBeenCalled();
   });
 
+  it('closes the in-flight marker and releases the claim when the security policy cannot be read', async () => {
+    const due = new Date(Date.now() - 60_000);
+    vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+      id: 'notification_policy_unavailable',
+      status: 'PENDING',
+      category: 'SECURITY',
+      attempts: 0,
+      maxAttempts: 5,
+      nextAttemptAt: due,
+      scheduledAt: due,
+      lastAttemptAt: null,
+      expiresAt: null,
+      payloadEncrypted: `encrypted:${JSON.stringify(input.payload)}`,
+    } as never);
+    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
+    mocks.sendEmail.mockResolvedValue({
+      success: false,
+      errorCode: 'AUTH_SECURITY_POLICY_UNAVAILABLE',
+      error: 'Authentication recipient policy unavailable.',
+    });
+
+    await deliverCentralNotification('notification_policy_unavailable');
+
+    expect(prisma.notificationDeliveryAttempt.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ outcome: 'IN_FLIGHT' }),
+        data: expect.objectContaining({ outcome: 'NOT_DISPATCHED' }),
+      })
+    );
+    expect(prisma.notification.updateMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ claimToken: expect.any(String) }),
+        data: expect.objectContaining({
+          status: 'PENDING',
+          claimToken: null,
+          claimedBy: null,
+          lastAttemptAt: null,
+        }),
+      })
+    );
+  });
+
   describe('classifies a failed send by what it proves about delivery', () => {
     async function deliverWithError(error: string) {
       const due = new Date(Date.now() - 60_000);
