@@ -145,6 +145,10 @@ explicit priority:
 An individual row set to **No automatic priority** overrides an enabled general
 fallback. Select **Use urgency fallback** on that row when you want derivation.
 
+On a service or integration with no policy yet, every row starts on
+**Inherit workspace**, so saving one edited row leaves the other severities
+following the workspace policy.
+
 Configure all four severity rows, review the fallback selection, and select
 **Save classification policy**. Rules apply when future alert signals are
 processed; they do not reclassify existing incidents.
