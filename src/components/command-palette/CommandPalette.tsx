@@ -434,7 +434,7 @@ export default function CommandPalette({
   const [recents, setRecents] = useState<SearchResult[]>(() => readRecents());
   const restoreFocus = useRef(true);
   const rootRef = useRef<HTMLDivElement>(null);
-  const { results, loading, failed } = useEntitySearch(open ? query : '');
+  const { results, loading, failed, limited, retry } = useEntitySearch(open ? query : '');
 
   const commands = useMemo<Entry[]>(
     () => [...ACTIONS, ...(theme.locked ? [] : THEME_ACTIONS), ...NAVIGATE],
@@ -446,7 +446,8 @@ export default function CommandPalette({
   const navigate = ranked.filter(command => command.group === 'navigate');
   const groups = groupResults(results);
   const waitingForEntities = loading && query.trim().length >= MIN_SEARCH_LENGTH;
-  const noResults = hasQuery && !waitingForEntities && ranked.length === 0 && results.length === 0;
+  const noResults =
+    hasQuery && !waitingForEntities && !failed && ranked.length === 0 && results.length === 0;
 
   const close = useCallback(() => {
     onOpenChange(false);
@@ -545,11 +546,15 @@ export default function CommandPalette({
 
   const statusMessage = waitingForEntities
     ? 'Searching'
-    : noResults
-      ? 'No results'
-      : hasQuery
-        ? `${ranked.length + results.length} results`
-        : '';
+    : failed
+      ? limited
+        ? 'Search is rate limited'
+        : 'Search is unavailable'
+      : noResults
+        ? 'No results'
+        : hasQuery
+          ? `${ranked.length + results.length} results`
+          : '';
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={next => (next ? onOpenChange(true) : close())}>
@@ -659,9 +664,23 @@ export default function CommandPalette({
               )}
 
               {failed && (
-                <p className="px-4 py-3 text-xs text-muted-foreground">
-                  Search is unavailable right now. Pages and actions still work.
-                </p>
+                <div
+                  role="alert"
+                  className="flex items-center justify-between gap-3 px-4 py-3 text-xs text-muted-foreground"
+                >
+                  <span>
+                    {limited
+                      ? 'Too many searches. Wait a few seconds, then retry.'
+                      : 'Search is unavailable right now. Pages and actions still work.'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={retry}
+                    className="shrink-0 rounded-md border border-border bg-card px-2 py-1 font-medium text-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    Retry
+                  </button>
+                </div>
               )}
 
               {noResults && (

@@ -106,8 +106,11 @@ preferences under **Settings → Profile → Notifications**.
 
 - **Search returns nothing:** use two or more characters, simplify punctuation,
   check spelling, and verify access to the record.
-- **Search is temporarily unavailable:** wait for the displayed/retry interval
-  if rate limited, then try a narrower query.
+- **Search is temporarily unavailable:** the palette shows an alert instead of
+  "No results", with a **Retry** button. "Too many searches" means you are rate
+  limited (30 searches a minute): wait a few seconds, then retry. "Search is
+  unavailable" means the server could not answer; retry shortly, then try a
+  narrower query.
 - **The unread count looks stale:** reopen the drawer; check whether it reports
   Live or Polling, then reload and verify the source event.
 - **A drawer item does not navigate:** service or shift items may not carry an
