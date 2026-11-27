@@ -78,4 +78,17 @@ describe('resolveServiceWarRoomResponders', () => {
     h.service.mockResolvedValue(null);
     expect(await resolveServiceWarRoomResponders('nope')).toEqual([]);
   });
+
+  it('caps only the team-derived people and always keeps every named person', async () => {
+    h.service.mockResolvedValue({
+      teamId: 't1',
+      warRoomAutoAddTeam: 'ALL',
+      warRoomAutoAddUserIds: ['outsider'],
+    });
+    h.members.mockResolvedValue([{ userId: 'm1' }]);
+    const ids = await resolveServiceWarRoomResponders('s1');
+    expect(h.members.mock.calls[0][0].take).toBe(100);
+    expect(h.users.mock.calls[0][0].take).toBeUndefined();
+    expect(ids.sort()).toEqual(['m1', 'outsider']);
+  });
 });

@@ -1,11 +1,14 @@
 'use client';
 
-import { useActionState, useEffect, useMemo, useState } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Button } from '@/components/ui/shadcn/button';
 import { NativeSelect } from '@/components/automation/authoring/primitives';
-import { updateServiceWarRoomAutoAdd } from '@/app/(app)/services/actions';
+import {
+  searchWarRoomAutoAddPeople,
+  updateServiceWarRoomAutoAdd,
+} from '@/app/(app)/services/actions';
 import { notify } from '@/lib/toast';
 
 type Person = { id: string; name: string | null; email: string };
@@ -15,6 +18,7 @@ export type WarRoomAutoAddCardProps = {
   teamName: string | null;
   initialTeam: 'NONE' | 'MANAGERS' | 'ALL';
   initialUserIds: string[];
+  /** The people already chosen plus a first page of suggestions. */
   people: Person[];
   canManage: boolean;
 };
@@ -36,12 +40,35 @@ export default function WarRoomAutoAddCard({
     if (state?.success) notify.success('War room people saved.');
   }, [state]);
 
-  const shown = useMemo(() => {
-    const needle = filter.trim().toLowerCase();
-    return people
-      .filter(p => !needle || `${p.name ?? ''} ${p.email}`.toLowerCase().includes(needle))
-      .slice(0, 50);
-  }, [people, filter]);
+  const [known, setKnown] = useState<Map<string, Person>>(
+    () => new Map(people.map(person => [person.id, person]))
+  );
+  const [results, setResults] = useState<Person[]>([
+    ...new Map(people.map(p => [p.id, p])).values(),
+  ]);
+  // Search the whole directory on the server, so nobody is out of reach in a large workspace.
+  useEffect(() => {
+    if (!canManage) return;
+    let live = true;
+    const timer = setTimeout(() => {
+      searchWarRoomAutoAddPeople(serviceId, filter)
+        .then(found => {
+          if (!live) return;
+          setResults(found);
+          setKnown(prev => new Map([...prev, ...found.map(p => [p.id, p] as const)]));
+        })
+        .catch(() => undefined);
+    }, 250);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [filter, serviceId, canManage]);
+  // Chosen people stay visible (and removable) whatever the search shows.
+  const shown = [
+    ...[...chosen].map(id => known.get(id) ?? { id, name: null, email: id }),
+    ...results.filter(person => !chosen.has(person.id)),
+  ];
   const toggle = (id: string) =>
     setChosen(prev => {
       const next = new Set(prev);

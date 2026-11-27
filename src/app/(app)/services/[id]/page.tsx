@@ -421,14 +421,21 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   }
 
   const service = serviceRaw;
-  // Only people who can edit the service see (and need) the directory of who can be added.
+  // Only people who can edit the service see (and need) the directory; the picker searches the rest.
+  const autoAddSelect = { id: true, name: true, email: true } as const;
   const autoAddPeople = canManageService
-    ? await prisma.user.findMany({
-        where: { status: 'ACTIVE' },
-        select: { id: true, name: true, email: true },
-        orderBy: { name: 'asc' },
-        take: 500,
-      })
+    ? [
+        ...(await prisma.user.findMany({
+          where: { id: { in: service.warRoomAutoAddUserIds ?? [] } },
+          select: autoAddSelect,
+        })),
+        ...(await prisma.user.findMany({
+          where: { status: 'ACTIVE' },
+          select: autoAddSelect,
+          orderBy: { name: 'asc' },
+          take: 30,
+        })),
+      ]
     : [];
   const canDeleteService = currentUser.role === 'ADMIN';
 
