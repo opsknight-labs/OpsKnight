@@ -114,21 +114,8 @@ export async function updateActionItemStatus(
       };
     }
 
-    // Handle legacy-only action item that might not yet have an ActionItem row
-    const postmortemWithLegacy = await prisma.postmortem.findFirst({
-      where: {
-        actionItems: {
-          not: Prisma.JsonNull,
-        },
-      },
-    });
-
-    if (!postmortemWithLegacy) {
-      return { success: false, error: 'Action item not found' };
-    }
-
-    revalidatePath('/action-items');
-    return { success: true };
+    // The board lists ActionItem rows only, so a miss means the item was deleted or is out of scope.
+    return { success: false, error: 'Action item not found' };
   } catch (error) {
     logger.error('[ActionItems] Failed to update action item status', { error, itemId, newStatus });
     return {

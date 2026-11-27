@@ -41,4 +41,13 @@ describe('updateActionItemStatus', () => {
     );
     expect(db.actionItem.update).not.toHaveBeenCalled();
   });
+
+  it('returns an error for a missing item instead of reporting success', async () => {
+    // Another postmortem still holds legacy JSON items, which used to make a miss look successful.
+    rbac.getCurrentAuthorizationActor.mockResolvedValue({ ...scoped, role: 'RESPONDER' });
+    const result = await updateActionItemStatus('deleted-item', ActionItemStatus.COMPLETED);
+
+    expect(result).toEqual({ success: false, error: 'Action item not found' });
+    expect(db.actionItem.update).not.toHaveBeenCalled();
+  });
 });
