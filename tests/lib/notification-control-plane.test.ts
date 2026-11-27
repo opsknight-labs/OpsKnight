@@ -17,6 +17,8 @@ import {
   requeueCentralNotification,
 } from '@/lib/notification-control-plane';
 import prisma from '@/lib/prisma';
+import { sendSlackNotification } from '@/lib/slack';
+import { slackWebhookHandle } from '@/lib/slack-webhook-secret';
 import { reconcileNotificationProviderFeedback } from '@/lib/notification-provider-feedback';
 import { CircuitBreakerError } from '@/lib/circuit-breaker';
 import { acquireProviderAdmission, acquireProviderConcurrency } from '@/lib/provider-admission';
@@ -676,6 +678,121 @@ describe('central notification control plane', () => {
         }),
       })
     );
+  });
+
+  describe('service Slack webhook secret', () => {
+    const WEBHOOK = 'https://hooks.slack.com/services/T000/B000/topsecretvalue';
+    const handle = () => slackWebhookHandle(WEBHOOK);
+    const queue = (policy: { targetAddress: string }, withLegacyUrl = false) => {
+      const due = new Date(Date.now() - 60_000);
+      const payload = {
+        kind: 'SLACK_WEBHOOK' as const,
+        incident: {
+          id: 'incident-1',
+          title: 'Workflow failed',
+          status: 'OPEN',
+          urgency: 'HIGH',
+          serviceName: 'CI',
+        },
+        eventType: 'triggered' as const,
+        serviceId: 'service-1',
+        ...(withLegacyUrl ? { webhookUrl: WEBHOOK } : {}),
+        lifecyclePolicy: {
+          incidentId: 'incident-1',
+          eventType: 'triggered',
+          serviceId: 'service-1',
+          targetKind: 'SERVICE_SLACK_WEBHOOK' as const,
+          targetId: 'service-1',
+          targetAddress: policy.targetAddress,
+        },
+      };
+      vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+        id: 'notification-webhook',
+        status: 'PENDING',
+        category: 'INCIDENT',
+        attempts: 0,
+        maxAttempts: 3,
+        nextAttemptAt: due,
+        scheduledAt: due,
+        lastAttemptAt: null,
+        expiresAt: null,
+        payloadEncrypted: `encrypted:${JSON.stringify(payload)}`,
+        sourceType: 'SERVICE_INCIDENT',
+        sourceId: 'service-1:incident-1',
+        recipientId: 'service-1',
+        templateKey: 'service-slack-webhook-triggered',
+      } as never);
+      vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+        status: 'OPEN',
+        escalationGeneration: 0,
+      } as never);
+      vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
+    };
+
+    it('sends to the service webhook read at delivery time, so the queue holds no secret', async () => {
+      queue({ targetAddress: handle() });
+      vi.mocked(prisma.service.findUnique).mockResolvedValue({
+        serviceNotificationChannels: ['SLACK'],
+        slackChannel: null,
+        // Stored encrypted (the mock decrypt strips this prefix).
+        slackWebhookUrl: `encrypted:${WEBHOOK}`,
+        serviceNotifyOnTriggered: true,
+      } as never);
+      vi.mocked(sendSlackNotification).mockResolvedValue({ success: true } as never);
+
+      await deliverCentralNotification('notification-webhook');
+
+      expect(sendSlackNotification).toHaveBeenCalledWith(
+        'triggered',
+        expect.objectContaining({ id: 'incident-1' }),
+        undefined,
+        WEBHOOK,
+        { maxAttempts: 1 }
+      );
+    });
+
+    it('still delivers a row queued before encryption that carries the plaintext URL', async () => {
+      queue({ targetAddress: WEBHOOK }, true);
+      vi.mocked(prisma.service.findUnique).mockResolvedValue({
+        serviceNotificationChannels: ['SLACK'],
+        slackChannel: null,
+        slackWebhookUrl: `encrypted:${WEBHOOK}`,
+        serviceNotifyOnTriggered: true,
+      } as never);
+      vi.mocked(sendSlackNotification).mockResolvedValue({ success: true } as never);
+
+      await deliverCentralNotification('notification-webhook');
+
+      expect(sendSlackNotification).toHaveBeenCalledWith(
+        'triggered',
+        expect.anything(),
+        undefined,
+        WEBHOOK,
+        { maxAttempts: 1 }
+      );
+    });
+
+    it('skips a queued message when the service webhook was replaced after it was queued', async () => {
+      queue({ targetAddress: handle() });
+      vi.mocked(prisma.service.findUnique).mockResolvedValue({
+        serviceNotificationChannels: ['SLACK'],
+        slackChannel: null,
+        slackWebhookUrl: 'https://hooks.slack.com/services/T000/B000/another',
+        serviceNotifyOnTriggered: true,
+      } as never);
+
+      await deliverCentralNotification('notification-webhook');
+
+      expect(sendSlackNotification).not.toHaveBeenCalled();
+      expect(prisma.notification.updateMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'SKIPPED',
+            errorMsg: 'Service Slack webhook was disabled or retargeted',
+          }),
+        })
+      );
+    });
   });
 
   it('uses lease expiry as the next scheduler deadline for active claims', async () => {

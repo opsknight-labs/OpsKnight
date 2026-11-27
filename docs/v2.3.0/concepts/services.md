@@ -227,6 +227,16 @@ to it (the dispatcher logs one warning), shows a notice on the Notifications tab
 and drops the value the next time the form is saved. Over the API, remove a
 legacy value from the list before sending it back.
 
+The optional **Slack Webhook URL (Legacy Fallback)** is a secret, so OpsKnight
+stores it encrypted and never shows it again: the field says "Configured" and
+stays empty, an empty field on save leaves the stored URL unchanged, a new URL
+replaces it, and the **Remove** box clears it. Queued notifications hold a
+non-secret handle instead of the URL and read the current webhook when they send,
+so replacing the URL cancels messages still queued for the old one. Webhooks saved
+before this change keep working; the scheduler encrypts them in the background
+(up to 1,000 services an hour), and the encryption key must be configured for new
+saves to succeed.
+
 Disabling Slack as a service notification channel disables enabled Slack
 destinations for that service. Saving a channel name is not proof of delivery.
 For each selected event, perform a controlled incident transition and inspect

@@ -8,6 +8,7 @@ import { enqueueCentralNotification } from './notification-control-plane';
 import { formatWebhookPayloadByType } from './webhooks';
 import { getBaseUrl } from './env-validation';
 import { configuredSlackWebhookUrl } from './slack';
+import { readSlackWebhookUrl, slackWebhookHandle } from './slack-webhook-secret';
 import { deriveNextSlaTransition } from '@/lib/incident-sla/next-transition';
 import {
   addOperationalMetric,
@@ -352,7 +353,11 @@ async function notifyBreachWarning(
     const channels = warning.serviceNotificationChannels || [];
     const hasSlackEnabled = channels.includes('SLACK');
     const slackChannel = warning.slackChannel?.trim();
-    const slackWebhookUrl = warning.slackWebhookUrl?.trim() || configuredSlackWebhookUrl();
+    // The service webhook is stored encrypted: queue rows keep that stored form (delivery decrypts it)
+    // and the recipient shows only a non-secret handle.
+    const storedSlackWebhook = warning.slackWebhookUrl?.trim();
+    const slackWebhookUrl =
+      (await readSlackWebhookUrl(storedSlackWebhook)) || configuredSlackWebhookUrl();
 
     // Do not create a synthetic Slack recipient. A service target is preferred,
     // with a configured global webhook as the deliberate fallback.
@@ -364,7 +369,7 @@ async function notifyBreachWarning(
           channel: 'SLACK',
           recipientType: slackChannel ? 'SLACK_CHANNEL' : 'WEBHOOK',
           recipientId: warning.serviceId,
-          recipientAddress: slackChannel || slackWebhookUrl!,
+          recipientAddress: slackChannel || slackWebhookHandle(slackWebhookUrl!),
           incidentId: warning.incidentId,
           templateKey: `sla-${warning.breachType}-${isBreached ? 'breached' : 'warning'}`,
           sourceType: 'INCIDENT_SLA',
@@ -386,7 +391,7 @@ async function notifyBreachWarning(
                 kind: 'SLACK_WEBHOOK',
                 incident: incidentPresentation,
                 eventType: 'triggered',
-                webhookUrl: slackWebhookUrl,
+                webhookUrl: storedSlackWebhook || slackWebhookUrl,
                 additionalMessage: message,
               },
         });

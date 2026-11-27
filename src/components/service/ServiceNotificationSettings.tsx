@@ -49,7 +49,8 @@ type ServiceNotificationSettingsProps = {
   serviceId: string;
   serviceNotificationChannels: string[];
   slackChannel: string | null;
-  slackWebhookUrl: string | null;
+  /** The stored Slack webhook is a secret: the page only says whether one is configured. */
+  slackWebhookConfigured: boolean;
   slackIntegration: {
     id: string;
     workspaceName: string | null;
@@ -74,7 +75,7 @@ export default function ServiceNotificationSettings({
   serviceId,
   serviceNotificationChannels,
   slackChannel,
-  slackWebhookUrl,
+  slackWebhookConfigured,
   slackIntegration,
   webhookIntegrations,
   serviceNotifyOnTriggered,
@@ -539,7 +540,7 @@ export default function ServiceNotificationSettings({
           const removesSlack =
             serviceNotificationChannels.includes('SLACK') &&
             !channels.includes('SLACK') &&
-            Boolean(slackWebhookUrl || slackChannel || existingSlackDests.some(d => d.enabled));
+            Boolean(slackWebhookConfigured || slackChannel || existingSlackDests.some(d => d.enabled));
           if (removesSlack && !slackRemovalConfirmed.current) {
             e.preventDefault();
             setConfirmSlackRemoval(true);
@@ -571,14 +572,14 @@ export default function ServiceNotificationSettings({
           required={
             channels.includes('SLACK') &&
             existingSlackDests.length === 0 &&
-            !slackWebhookUrl?.trim()
+            !slackWebhookConfigured
           }
           value={
             channels.includes('SLACK')
               ? existingSlackDests[0]?.channelName ||
                 existingSlackDests[0]?.channelId ||
                 selectedSlackChannel ||
-                (slackWebhookUrl?.trim() ? 'webhook' : '')
+                (slackWebhookConfigured ? 'webhook' : '')
               : ''
           }
           readOnly
@@ -1150,15 +1151,27 @@ export default function ServiceNotificationSettings({
                         >
                           Slack Webhook URL (Legacy Fallback)
                         </Label>
-                        <span className="text-[10px] text-muted-foreground">Optional</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {slackWebhookConfigured ? 'Configured' : 'Optional'}
+                        </span>
                       </div>
                       <input
                         id="slackWebhookUrl"
                         name="slackWebhookUrl"
-                        defaultValue={slackWebhookUrl || ''}
-                        placeholder="https://hooks.slack.com/services/..."
+                        autoComplete="off"
+                        placeholder={
+                          slackWebhookConfigured
+                            ? 'Configured. Enter a new URL to replace it.'
+                            : 'https://hooks.slack.com/services/...'
+                        }
                         className="w-full h-8 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-mono shadow-2xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
                       />
+                      {slackWebhookConfigured && (
+                        <label className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                          <input type="checkbox" name="clearSlackWebhookUrl" value="true" />
+                          Remove the stored webhook on save (the URL is never shown again)
+                        </label>
+                      )}
                     </div>
                   </div>
                 )}

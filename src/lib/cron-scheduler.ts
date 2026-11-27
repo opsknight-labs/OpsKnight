@@ -47,6 +47,7 @@ let initialized = false;
 let lastJobCleanup = 0;
 let lastSessionCleanup = 0;
 let lastInboundDeliveryCleanup = 0;
+let lastSlackWebhookReencrypt = 0;
 let schedulerProfile: SchedulerProfile = 'full';
 let activeLeaseEpoch: number | null = null;
 
@@ -773,6 +774,24 @@ async function runOnce() {
             return removed;
           })
         : null;
+    // Service Slack webhook URLs are encrypted at rest; convert any plaintext rows left from before.
+    // Hourly (a failure waits an hour too), bounded batches, isolated from the steps around it.
+    const slackWebhookEncryption =
+      Date.now() - lastSlackWebhookReencrypt > 60 * 60 * 1000
+        ? await maintenanceStep('Slack webhook encryption', async () => {
+            const {
+              reencryptSlackWebhookUrls,
+              SLACK_WEBHOOK_REENCRYPT_BATCH,
+              SLACK_WEBHOOK_REENCRYPT_MAX_BATCHES,
+            } = await import('./slack-webhook-secret');
+            lastSlackWebhookReencrypt = Date.now();
+            const converted = await reencryptSlackWebhookUrls();
+            // A full run means more may be waiting: continue on the next tick.
+            if (converted >= SLACK_WEBHOOK_REENCRYPT_BATCH * SLACK_WEBHOOK_REENCRYPT_MAX_BATCHES)
+              lastSlackWebhookReencrypt = 0;
+            return converted;
+          })
+        : null;
     const rateLimitCleanup = await maintenanceStep('Rate limit cleanup', cleanupExpiredRateLimits);
     // MCP maintenance failure must not block incident-response maintenance; it logs and counts
     // its own failures.
@@ -827,6 +846,7 @@ async function runOnce() {
       tokenCleanup,
       sessionCleanup,
       inboundDeliveryCleanup,
+      slackWebhookEncryption,
       rateLimitCleanup,
       notificationCapacityCleanup,
       privacyExportArtifactsExpired,

@@ -10,6 +10,7 @@ import { randomBytes } from 'crypto';
 import { encrypt } from '@/lib/encryption';
 import { integrationKeyFingerprint } from '@/lib/integrations/credentials';
 import { logAudit } from '@/lib/audit';
+import { storeSlackWebhookUrl } from '@/lib/slack-webhook-secret';
 import { assertAdmin, assertCanModifyService } from '@/lib/rbac';
 import { assertServiceNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
 import { assertJiraIssueType, assertJiraProjectKey, parseLabels } from '@/lib/jira-validation';
@@ -242,13 +243,24 @@ export async function updateServiceNotificationSettings(serviceId: string, formD
       ? String(formData.get('slackChannel') ?? '').trim() || null
       : undefined
     : null;
+  // The stored URL is a secret and is never sent to the form, so an empty field means "unchanged";
+  // clearing needs the explicit checkbox. Turning Slack off clears it.
+  const typedSlackWebhookUrl = String(formData.get('slackWebhookUrl') ?? '').trim();
   const slackWebhookUrl = isSlackEnabled
-    ? formData.has('slackWebhookUrl')
-      ? String(formData.get('slackWebhookUrl') ?? '').trim() || null
-      : undefined
+    ? formData.get('clearSlackWebhookUrl') === 'true'
+      ? null
+      : typedSlackWebhookUrl || undefined
     : null;
   if (slackWebhookUrl && !isSlackWebhookUrl(slackWebhookUrl)) {
     return redirect(`/services/${serviceId}?tab=notifications&error=invalid-slack-webhook`);
+  }
+  let storedSlackWebhookUrl: string | null | undefined = slackWebhookUrl;
+  if (slackWebhookUrl) {
+    try {
+      storedSlackWebhookUrl = await storeSlackWebhookUrl(slackWebhookUrl);
+    } catch {
+      return redirect(`/services/${serviceId}?tab=notifications&error=slack-webhook-encryption`);
+    }
   }
 
   await prisma.service.update({
@@ -260,7 +272,7 @@ export async function updateServiceNotificationSettings(serviceId: string, formD
       serviceNotifyOnResolved: formData.get('serviceNotifyOnResolved') === 'true',
       serviceNotifyOnSlaBreach: formData.get('serviceNotifyOnSlaBreach') === 'true',
       ...(slackChannel === undefined ? {} : { slackChannel }),
-      ...(slackWebhookUrl === undefined ? {} : { slackWebhookUrl }),
+      ...(storedSlackWebhookUrl === undefined ? {} : { slackWebhookUrl: storedSlackWebhookUrl }),
     },
   });
 

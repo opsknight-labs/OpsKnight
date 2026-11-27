@@ -32,6 +32,7 @@ import {
   type CircuitBreaker,
 } from './circuit-breaker';
 import { decrypt, encrypt } from '@/lib/encryption';
+import { readSlackWebhookUrl, slackWebhookHandle } from '@/lib/slack-webhook-secret';
 import {
   acquireProviderAdmission,
   acquireProviderConcurrency,
@@ -1462,12 +1463,23 @@ async function dispatchPayload(
     }
     case 'SLACK_WEBHOOK': {
       const { sendSlackNotification } = await import('./slack');
+      // Rows queued before encryption carry the URL (plaintext or encrypted); newer rows carry none and
+      // read the service's current webhook here, so the secret never sits in the queue.
+      let webhookUrl = await readSlackWebhookUrl(payload.webhookUrl);
+      const policy = payload.lifecyclePolicy;
+      if (policy?.targetKind === 'SERVICE_SLACK_WEBHOOK' && policy.serviceId) {
+        const service = await prisma.service.findUnique({
+          where: { id: policy.serviceId },
+          select: { slackWebhookUrl: true },
+        });
+        webhookUrl = (await readSlackWebhookUrl(service?.slackWebhookUrl)) ?? webhookUrl;
+      }
       return executeProvider(CircuitBreakers.slack(), () =>
         sendSlackNotification(
           payload.eventType,
           payload.incident,
           payload.additionalMessage,
-          payload.webhookUrl,
+          webhookUrl,
           { maxAttempts: 1 }
         )
       );
@@ -1919,8 +1931,14 @@ async function serviceTargetDeliveryRevoked(
     return dest ? null : 'Service Slack channel was disabled or retargeted';
   }
   if (policy.targetKind === 'SERVICE_SLACK_WEBHOOK') {
-    return service.serviceNotificationChannels.includes('SLACK') &&
-      service.slackWebhookUrl?.trim() === policy.targetAddress
+    const current = await readSlackWebhookUrl(service.slackWebhookUrl);
+    if (!service.serviceNotificationChannels.includes('SLACK') || !current)
+      return 'Service Slack webhook was disabled or retargeted';
+    // New rows hold a handle of the URL they were queued for; older rows hold the URL itself
+    // (plaintext or encrypted), so compare decrypted values.
+    const queuedFor = policy.targetAddress;
+    return queuedFor === slackWebhookHandle(current) ||
+      (queuedFor && (await readSlackWebhookUrl(queuedFor)) === current)
       ? null
       : 'Service Slack webhook was disabled or retargeted';
   }
@@ -2032,8 +2050,8 @@ async function serviceSlackDeliveryRevoked(
       }
     }
   } else {
-    const currentWebhook = service.slackWebhookUrl?.trim();
-    if (!currentWebhook || currentWebhook !== payload.webhookUrl?.trim())
+    const currentWebhook = await readSlackWebhookUrl(service.slackWebhookUrl);
+    if (!currentWebhook || currentWebhook !== (await readSlackWebhookUrl(payload.webhookUrl)))
       return 'Service Slack webhook was removed or changed';
   }
   return null;

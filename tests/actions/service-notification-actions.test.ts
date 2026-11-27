@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   assertCanModifyService: vi.fn(),
   serviceUpdate: vi.fn(),
   serviceFindUnique: vi.fn(),
+  storeSlackWebhookUrl: vi.fn(),
   slackDestinationUpdateMany: vi.fn(),
   logAudit: vi.fn(),
   revalidatePath: vi.fn(),
@@ -27,6 +28,10 @@ vi.mock('@/lib/prisma', () => ({
   },
 }));
 
+vi.mock('@/lib/slack-webhook-secret', () => ({
+  storeSlackWebhookUrl: mocks.storeSlackWebhookUrl,
+}));
+
 vi.mock('@/lib/audit', () => ({
   logAudit: mocks.logAudit,
 }));
@@ -47,6 +52,7 @@ describe('updateServiceNotificationSettings', () => {
     mocks.assertCanModifyService.mockResolvedValue({ id: 'user-1' });
     mocks.serviceUpdate.mockResolvedValue({});
     mocks.serviceFindUnique.mockResolvedValue({ serviceNotificationChannels: [] });
+    mocks.storeSlackWebhookUrl.mockImplementation(async (url: string) => `v3:k1:${url.length}`);
   });
 
   it('explicitly nullifies slackChannel and slackWebhookUrl when SLACK is unchecked', async () => {
@@ -135,5 +141,53 @@ describe('updateServiceNotificationSettings', () => {
         data: expect.objectContaining({ serviceNotificationChannels: ['WEBHOOK'] }),
       })
     );
+  });
+
+  describe('Slack webhook secret', () => {
+    const webhook = 'https://hooks.slack.com/services/T000/B000/topsecretvalue';
+    const slackForm = (extra: Record<string, string> = {}) => {
+      const formData = new FormData();
+      formData.set('serviceNotificationChannelsJson', JSON.stringify(['SLACK']));
+      formData.set('slackChannel', 'incident-alerts');
+      for (const [key, value] of Object.entries(extra)) formData.set(key, value);
+      return formData;
+    };
+    const savedData = () =>
+      (mocks.serviceUpdate.mock.calls[0][0] as { data: Record<string, unknown> }).data;
+
+    it('encrypts a new webhook before it is stored and never audits the value', async () => {
+      await updateServiceNotificationSettings('svc-1', slackForm({ slackWebhookUrl: webhook }));
+
+      expect(mocks.storeSlackWebhookUrl).toHaveBeenCalledWith(webhook);
+      expect(savedData().slackWebhookUrl).toBe(`v3:k1:${webhook.length}`);
+      expect(JSON.stringify(mocks.logAudit.mock.calls)).not.toContain('topsecretvalue');
+    });
+
+    it('keeps the stored webhook when the field is left empty, because the form never shows it', async () => {
+      await updateServiceNotificationSettings('svc-1', slackForm({ slackWebhookUrl: '' }));
+
+      expect('slackWebhookUrl' in savedData()).toBe(false);
+      expect(mocks.storeSlackWebhookUrl).not.toHaveBeenCalled();
+    });
+
+    it('removes the stored webhook only when the remove box is ticked', async () => {
+      await updateServiceNotificationSettings(
+        'svc-1',
+        slackForm({ slackWebhookUrl: '', clearSlackWebhookUrl: 'true' })
+      );
+
+      expect(savedData().slackWebhookUrl).toBeNull();
+    });
+
+    it('saves nothing when the webhook cannot be encrypted', async () => {
+      mocks.storeSlackWebhookUrl.mockRejectedValue(new Error('ENCRYPTION_KEY not configured'));
+
+      await updateServiceNotificationSettings('svc-1', slackForm({ slackWebhookUrl: webhook }));
+
+      expect(mocks.redirect).toHaveBeenCalledWith(
+        '/services/svc-1?tab=notifications&error=slack-webhook-encryption'
+      );
+      expect(mocks.serviceUpdate).not.toHaveBeenCalled();
+    });
   });
 });

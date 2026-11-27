@@ -3,6 +3,7 @@ import prisma from './prisma';
 import { incidentNotificationPriority } from './notification-priority';
 import { logger } from './logger';
 import { unsupportedServiceChannels } from './service-notification-settings';
+import { readSlackWebhookUrl, slackWebhookHandle } from './slack-webhook-secret';
 import { enqueueCentralNotification } from './notification-control-plane';
 import { getBaseUrl } from './env-validation';
 import type { SlackCardEvent } from './slack/incident-card';
@@ -278,7 +279,10 @@ export async function sendServiceNotifications(
         }
       }
 
-      const slackWebhookUrl = service.slackWebhookUrl?.trim();
+      // The webhook URL is a stored secret: rows below carry only a non-secret handle and delivery
+      // reads the URL from the service when it sends.
+      const slackWebhookUrl = await readSlackWebhookUrl(service.slackWebhookUrl);
+      const slackWebhookTarget = slackWebhookUrl ? slackWebhookHandle(slackWebhookUrl) : null;
       const slackEditable = !slackEditOnly || (await liveCardExists());
       if (activeChannels.length > 0 && slackEditable) {
         await Promise.all(
@@ -344,7 +348,7 @@ export async function sendServiceNotifications(
         );
       }
 
-      if (slackWebhookUrl && eventType !== 'updated' && !slackOnly) {
+      if (slackWebhookTarget && eventType !== 'updated' && !slackOnly) {
         const result = await persistIntent(async () => {
           await enqueueCentralNotification(
             {
@@ -352,7 +356,7 @@ export async function sendServiceNotifications(
               channel: 'SLACK',
               recipientType: 'WEBHOOK',
               recipientId: service.id,
-              recipientAddress: slackWebhookUrl,
+              recipientAddress: slackWebhookTarget,
               incidentId,
               templateKey: `service-slack-webhook-${eventType}`,
               sourceType: 'SERVICE_INCIDENT',
@@ -365,13 +369,12 @@ export async function sendServiceNotifications(
                 kind: 'SLACK_WEBHOOK',
                 incident: incidentPresentation,
                 eventType,
-                webhookUrl: slackWebhookUrl,
                 serviceId: service.id,
                 lifecyclePolicy: {
                   ...lifecyclePolicy,
                   targetKind: 'SERVICE_SLACK_WEBHOOK',
                   targetId: service.id,
-                  targetAddress: slackWebhookUrl,
+                  targetAddress: slackWebhookTarget,
                 },
               },
             },

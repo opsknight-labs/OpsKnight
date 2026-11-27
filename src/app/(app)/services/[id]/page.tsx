@@ -1129,6 +1129,12 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
           {SERVICE_CHANNEL_UNSUPPORTED_MESSAGE} Nothing was saved.
         </InlineNotice>
       )}
+      {errorCode === 'slack-webhook-encryption' && (
+        <InlineNotice tone="error" title="Slack webhook could not be stored">
+          The webhook URL is stored encrypted and the encryption key is not available. Nothing was
+          saved.
+        </InlineNotice>
+      )}
       {errorCode === 'invalid-slack-webhook' && (
         <InlineNotice tone="error" title="Invalid Slack webhook URL">
           Use an incoming-webhook URL from Slack (https://hooks.slack.com/...). Nothing was saved.
@@ -1141,7 +1147,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
           serviceId={id}
           serviceNotificationChannels={service.serviceNotificationChannels || []}
           slackChannel={service.slackChannel || null}
-          slackWebhookUrl={service.slackWebhookUrl || null}
+          slackWebhookConfigured={Boolean(service.slackWebhookUrl?.trim())}
           slackIntegration={globalSlackIntegration}
           webhookIntegrations={(service.webhookIntegrations || []).map((w: WebhookIntegration) => ({
             id: w.id,

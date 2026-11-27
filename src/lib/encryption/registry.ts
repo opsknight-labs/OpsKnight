@@ -194,6 +194,15 @@ export const ENCRYPTION_TARGETS: EncryptionTargetDefinition[] = [
     description: 'Shared secret for authenticating inbound webhook integrations',
   },
   {
+    id: 'service.slack-webhook-url',
+    model: 'Service',
+    field: 'slackWebhookUrl',
+    storageType: 'SCALAR',
+    plaintextLegacyAllowed: true,
+    label: 'Service Slack Webhook URL',
+    description: 'Incoming-webhook URL a service posts incident notifications to; a bearer secret',
+  },
+  {
     id: 'webhook.secret',
     model: 'WebhookIntegration',
     field: 'secret',
