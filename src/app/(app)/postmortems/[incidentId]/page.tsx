@@ -5,6 +5,7 @@ import { getPostmortem } from '../actions';
 import PostmortemForm from '@/components/PostmortemForm';
 import PostmortemDetailView from '@/components/postmortem/PostmortemDetailView';
 import { getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
+import { postmortemEditWhere } from '@/lib/postmortems/authorization';
 import { dashboardUserReadWhere, incidentReadWhere } from '@/lib/authorization-filters';
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
@@ -43,7 +44,14 @@ export default async function PostmortemPage({
     getUserPermissions(),
     getCurrentAuthorizationActor(),
   ]);
-  const canEdit = permissions.isResponderOrAbove;
+  // Saving is limited to administrators, the author, the assignee and the service team, so the
+  // Edit button follows the same rule instead of every responder.
+  const canEdit =
+    permissions.isResponderOrAbove &&
+    (!postmortem ||
+      (await prisma.postmortem.count({
+        where: { AND: [{ incidentId }, postmortemEditWhere(actor)] },
+      })) > 0);
   const canView = postmortem ? postmortem.status === 'PUBLISHED' || canEdit : canEdit;
 
   // Resolve the incident once through the authorization boundary. Jira links
@@ -87,6 +95,25 @@ export default async function PostmortemPage({
   });
 
   if (!postmortem) {
+    // A draft the person cannot read is still there: offering "Create" would only fail on save.
+    if (await prisma.postmortem.count({ where: { incidentId } })) {
+      return (
+        <div className="p-6">
+          <Card className="text-center">
+            <CardContent className="py-8">
+              <h2 className="text-xl font-semibold mb-2">Postmortem not visible</h2>
+              <p className="text-muted-foreground mb-4">
+                This incident already has a postmortem, but you can&apos;t view it. Ask its author
+                or an administrator.
+              </p>
+              <Link href={`/incidents/${incidentId}`}>
+                <Button>View Incident</Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
     if (incidentContext.status !== 'RESOLVED') {
       return (
         <div className="p-6">

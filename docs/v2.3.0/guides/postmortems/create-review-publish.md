@@ -130,6 +130,11 @@ includes it. Users and Auditors see published postmortems only.
 - The same rule applies to API v2, MCP, the mobile postmortem pages, the Action
   Items page and global search. Search results cannot be used to probe draft
   root-cause or lessons text.
+- If an incident already has a postmortem you cannot view, its postmortem page
+  says "Postmortem not visible" instead of offering **Create Postmortem**.
+- The **Edit** button on a postmortem appears only for people who can save the
+  change (an administrator, the author, the incident assignee or a member of the
+  owning service's team), not for every responder.
 
 ## Remove, archive, or follow up
 
