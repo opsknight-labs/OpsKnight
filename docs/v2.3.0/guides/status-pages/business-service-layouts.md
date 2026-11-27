@@ -40,10 +40,14 @@ has business services; otherwise it starts on **Technical services**. Saving the
 keeps that choice. Pages that already list services keep their layout.
 
 Every row shows its service count, for example "3 services", or how many are affected, for example
-"1 of 3 services affected". On the expandable layout the name and count together are the toggle,
-marked with ›. A row with active incidents shows a chip such as "1 active incident" that jumps to
+"1 of 3 services affected". On the expandable layout a full-width **Show services** bar under the history opens the row, and
+flips to **Hide services**. A row with active incidents shows a chip such as "1 active incident" that jumps to
 the incidents section. Technical services that are in no business service on the page appear under
 **Other services**.
+
+While an incident is active, the incidents section stays above the services. A page with only
+resolved incidents lists them below the services, so a quiet history does not push the services off
+the first screen.
 
 With the expandable layout, **Expand groups by default (affected groups always open)** opens every
 row when the page loads. Off (the default), only affected rows start open.
@@ -133,7 +137,7 @@ services. People who pick nothing still get every update.
 ## Themes, mobile and accessibility
 
 The layouts use the page's theme colours, so every built-in theme and custom CSS keep working, in
-light and dark. Expandable rows are buttons that announce whether they are open, work with the
+light and dark. The Show/Hide services bar is a button that announces whether the row is open, work with the
 keyboard and have 44px touch targets on phones.
 
 ## API
