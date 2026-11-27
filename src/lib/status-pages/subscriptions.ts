@@ -28,6 +28,31 @@ import {
   isRequestToAppHost,
 } from '@/lib/status-pages/status-auth';
 
+/** Verification mails per address per page, and per page overall. Windows are fixed, so they advance. */
+const VERIFICATION_MAILS_PER_ADDRESS = 5;
+const VERIFICATION_MAILS_PER_ADDRESS_WINDOW_MS = 24 * 60 * 60 * 1000;
+const VERIFICATION_MAILS_PER_PAGE = 1000;
+const VERIFICATION_MAILS_PER_PAGE_WINDOW_MS = 60 * 60 * 1000;
+
+/**
+ * Whether one more verification mail may go to this address. A refused request is answered like an
+ * accepted one and changes nothing, so it neither mails nor invalidates the link already sent.
+ */
+async function verificationMailAllowed(statusPageId: string, email: string) {
+  const address = await checkRateLimit(
+    `api:status-page:verification-mail:address:${statusPageId}:${email}`,
+    VERIFICATION_MAILS_PER_ADDRESS,
+    VERIFICATION_MAILS_PER_ADDRESS_WINDOW_MS
+  );
+  if (!address.allowed) return false;
+  const page = await checkRateLimit(
+    `api:status-page:verification-mail:page:${statusPageId}`,
+    VERIFICATION_MAILS_PER_PAGE,
+    VERIFICATION_MAILS_PER_PAGE_WINDOW_MS
+  );
+  return page.allowed;
+}
+
 function rateLimitError(retryAfter: number) {
   return jsonError(new AppError({ code: 'RATE_LIMIT_EXCEEDED' }), undefined, { retryAfter });
 }
@@ -178,6 +203,9 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
           // Persist pending preferences alongside the verification token so
           // the verify handler can atomically install them on confirmation.
           // Keep state=ACTIVE and current preferences untouched until verified.
+          if (!(await verificationMailAllowed(statusPageId, normalizedEmail))) {
+            return subscriptionAccepted();
+          }
           const pendingVerif = hashSubscriptionToken(verificationToken);
           const existingPrefs = (existing.preferences as Record<string, unknown> | null) ?? null;
           const pendingValue = normalizedPreferences !== null ? normalizedPreferences : null;
@@ -217,6 +245,14 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
           // No preference change for ACTIVE, or suppressed/bounced/complained — generic, no email
           return subscriptionAccepted();
         }
+      }
+
+      if (
+        !isActivePendingChange &&
+        action !== 'ACCEPT' &&
+        !(await verificationMailAllowed(statusPageId, normalizedEmail))
+      ) {
+        return subscriptionAccepted();
       }
 
       if (!isActivePendingChange && action === 'REACTIVATE') {
@@ -279,6 +315,10 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
         throw error;
       }
       if (preferencesProvided) await syncSubscriptionServices(created.id);
+      // The row exists; past the mail limits the address simply does not get a mail now.
+      if (!(await verificationMailAllowed(statusPageId, normalizedEmail))) {
+        return subscriptionAccepted();
+      }
     }
 
     const subscription = existing
