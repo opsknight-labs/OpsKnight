@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { AppError } from '@/lib/errors';
 
 const m = vi.hoisted(() => ({
   createScheduleLayer: vi.fn(),
@@ -84,6 +85,35 @@ describe('schedule layer actions use the same bounds as the API', () => {
       'sched-1',
       expect.objectContaining({ name: 'Primary', rotationLengthHours: 168 }),
       []
+    );
+  });
+
+  it('fences a layer edit on the revision the form was rendered from', async () => {
+    await expect(
+      updateLayer('layer-1', layerForm({ revision: '4' }))
+    ).resolves.toBeUndefined();
+    expect(m.updateScheduleLayer).toHaveBeenCalledWith(
+      m.tx,
+      'sched-1',
+      'layer-1',
+      expect.objectContaining({ name: 'Primary' }),
+      4
+    );
+
+    m.updateScheduleLayer.mockRejectedValue(new AppError({ code: 'PRECONDITION_FAILED' }));
+    const stale = await updateLayer('layer-1', layerForm({ revision: '3' }));
+    expect(stale?.error).toContain('Someone else changed this schedule');
+  });
+
+  it('still saves when the form carries no revision', async () => {
+    await updateLayer('layer-1', layerForm());
+
+    expect(m.updateScheduleLayer).toHaveBeenCalledWith(
+      m.tx,
+      'sched-1',
+      'layer-1',
+      expect.anything(),
+      undefined
     );
   });
 });

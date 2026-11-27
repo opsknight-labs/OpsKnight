@@ -28,6 +28,8 @@ type LayerRestrictions = {
 type LayerEditSheetProps = {
   layer: {
     id: string;
+    /** Revision when the page was rendered; a newer one makes the save refuse. */
+    revision?: number;
     name: string;
     start: Date;
     end: Date | null;
@@ -70,6 +72,7 @@ export default function LayerEditSheet({
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
+    if (layer.revision !== undefined) formData.set('revision', String(layer.revision));
     selectedDays.forEach(day => formData.append('daysOfWeek', day.toString()));
 
     startTransition(async () => {

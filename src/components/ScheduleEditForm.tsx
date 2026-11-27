@@ -25,6 +25,8 @@ type ScheduleEditFormProps = {
   scheduleId: string;
   currentName: string;
   currentTimeZone: string;
+  /** The schedule's revision when the page was rendered; a newer one makes the save refuse. */
+  currentRevision?: number;
   updateSchedule: (
     scheduleId: string,
     formData: FormData
@@ -36,6 +38,7 @@ export default function ScheduleEditForm({
   scheduleId,
   currentName,
   currentTimeZone,
+  currentRevision,
   updateSchedule,
   canManageSchedules,
 }: ScheduleEditFormProps) {
@@ -79,6 +82,7 @@ export default function ScheduleEditForm({
     const formData = new FormData();
     formData.set('name', name.trim());
     formData.set('timeZone', timeZone);
+    if (currentRevision !== undefined) formData.set('revision', String(currentRevision));
 
     startTransition(async () => {
       try {

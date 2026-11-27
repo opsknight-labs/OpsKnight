@@ -26,6 +26,7 @@ describe('ScheduleEditForm time zone change', () => {
         scheduleId="sched-1"
         currentName="Primary"
         currentTimeZone="UTC"
+        currentRevision={7}
         updateSchedule={updateSchedule}
         canManageSchedules
       />
@@ -63,5 +64,7 @@ describe('ScheduleEditForm time zone change', () => {
 
     await waitFor(() => expect(updateSchedule).toHaveBeenCalledTimes(1));
     expect(screen.queryByText(/Change schedule time zone/)).not.toBeInTheDocument();
+    // The revision the page was rendered from rides along so a stale save is refused.
+    expect((updateSchedule.mock.calls[0][1] as FormData).get('revision')).toBe('7');
   });
 });

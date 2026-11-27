@@ -34,10 +34,11 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
 import { updateSchedule } from '@/app/(app)/schedules/actions';
 
-function form(name: string, timeZone: string) {
+function form(name: string, timeZone: string, revision?: string) {
   const data = new FormData();
   data.set('name', name);
   data.set('timeZone', timeZone);
+  if (revision) data.set('revision', revision);
   return data;
 }
 
@@ -66,6 +67,18 @@ describe('updateSchedule notification', () => {
   it('sends nothing when nothing changed', async () => {
     await updateSchedule('sched-1', form('Primary', 'UTC'));
 
+    expect(m.createInAppNotifications).not.toHaveBeenCalled();
+  });
+
+  it('refuses an edit made from an older revision instead of overwriting', async () => {
+    m.update.mockRejectedValueOnce(Object.assign(new Error('not found'), { code: 'P2025' }));
+
+    const result = await updateSchedule('sched-1', form('Renamed', 'UTC', '2'));
+
+    expect(m.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'sched-1', revision: 2 } })
+    );
+    expect(result?.error).toContain('Someone else changed this schedule');
     expect(m.createInAppNotifications).not.toHaveBeenCalled();
   });
 });

@@ -51,6 +51,7 @@ type LayerRestrictions = {
 type LayerCardProps = {
   layer: {
     id: string;
+    revision?: number;
     name: string;
     start: Date;
     end: Date | null;
@@ -462,6 +463,7 @@ export default function LayerCard({
           <LayerEditSheet
             layer={{
               id: layer.id,
+              revision: layer.revision,
               name: layer.name,
               start: new Date(layer.start),
               end: layer.end ? new Date(layer.end) : null,

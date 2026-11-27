@@ -11,7 +11,7 @@ import { logAudit } from '@/lib/audit';
 import { createInAppNotifications, getScheduleUserIds } from '@/lib/in-app-notifications';
 import { parseDateTimeInTimeZone, isValidTimeZone } from '@/lib/timezone';
 import { assertScheduleNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
-import { AppError } from '@/lib/errors';
+import { AppError, isAppError } from '@/lib/errors';
 import {
   scheduleActionError,
   scheduleValidationError,
@@ -35,6 +35,24 @@ import {
 } from '@/lib/schedules/layer-commands';
 
 type ScheduleFormState = ScheduleActionState;
+
+const STALE_SCHEDULE_MESSAGE =
+  'Someone else changed this schedule after you opened it. Reload the page to see their changes, then make yours again.';
+
+/** The revision the form was rendered from, so a stale edit is refused instead of overwriting. */
+function expectedRevisionFrom(formData: FormData): number | undefined {
+  const raw = formData.get('revision');
+  if (raw === null || raw === '') return undefined;
+  const value = Number(raw);
+  return Number.isInteger(value) && value >= 1 ? value : undefined;
+}
+
+function staleScheduleState(): ScheduleFormState {
+  return scheduleActionError(
+    new AppError({ code: 'PRECONDITION_FAILED', userMessage: STALE_SCHEDULE_MESSAGE }),
+    STALE_SCHEDULE_MESSAGE
+  );
+}
 
 async function getScheduleName(scheduleId: string) {
   const schedule = await prisma.onCallSchedule.findUnique({
@@ -150,6 +168,7 @@ export async function updateSchedule(
 
   const name = (formData.get('name') as string)?.trim();
   const timeZone = (formData.get('timeZone') as string) || 'UTC';
+  const expectedRevision = expectedRevisionFrom(formData);
 
   if (!name) {
     return scheduleValidationError('Schedule name is required.', [
@@ -171,7 +190,10 @@ export async function updateSchedule(
     });
     await prisma.$transaction(async tx => {
       await tx.onCallSchedule.update({
-        where: { id: scheduleId },
+        where: {
+          id: scheduleId,
+          ...(expectedRevision === undefined ? {} : { revision: expectedRevision }),
+        },
         data: { name: normalizedName, timeZone },
       });
       await logAudit(
@@ -207,6 +229,10 @@ export async function updateSchedule(
     revalidatePath('/schedules');
     return undefined;
   } catch (error) {
+    // P2025: no row matched the id and the revision the form was rendered from.
+    if (expectedRevision !== undefined && (error as { code?: string })?.code === 'P2025') {
+      return staleScheduleState();
+    }
     if (error instanceof UniqueNameConflictError) {
       return scheduleActionError(
         new AppError({
@@ -481,6 +507,7 @@ export async function updateLayer(
   } catch (error) {
     return scheduleActionError(error, 'Unauthorized. Admin or Responder access required.');
   }
+  const expectedRevision = expectedRevisionFrom(formData);
   const name = formData.get('name') as string;
   const start = formData.get('start') as string;
   const end = formData.get('end') as string;
@@ -574,7 +601,8 @@ export async function updateLayer(
           rotationLengthHours: checked.values.rotationLengthHours,
           shiftLengthHours: checked.values.shiftLengthHours,
           restrictions: restrictions ?? null,
-        }
+        },
+        expectedRevision
       );
       await logAudit({
         action: 'schedule.layer.updated',
@@ -595,6 +623,7 @@ export async function updateLayer(
     revalidatePath(`/schedules/${layerMeta.scheduleId}`);
     revalidatePath('/schedules');
   } catch (error) {
+    if (isAppError(error) && error.code === 'PRECONDITION_FAILED') return staleScheduleState();
     return scheduleActionError(error, 'Failed to update layer.');
   }
 }
