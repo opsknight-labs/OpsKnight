@@ -121,6 +121,7 @@ Keep a personal token in the client's own secret store or environment where it h
 
 - Each line the client writes is one HTTP `POST <App URL>/mcp` with your bearer token and the protocol headers the server expects: `MCP-Protocol-Version` (the version in the request's `_meta`, otherwise the one agreed in `initialize`), `Mcp-Method`, and `Mcp-Name` for tool calls, prompts, resource reads and tasks.
 - JSON answers and streamed (`text/event-stream`) answers are both written back, one message per line. Several requests can run at once; each answer keeps its request's id.
+- **Several bridges, one sign-in**: bridges that share the saved sign-in refresh it one at a time, because the server rotates the refresh token. A sign-in or refresh request that gets no answer in 15 seconds is abandoned (the bridge logs that it could not reach the server) so a stalled server does not block the other bridges; one that waits more than 20 seconds for another bridge's refresh gives up the same way.
 - **401**: with a device sign-in the bridge refreshes once and retries; otherwise the client gets a JSON-RPC error telling you to sign in again or replace the token.
 - **429**: the bridge waits for `Retry-After` (up to 30 seconds, three times) and retries; a longer wait is returned as an error.
 - If the server cannot be reached, the request gets a JSON-RPC error and the bridge keeps running.

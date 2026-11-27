@@ -2,11 +2,11 @@
 // from `opsknight-mcp login` (OAuth device authorization, RFC 8628) kept in a 0600 file.
 // Tokens never reach stdout, stderr or error messages.
 /* eslint-disable security/detect-non-literal-fs-filename -- the only path is configPath() */
+import { randomUUID } from 'node:crypto';
 import {
   chmodSync,
-  closeSync,
+  linkSync,
   mkdirSync,
-  openSync,
   readFileSync,
   renameSync,
   statSync,
@@ -70,9 +70,13 @@ export function writeConfig(path, config) {
   renameSync(temp, path);
 }
 
+// A request must end well inside LOCK_STALE_MS, or a waiter would treat a live refresh as a crashed one.
+const REQUEST_TIMEOUT_MS = 15_000;
+
 async function postForm(endpoint, fields) {
   const response = await fetch(endpoint, {
     method: 'POST',
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
       accept: 'application/json',
@@ -104,17 +108,19 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
  */
 async function withConfigLock(path, work) {
   const lock = `${path}.lock`;
+  // Whoever holds the lock writes this into it, so a release only removes its own lock.
+  const owner = randomUUID();
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   const deadline = Date.now() + LOCK_WAIT_MS;
   for (;;) {
     try {
-      closeSync(openSync(lock, 'wx', 0o600));
+      writeFileSync(lock, owner, { flag: 'wx', mode: 0o600 });
       break;
     } catch (error) {
       if (error?.code !== 'EEXIST') throw error;
       try {
         // A crashed process must not block every later one.
-        if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS) unlinkSync(lock);
+        if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS) breakStaleLock(lock);
       } catch {
         // Released by its owner between the checks.
       }
@@ -126,10 +132,36 @@ async function withConfigLock(path, work) {
     return await work();
   } finally {
     try {
-      unlinkSync(lock);
+      // Another process may have broken this lock as stale and taken its own: leave that one alone.
+      if (readFileSync(lock, 'utf8') === owner) unlinkSync(lock);
     } catch {
       // Already removed.
     }
+  }
+}
+
+/**
+ * Two waiters that both saw the same stale lock must not both remove it: the second would delete the
+ * fresh lock the first just created. The rename is atomic, so one waiter wins a given file, and a
+ * waiter that finds it renamed a live lock puts it back.
+ * shortcut: a third process creating the lock in the instant between the rename and the put-back wins it; the displaced holder's release then leaves it alone.
+ */
+function breakStaleLock(lock) {
+  const aside = `${lock}.${randomUUID()}.stale`;
+  try {
+    renameSync(lock, aside);
+  } catch {
+    return;
+  }
+  try {
+    if (Date.now() - statSync(aside).mtimeMs <= LOCK_STALE_MS) linkSync(aside, lock);
+  } catch {
+    // Re-created in the meantime.
+  }
+  try {
+    unlinkSync(aside);
+  } catch {
+    // Already gone.
   }
 }
 
