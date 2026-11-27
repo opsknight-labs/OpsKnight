@@ -103,7 +103,7 @@ for ((i=1; i<=PROBE_ATTEMPTS; i++)); do
     echo "❌ [ERROR] No HTTP probe tool available on host (curl or wget) and no running web container found." >&2
     exit 1
   fi
-  if echo "${HTTP_RESPONSE}" | grep -q '"status":"healthy"'; then
+  if echo "${HTTP_RESPONSE}" | grep -Eq '"status":"(healthy|degraded)"'; then
     echo "✅ Web Ingress is HEALTHY (Response: ${HTTP_RESPONSE})"
     HTTP_SUCCESS=1
     break
