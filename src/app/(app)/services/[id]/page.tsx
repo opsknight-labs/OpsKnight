@@ -102,6 +102,7 @@ import ServiceGeneralSettings from '@/components/service/ServiceGeneralSettings'
 import ServiceNotificationSettings from '@/components/service/ServiceNotificationSettings';
 import JiraServiceMappingSettings from '@/components/service/JiraServiceMappingSettings';
 import ChatOpsWarRoomSettings from '@/components/service/ChatOpsWarRoomSettings';
+import { SERVICE_ACCOUNT_DOMAIN } from '@/lib/service-account-identity';
 import WarRoomAutoAddCard from '@/components/service/WarRoomAutoAddCard';
 import ServiceVisibilitySettings from '@/components/service/ServiceVisibilitySettings';
 import ServiceResponsePolicyHub from '@/components/service/ServiceResponsePolicyHub';
@@ -430,7 +431,10 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
           select: autoAddSelect,
         })),
         ...(await prisma.user.findMany({
-          where: { status: 'ACTIVE' },
+          where: {
+            status: 'ACTIVE',
+            NOT: { email: { endsWith: `@${SERVICE_ACCOUNT_DOMAIN}`, mode: 'insensitive' } },
+          },
           select: autoAddSelect,
           orderBy: { name: 'asc' },
           take: 30,

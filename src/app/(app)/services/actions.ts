@@ -1,6 +1,7 @@
 'use server';
 
 import { z } from 'zod';
+import { SERVICE_ACCOUNT_DOMAIN } from '@/lib/service-account-identity';
 import prisma from '@/lib/prisma';
 import { updateServiceWithAutomationPolicyGuard } from '@/lib/automation/service-policy';
 import type { Prisma } from '@prisma/client';
@@ -439,7 +440,11 @@ export async function updateServiceWarRoomAutoAdd(
     const currentUser = await assertCanModifyService(serviceId);
     const active = requested.length
       ? await prisma.user.findMany({
-          where: { id: { in: requested }, status: 'ACTIVE' },
+          where: {
+            id: { in: requested },
+            status: 'ACTIVE',
+            NOT: { email: { endsWith: `@${SERVICE_ACCOUNT_DOMAIN}`, mode: 'insensitive' } },
+          },
           select: { id: true },
         })
       : [];
@@ -475,6 +480,7 @@ export async function searchWarRoomAutoAddPeople(
   return prisma.user.findMany({
     where: {
       status: 'ACTIVE',
+      NOT: { email: { endsWith: `@${SERVICE_ACCOUNT_DOMAIN}`, mode: 'insensitive' } },
       ...(needle
         ? {
             OR: [

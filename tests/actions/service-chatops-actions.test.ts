@@ -281,6 +281,7 @@ describe('searchWarRoomAutoAddPeople', () => {
     const args = mocks.userFindMany.mock.calls[0][0];
     expect(args.take).toBe(30);
     expect(args.where.status).toBe('ACTIVE');
+    expect(args.where.NOT.email.endsWith).toBe('@serviceaccount.opsknight.local');
     expect(args.where.OR).toHaveLength(2);
     mocks.assertCanModifyService.mockRejectedValue(new Error('Forbidden'));
     await expect(searchWarRoomAutoAddPeople('svc-1', 'x')).rejects.toThrow('Forbidden');

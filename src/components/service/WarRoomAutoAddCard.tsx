@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useState } from 'react';
+import { startTransition, useActionState, useEffect, useState } from 'react';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Button } from '@/components/ui/shadcn/button';
@@ -78,7 +78,15 @@ export default function WarRoomAutoAddCard({
     });
 
   return (
-    <form action={formAction} className="space-y-3 rounded-lg border bg-card p-4">
+    <form
+      // Not `action=`: React resets a form after an action, which blanked the fields until a reload.
+      onSubmit={event => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        startTransition(() => formAction(data));
+      }}
+      className="space-y-3 rounded-lg border bg-card p-4"
+    >
       <input type="hidden" name="serviceId" value={serviceId} />
       {[...chosen].map(id => (
         <input key={id} type="hidden" name="userIds" value={id} />
