@@ -197,16 +197,31 @@ test.describe.serial('AIOps overview', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'AIOps overview' })).toBeVisible();
     const windows = page.getByRole('navigation', { name: 'Time window' });
     await expect(windows.locator('a[aria-current="page"]')).toHaveText(/7 days/);
+    const impact = page.getByRole('region', { name: 'Impact, last 7 days', exact: true });
+    await expect(impact).toBeVisible();
+    for (const label of ['Alerts to incidents', 'Time to first insight', 'MTTA', 'MTTR'])
+      await expect(impact.getByText(label, { exact: true })).toBeVisible();
 
-    for (const name of ['Noise', 'Speed', 'Outcomes', 'Alert quality', 'Changes', 'Lane health'])
+    for (const name of [
+      'Noise controls',
+      'Response trend',
+      'Feedback and quality',
+      'Alert quality',
+      'Changes',
+      'Lane health',
+    ])
       await expect(page.getByRole('region', { name, exact: true })).toBeVisible();
 
-    const noise = page.getByRole('region', { name: 'Noise', exact: true });
+    const noise = page.getByRole('region', { name: 'Noise controls', exact: true });
     const bars = noise.getByRole('list', { name: /suppressed per rule or maintenance window/ });
     await expect(
       bars.getByRole('listitem').filter({ hasText: `${prefix}known disk alarm` })
     ).toContainText('4');
-    await expect(noise.getByText('Pages avoided')).toBeVisible();
+    await expect(
+      page
+        .getByRole('region', { name: 'Feedback and quality', exact: true })
+        .getByText('Pages avoided', { exact: true })
+    ).toBeVisible();
 
     const changes = page.getByRole('region', { name: 'Changes', exact: true });
     await expect(
@@ -224,8 +239,8 @@ test.describe.serial('AIOps overview', () => {
     );
 
     await page
-      .getByRole('region', { name: 'Outcomes', exact: true })
-      .getByText('Show data table')
+      .getByRole('region', { name: 'Response trend', exact: true })
+      .getByRole('button', { name: 'Table', exact: true })
       .click();
     await expect(page.getByRole('table')).toBeVisible();
 
@@ -233,7 +248,7 @@ test.describe.serial('AIOps overview', () => {
     await windows.getByRole('link', { name: /24 hours/ }).click();
     await expect(page).toHaveURL(/window=24h/);
     await expect(windows.locator('a[aria-current="page"]')).toHaveText(/24 hours/);
-    await expect(page.getByRole('region', { name: 'Noise', exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Noise controls', exact: true })).toBeVisible();
 
     // Keyboard: the window links are reachable with Tab and show a visible focus ring.
     await windows.getByRole('link', { name: /7 days/ }).focus();
@@ -243,7 +258,7 @@ test.describe.serial('AIOps overview', () => {
     expect(await focused.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe('none');
 
     await page.screenshot({ path: testInfo.outputPath('overview-desktop.png'), fullPage: true });
-    for (const name of ['Outcomes', 'Alert quality', 'Changes', 'Lane health'])
+    for (const name of ['Response trend', 'Alert quality', 'Changes', 'Lane health'])
       await page
         .getByRole('region', { name, exact: true })
         .screenshot({ path: testInfo.outputPath(`overview-${name.replace(' ', '-')}.png`) });
@@ -256,7 +271,7 @@ test.describe.serial('AIOps overview', () => {
     const page = await signIn(browser, responderEmail);
     await page.goto('/intelligence');
     await expect(page.getByRole('heading', { level: 1, name: 'AIOps overview' })).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Noise', exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Noise controls', exact: true })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Lane health', exact: true })).toHaveCount(0);
     await expect(page.getByRole('link', { name: /Create suppression rule/ })).toHaveCount(0);
     await expect(
@@ -270,7 +285,7 @@ test.describe.serial('AIOps overview', () => {
     const page = await signIn(browser, adminEmail);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/intelligence?window=30d');
-    await expect(page.getByRole('region', { name: 'Outcomes', exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Response trend', exact: true })).toBeVisible();
     await page.evaluate(() => document.documentElement.classList.add('dark'));
     await noHorizontalOverflow(page);
     const target = await page
@@ -298,30 +313,34 @@ test.describe.serial('AIOps overview', () => {
       'href',
       '/settings/intelligence/services#dependencies'
     );
-    expect((await dependency.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
-    // The inbox sits above the sections.
-    const noise = page.getByRole('region', { name: 'Noise', exact: true });
+    // The inbox follows impact and sits above the detailed sections.
+    const noise = page.getByRole('region', { name: 'Noise controls', exact: true });
     await expect(noise).toBeVisible();
     expect((await inbox.boundingBox())?.y ?? 0).toBeLessThan((await noise.boundingBox())?.y ?? 0);
 
     for (const [name, label, href] of [
-      ['Noise', 'View alerts', '/alerts'],
-      ['Speed', 'View incidents', '/incidents'],
+      ['Noise controls', 'View alerts', '/alerts'],
       ['Alert quality', 'View services', '/services'],
       ['Changes', 'View changes', '/changes'],
-      ['Outcomes', 'Open analytics', '/insights'],
+      ['Response trend', 'Open analytics', '/insights'],
       ['Lane health', 'Open Intelligence settings', '/settings/intelligence'],
     ] as const)
       await expect(
         page.getByRole('region', { name, exact: true }).getByRole('link', { name: label })
       ).toHaveAttribute('href', href);
     await expectAccessible(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect((await dependency.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+    await noHorizontalOverflow(page);
+    await expectAccessible(page);
     await page.context().close();
 
     // Administrator-only rows never reach a responder.
     const responder = await signIn(browser, responderEmail);
     await responder.goto('/intelligence');
-    await expect(responder.getByRole('region', { name: 'Noise', exact: true })).toBeVisible();
+    await expect(
+      responder.getByRole('region', { name: 'Noise controls', exact: true })
+    ).toBeVisible();
     for (const kind of ['dependencies', 'quarantine', 'gate'])
       await expect(responder.locator(`[data-attention-item="${kind}"]`)).toHaveCount(0);
     await responder.context().close();
@@ -375,10 +394,11 @@ test.describe.serial('AIOps overview', () => {
     // Phone width, dark mode: no sideways scroll and the row link is a 44 px target.
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/alerts?service=${serviceId}`);
-    await expect(table).toBeVisible();
+    const mobileList = page.getByRole('list', { name: 'Alerts, newest first' });
+    await expect(mobileList).toBeVisible();
     await page.evaluate(() => document.documentElement.classList.add('dark'));
     await noHorizontalOverflow(page);
-    const target = await table
+    const target = await mobileList
       .getByRole('link', { name: `${prefix}suppressed disk alarm` })
       .boundingBox();
     expect(target?.height ?? 0).toBeGreaterThanOrEqual(44);
@@ -430,10 +450,11 @@ test.describe.serial('AIOps overview', () => {
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/changes?service=${serviceId}`);
-    await expect(table).toBeVisible();
+    const mobileList = page.getByRole('list', { name: 'Changes, newest first' });
+    await expect(mobileList).toBeVisible();
     await page.evaluate(() => document.documentElement.classList.add('dark'));
     await noHorizontalOverflow(page);
-    const target = await table
+    const target = await mobileList
       .getByRole('link', { name: `${prefix}checkout v43 rollout` })
       .boundingBox();
     expect(target?.height ?? 0).toBeGreaterThanOrEqual(44);

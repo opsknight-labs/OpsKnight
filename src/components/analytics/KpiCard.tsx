@@ -55,7 +55,11 @@ export function KpiGridSkeleton({ count }: { count: number }) {
   return (
     <ul role="status" aria-label="Loading key metrics" className={KPI_GRID}>
       {Array.from({ length: count }, (_, index) => (
-        <li key={index} className="h-26 animate-pulse rounded-lg border bg-card shadow-xs" />
+        <li
+          key={index}
+          aria-hidden="true"
+          className="h-26 animate-pulse rounded-lg border bg-card shadow-xs"
+        />
       ))}
     </ul>
   );

@@ -16,6 +16,8 @@ import { formatBucket, formatDuration } from './format';
 type Bucket = 'hour' | 'day' | 'week' | 'month';
 
 const AXIS = { fontSize: 11, fill: 'hsl(var(--ui-muted-foreground))' };
+// The charts are decorative beside an accessible table view. Recharts must not
+// insert focusable surfaces inside their aria-hidden wrappers.
 const HEIGHT = 240;
 // The comparison chart sits beside a side card on the AIOps overview, so it runs shorter.
 const COMPARISON_HEIGHT = 190;
@@ -128,6 +130,7 @@ export function VolumeChart({ data, bucket }: { data: TrendPoint[]; bucket: Buck
       <div style={{ height: HEIGHT }} aria-hidden>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
+            accessibilityLayer={false}
             data={data}
             margin={{ top: 4, right: 4, bottom: 0, left: -12 }}
             barCategoryGap="20%"
@@ -196,7 +199,11 @@ export function DurationChart({
     <div>
       <div style={{ height: HEIGHT }} aria-hidden>
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -4 }}>
+          <ComposedChart
+            accessibilityLayer={false}
+            data={data}
+            margin={{ top: 4, right: 8, bottom: 0, left: -4 }}
+          >
             <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
             <XAxis
               dataKey="bucket"
@@ -269,7 +276,11 @@ export function DurationComparisonChart({
     <div>
       <div style={{ height: COMPARISON_HEIGHT }} aria-hidden>
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -4 }}>
+          <ComposedChart
+            accessibilityLayer={false}
+            data={data}
+            margin={{ top: 4, right: 8, bottom: 0, left: -4 }}
+          >
             <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
             <XAxis
               dataKey="bucket"
@@ -336,7 +347,11 @@ export function InterruptionsChart({
     <div>
       <div style={{ height: 180 }} aria-hidden>
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -12 }}>
+          <ComposedChart
+            accessibilityLayer={false}
+            data={data}
+            margin={{ top: 4, right: 8, bottom: 0, left: -12 }}
+          >
             <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
             <XAxis
               dataKey="bucket"

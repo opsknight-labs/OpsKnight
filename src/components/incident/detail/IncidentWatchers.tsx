@@ -220,7 +220,7 @@ export default function IncidentWatchers({
                 variant="outline"
                 size="sm"
                 title="Add teammate as subscriber"
-                className="-my-1.5 h-7 shrink-0 gap-1 px-2 text-xs font-medium shadow-2xs"
+                className="-my-1.5 h-7 shrink-0 gap-1 px-2 text-xs font-medium shadow-2xs pointer-coarse:my-0 pointer-coarse:h-11"
               >
                 <Plus className="h-3.5 w-3.5" />
                 <span>Add</span>
