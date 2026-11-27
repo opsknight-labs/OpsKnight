@@ -341,7 +341,12 @@ export default async function IncidentDetailScreen({
       where: { incidentId: id, provider: 'JIRA' },
       orderBy: { createdAt: 'desc' },
     }),
-    getIncidentCollaborationView({ incidentId: id, userId: user.id }),
+    // A war-room or meeting read failure must not blank the page responders need; the
+    // controls simply stay hidden.
+    getIncidentCollaborationView({ incidentId: id, userId: user.id }).catch(error => {
+      logger.warn('incident.collaboration_view.unavailable', { incidentId: id, error });
+      return undefined;
+    }),
     // A health read failure must not block the incident page.
     getEscalationExecutionHealth(id).catch(() => null),
     // "Post status update": the status-page publish permission (admin), like the announcement API.

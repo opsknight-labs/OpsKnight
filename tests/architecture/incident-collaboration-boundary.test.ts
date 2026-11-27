@@ -53,4 +53,12 @@ describe('Incident Collaboration Architectural Boundaries', () => {
     expect(fileContent).not.toMatch(/@microsoft\/microsoft-graph-client/);
     expect(fileContent).not.toMatch(/@slack\/web-api/);
   });
+
+  it('keeps the incident page rendering when the collaboration view cannot be built', () => {
+    const screen = readFileSync('src/components/incident/IncidentDetailScreen.tsx', 'utf8');
+
+    expect(screen).toMatch(
+      /getIncidentCollaborationView\(\{ incidentId: id, userId: user\.id \}\)\.catch\(/
+    );
+  });
 });
