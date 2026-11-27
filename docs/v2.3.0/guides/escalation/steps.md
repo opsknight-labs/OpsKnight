@@ -44,6 +44,8 @@ Review every target and total path, then run a controlled test at a time the sch
 
 Preserve at least one viable route and review service impact before reordering/deleting. Retest the complete fallback chain after changes.
 
+Incidents that are already escalating keep their place. Deleting a step, reordering steps in the console, or sending the API a step list that only removes or reorders existing steps moves each open incident so it still pages the next tier it was waiting for, without skipping a tier or repeating one. If you move a tier that has not paged yet above one that already has, the incident pages the moved tier next and the earlier tier pages again, because skipping a responder is the worse failure. Replacing steps through the API with edited or new steps does not move open incidents; they continue from their current position in the new list.
+
 ## Troubleshooting
 
 **Step saves but no recipient:** inspect active user/team membership/schedule coverage and personal channel eligibility.

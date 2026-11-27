@@ -6,6 +6,10 @@ import {
   bumpResponderPolicyRevision,
   lockResponderPolicy,
 } from '@/lib/escalation/automation-snapshot';
+import {
+  readEscalationStepOrder,
+  remapOpenIncidentEscalationCursors,
+} from '@/lib/escalation/step-cursor';
 
 import {
   ESCALATION_STEP_CHANNELS_SUBMITTED,
@@ -532,6 +536,7 @@ export async function deletePolicyStep(stepId: string): Promise<{ error?: string
     await prisma.$transaction(async tx => {
       await lockResponderPolicy(tx, policyId);
       await bumpResponderPolicyRevision(tx, policyId);
+      const orderBefore = await readEscalationStepOrder(tx, policyId);
       await tx.escalationRule.delete({
         where: { id: stepId },
       });
@@ -551,6 +556,12 @@ export async function deletePolicyStep(stepId: string): Promise<{ error?: string
           });
         }
       }
+      // In-flight escalations track their next tier by index; keep each on the same tier.
+      await remapOpenIncidentEscalationCursors(tx, {
+        policyId,
+        before: orderBefore,
+        after: remainingSteps.map(remaining => remaining.id),
+      });
       await assertResponderPolicySnapshotSafe(tx, policyId);
     });
 
@@ -623,6 +634,7 @@ export async function movePolicyStep(
     await prisma.$transaction(async tx => {
       await lockResponderPolicy(tx, policyId);
       await bumpResponderPolicyRevision(tx, policyId);
+      const orderBefore = await readEscalationStepOrder(tx, policyId);
       await tx.escalationRule.update({
         where: { id: stepId },
         data: { stepOrder: -1 },
@@ -636,6 +648,11 @@ export async function movePolicyStep(
       await tx.escalationRule.update({
         where: { id: stepId },
         data: { stepOrder: newOrder, delayMinutes: targetDelay },
+      });
+      await remapOpenIncidentEscalationCursors(tx, {
+        policyId,
+        before: orderBefore,
+        after: await readEscalationStepOrder(tx, policyId),
       });
       await assertResponderPolicySnapshotSafe(tx, policyId);
     });
@@ -693,6 +710,7 @@ export async function reorderPolicySteps(
       if (steps.length !== orderIds.length) {
         throw new Error('Invalid step IDs provided for reordering');
       }
+      const orderBefore = await readEscalationStepOrder(tx, policyId);
 
       // Step 1: Temporarily set all steps to negative indices to prevent @@unique([policyId, stepOrder]) collisions
       for (const [i, stepId] of orderIds.entries()) {
@@ -715,6 +733,11 @@ export async function reorderPolicySteps(
           },
         });
       }
+      await remapOpenIncidentEscalationCursors(tx, {
+        policyId,
+        before: orderBefore,
+        after: await readEscalationStepOrder(tx, policyId),
+      });
       await assertResponderPolicySnapshotSafe(tx, policyId);
     });
 

@@ -38,6 +38,9 @@ type PrismaUpdateCall = [{ where: { id: string }; data: Record<string, unknown> 
 describe('Policy Step Actions', () => {
   const prismaMock = prisma as unknown as {
     $transaction: ReturnType<typeof vi.fn>;
+    $queryRaw: ReturnType<typeof vi.fn>;
+    $executeRaw: ReturnType<typeof vi.fn>;
+    incident: { updateMany: ReturnType<typeof vi.fn> };
     escalationRule: {
       findUnique: ReturnType<typeof vi.fn>;
       findMany: ReturnType<typeof vi.fn>;
@@ -171,6 +174,88 @@ describe('Policy Step Actions', () => {
         { where: { id: 'step-c' }, data: { stepOrder: 1, delayMinutes: 10 } },
         { where: { id: 'step-a' }, data: { stepOrder: 2, delayMinutes: 20 } },
       ]);
+    });
+  });
+
+  describe('in-flight escalations', () => {
+    const steps = (...ids: string[]) => ids.map((id, order) => ({ id, stepOrder: order, delayMinutes: 0 }));
+    const movedCursors = () =>
+      prismaMock.incident.updateMany.mock.calls.map(
+        call => (call[0] as { data: { currentEscalationStep: number } }).data.currentEscalationStep
+      );
+
+    beforeEach(() => {
+      // One incident whose next tier is the third step (index 2).
+      prismaMock.$queryRaw.mockResolvedValue([{ id: 'inc-1', step: 2 }]);
+    });
+
+    it('keeps an incident on the same tier when an earlier step is deleted', async () => {
+      prismaMock.escalationRule.findUnique.mockResolvedValue({
+        id: 'step-a',
+        policyId: 'pol-1',
+        stepOrder: 0,
+        delayMinutes: 0,
+        policy: { id: 'pol-1' },
+      });
+      prismaMock.escalationRule.findMany
+        .mockResolvedValueOnce(steps('step-a', 'step-b', 'step-c'))
+        .mockResolvedValueOnce(steps('step-b', 'step-c'));
+
+      await deletePolicyStep('step-a');
+
+      expect(movedCursors()).toEqual([1]);
+      expect(prismaMock.incident.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['inc-1'] } },
+        data: { currentEscalationStep: 1 },
+      });
+    });
+
+    it('leaves an incident alone when a later step is deleted', async () => {
+      prismaMock.escalationRule.findUnique.mockResolvedValue({
+        id: 'step-d',
+        policyId: 'pol-1',
+        stepOrder: 3,
+        delayMinutes: 0,
+        policy: { id: 'pol-1' },
+      });
+      prismaMock.escalationRule.findMany
+        .mockResolvedValueOnce(steps('step-a', 'step-b', 'step-c', 'step-d'))
+        .mockResolvedValueOnce(steps('step-a', 'step-b', 'step-c'));
+
+      await deletePolicyStep('step-d');
+
+      expect(prismaMock.incident.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('does not skip the unpaged tier when a step is moved above a paged one', async () => {
+      prismaMock.$queryRaw.mockResolvedValue([{ id: 'inc-1', step: 1 }]);
+      prismaMock.escalationRule.findUnique.mockResolvedValue({
+        id: 'step-b',
+        policyId: 'pol-1',
+        stepOrder: 1,
+        delayMinutes: 0,
+      });
+      prismaMock.escalationRule.findMany
+        .mockResolvedValueOnce(steps('step-a', 'step-b'))
+        .mockResolvedValueOnce(steps('step-a', 'step-b'))
+        .mockResolvedValueOnce(steps('step-b', 'step-a'));
+
+      await movePolicyStep('step-b', 'up');
+
+      expect(movedCursors()).toEqual([0]);
+    });
+
+    it('moves the cursor with a full reorder that drops no tier behind it', async () => {
+      prismaMock.$queryRaw.mockResolvedValue([{ id: 'inc-1', step: 1 }]);
+      prismaMock.escalationRule.findMany
+        .mockResolvedValueOnce(steps('step-a', 'step-b', 'step-c'))
+        .mockResolvedValueOnce(steps('step-a', 'step-b', 'step-c'))
+        .mockResolvedValueOnce(steps('step-a', 'step-c', 'step-b'));
+
+      await reorderPolicySteps('pol-1', ['step-a', 'step-c', 'step-b']);
+
+      // step-a is paged and still first; the unpaged tiers just swap, so the cursor stays.
+      expect(prismaMock.incident.updateMany).not.toHaveBeenCalled();
     });
   });
 
