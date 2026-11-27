@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   findUnique: vi.fn(),
   create: vi.fn(),
   deleteMany: vi.fn(),
+  updateMany: vi.fn(),
   fanout: vi.fn(),
   audit: vi.fn(),
 }));
@@ -13,6 +14,7 @@ vi.mock('@/lib/prisma', () => {
       findUnique: mocks.findUnique,
       create: mocks.create,
       deleteMany: mocks.deleteMany,
+      updateMany: mocks.updateMany,
     },
   };
   return { default: { $transaction: (run: (client: typeof tx) => unknown) => run(tx) } };
@@ -37,6 +39,7 @@ describe('status-page drafts', () => {
     vi.clearAllMocks();
     mocks.findUnique.mockResolvedValue(null);
     mocks.deleteMany.mockResolvedValue({ count: 0 });
+    mocks.updateMany.mockResolvedValue({ count: 0 });
     mocks.create.mockImplementation(async ({ data }) => ({
       id: data.id,
       notificationGeneration: 0,
@@ -126,6 +129,41 @@ describe('status-page drafts', () => {
       deliveryMode: 'ALL_ELIGIBLE',
     });
     expect(mocks.audit.mock.calls[0][0].action).toBe('status_page.announcement.auto_published');
+  });
+
+  it('a published recovery ends the published impact notice for that business service', async () => {
+    mocks.updateMany.mockResolvedValue({ count: 1 });
+    await draftStatusPageUpdates({
+      businessService: { ...bs, autoPublishStatusUpdates: true },
+      pages: [{ statusPageId: 'p1' }],
+      from: 'MAJOR_OUTAGE',
+      to: 'OPERATIONAL',
+      changeKey: 'k4',
+      now,
+    });
+    expect(mocks.updateMany).toHaveBeenCalledWith({
+      where: {
+        statusPageId: 'p1',
+        id: { startsWith: 'bsd_' },
+        isActive: true,
+        endDate: null,
+        affectedBusinessServiceIds: { array_contains: ['bs1'] },
+      },
+      data: { endDate: now },
+    });
+    expect(mocks.audit.mock.calls[0][0].metadata.closedNotices).toBe(1);
+  });
+
+  it('a recovery draft leaves the published impact notice for the admin to close', async () => {
+    await draftStatusPageUpdates({
+      businessService: bs,
+      pages: [{ statusPageId: 'p1' }],
+      from: 'MAJOR_OUTAGE',
+      to: 'OPERATIONAL',
+      changeKey: 'k5',
+      now,
+    });
+    expect(mocks.updateMany).not.toHaveBeenCalled();
   });
 
   it('on recovery withdraws unpublished impact drafts and drafts the recovery', async () => {

@@ -293,6 +293,53 @@ describe('computeHealth', () => {
     }
   });
 
+  it('keeps every impacted member in the capped reasons when one member has many incidents', () => {
+    const noisy = Array.from({ length: 40 }, (_, n) => incident(`noisy-${n}`, 'alerts', 'HIGH'));
+    const health = computeHealth(
+      inputs({
+        businessServices: [bs('platform', ['alerts', 'web'])],
+        incidents: [...noisy, incident('quiet', 'web', 'HIGH')],
+      })
+    ).get('platform')!;
+    const subjects = new Set(
+      health.reasons.map(reason => (reason.kind === 'DIRECT' ? reason.serviceId : null))
+    );
+    expect(subjects).toEqual(new Set(['alerts', 'web']));
+    expect(health.reasons).toHaveLength(25);
+    expect(health.impactedMemberCount).toBe(2);
+  });
+
+  it('keeps a status-setting manual reason when more than 25 members are impacted', () => {
+    const members = Array.from({ length: 30 }, (_, n) => `svc-${n}`);
+    const health = computeHealth(
+      inputs({
+        // Non-critical members cap at DEGRADED; the manual mark on a HIGH incident is the worst.
+        businessServices: [
+          bs(
+            'platform',
+            members.map(id => [id, false] as [string, boolean])
+          ),
+        ],
+        incidents: [
+          ...members.map(id => incident(`i-${id}`, id, 'HIGH')),
+          incident('marked', 'elsewhere', 'HIGH'),
+        ],
+        impactRows: [
+          {
+            incidentId: 'marked',
+            businessServiceId: 'platform',
+            source: 'MANUAL',
+            excluded: false,
+            createdById: 'u1',
+            startedAt: NOW,
+          },
+        ],
+      })
+    ).get('platform')!;
+    expect(health.status).toBe('MAJOR_OUTAGE');
+    expect(health.reasons[0]).toMatchObject({ kind: 'MANUAL', status: 'MAJOR_OUTAGE' });
+  });
+
   it('reports since as the earliest incident behind the current status', () => {
     const early = new Date('2026-11-22T09:00:00Z');
     const health = computeHealth(

@@ -230,6 +230,38 @@ function byWorst(a: ImpactReason, b: ImpactReason) {
 }
 
 /**
+ * The member or child business service a reason is about. Reasons about no member (manual
+ * marks, maintenance, customer reports) count as one subject per kind, so the worst reason,
+ * which sets the status, always survives the cap.
+ */
+function reasonSubject(reason: ImpactReason): string {
+  if (reason.kind === 'DIRECT') return `s:${reason.serviceId}`;
+  if (reason.kind === 'DEPENDENCY') return `s:${reason.viaServiceId}`;
+  if (reason.kind === 'NESTED') return `b:${reason.childBusinessServiceId}`;
+  return `k:${reason.kind}`;
+}
+
+/**
+ * Caps sorted reasons at MAX_REASONS but keeps each subject's worst one first, so a member
+ * behind hundreds of incidents cannot push another impacted member out of the list (its row
+ * would read Operational and the "why" card would skip it). Stays sorted worst first.
+ */
+function capReasons(sorted: ImpactReason[]): ImpactReason[] {
+  if (sorted.length <= MAX_REASONS) return sorted;
+  const seen = new Set<string>();
+  const firsts: ImpactReason[] = [];
+  const rest: ImpactReason[] = [];
+  for (const reason of sorted) {
+    const subject = reasonSubject(reason);
+    if (!seen.has(subject)) {
+      seen.add(subject);
+      firsts.push(reason);
+    } else rest.push(reason);
+  }
+  return [...firsts, ...rest].slice(0, Math.max(MAX_REASONS, firsts.length)).sort(byWorst);
+}
+
+/**
  * Health of every business service in `inputs`. Rules, worst reason wins:
  * - DIRECT: an incident meeting the service's threshold on a member; urgency maps to status,
  *   non-critical members cap at DEGRADED.
@@ -446,7 +478,7 @@ export function computeHealth(inputs: HealthInputs): Map<string, BusinessService
       status,
       since:
         status === 'OPERATIONAL' || status === 'MAINTENANCE' || status === 'UNKNOWN' ? null : since,
-      reasons: reasons.slice(0, MAX_REASONS),
+      reasons: capReasons(reasons),
       openIncidentCount: incidentIds.size,
       memberCount: bs.members.length,
       impactedMemberCount: impactedMembers.get(bs.id)?.size ?? 0,
