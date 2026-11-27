@@ -396,8 +396,13 @@ test.describe.serial('intelligence responder workflows', () => {
     await expect(page.getByRole('textbox', { name: 'Assistant name', exact: true })).toHaveValue(
       'Pip'
     );
-    // The seed stores the SQUIRE mascot (the chat tests below rely on it).
-    await expect(page.getByRole('radio', { name: 'Squire mascot' })).toBeChecked();
+    const appearance = page.getByRole('region', { name: 'Assistant appearance preview' });
+    await expect(appearance.getByText('Pip', { exact: true })).toBeVisible();
+    await appearance.getByLabel('Expression', { exact: true }).selectOption('thinking');
+    await expect(appearance.locator('[data-avatar="SQUIRE"] svg')).toHaveAttribute(
+      'data-state',
+      'thinking'
+    );
   });
 
   test('administrators can pause and adjust the background allocation through the settings form', async ({
@@ -595,8 +600,8 @@ test.describe.serial('intelligence responder workflows', () => {
     await expect(dialog).toBeHidden();
     await expect(launcher).toBeFocused();
 
-    const search = page.getByPlaceholder('Search...');
-    await search.click();
+    await page.getByRole('button', { name: /Search or jump/ }).click();
+    const search = page.getByPlaceholder('Search or type a command…');
     await search.fill('pip');
     await page.getByText('Ask Pip', { exact: true }).last().click();
     await expect(dialog).toBeVisible();
@@ -674,7 +679,10 @@ test.describe.serial('intelligence responder workflows', () => {
     await dialog.getByRole('button', { name: 'More actions' }).click();
     await page.getByRole('menuitem', { name: 'Float Pip over the page' }).click();
     await expect(page.locator('html.squire-docked')).toHaveCount(0);
+    await expect(page.getByRole('menu')).toHaveCount(0);
+    await page.getByLabel('Message Pip').focus();
     await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
     await page.evaluate(() => localStorage.removeItem('opsknight.squire.display'));
 
     // Below the desktop breakpoint docking is not offered.
@@ -685,8 +693,8 @@ test.describe.serial('intelligence responder workflows', () => {
     await page.keyboard.press('Escape');
     await page.setViewportSize({ width: 1440, height: 900 });
 
-    const search = page.getByPlaceholder('Search...');
-    await search.click();
+    await page.getByRole('button', { name: /Search or jump/ }).click();
+    const search = page.getByPlaceholder('Search or type a command…');
     await search.fill('ask pip what is on fire?');
     await page.getByText('Ask Pip', { exact: true }).last().click();
     await expect(dialog).toBeVisible();

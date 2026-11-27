@@ -77,7 +77,7 @@ export function CopyIdText({ id }: { id: string }) {
       type="button"
       onClick={() => copy(id, 'ID')}
       title="Copy incident ID"
-      className="inline-flex h-11 items-center font-mono text-muted-foreground hover:text-foreground hover:underline"
+      className="-my-3 inline-flex h-11 items-center font-mono text-muted-foreground hover:text-foreground hover:underline"
     >
       #{id.slice(0, 8)}
     </button>
