@@ -169,42 +169,42 @@ export async function runSLADriftDetection(options?: {
           'totalIncidents',
           liveResult.totalIncidents,
           rollupResult.totalIncidents,
-          DEFAULT_TOLERANCE_FRACTION,
+          options?.toleranceFraction,
           DEFAULT_SMALL_COUNT_TOLERANCE
         ),
         compare(
           'highUrgencyCount',
           liveResult.highUrgencyCount,
           rollupResult.highUrgencyCount,
-          DEFAULT_TOLERANCE_FRACTION,
+          options?.toleranceFraction,
           DEFAULT_SMALL_COUNT_TOLERANCE
         ),
         compare(
           'mediumUrgencyCount',
           liveResult.mediumUrgencyCount,
           rollupResult.mediumUrgencyCount,
-          DEFAULT_TOLERANCE_FRACTION,
+          options?.toleranceFraction,
           DEFAULT_SMALL_COUNT_TOLERANCE
         ),
         compare(
           'lowUrgencyCount',
           liveResult.lowUrgencyCount,
           rollupResult.lowUrgencyCount,
-          DEFAULT_TOLERANCE_FRACTION,
+          options?.toleranceFraction,
           DEFAULT_SMALL_COUNT_TOLERANCE
         ),
         compare(
           'ackBreaches',
           liveResult.ackBreaches,
           rollupResult.ackBreaches,
-          DEFAULT_TOLERANCE_FRACTION,
+          options?.toleranceFraction,
           DEFAULT_SMALL_COUNT_TOLERANCE
         ),
         compare(
           'resolveBreaches',
           liveResult.resolveBreaches,
           rollupResult.resolveBreaches,
-          DEFAULT_TOLERANCE_FRACTION,
+          options?.toleranceFraction,
           DEFAULT_SMALL_COUNT_TOLERANCE
         ),
         compare('mttr', liveResult.mttr, rollupResult.mttr, options?.toleranceFraction ?? 0.02),
@@ -212,7 +212,7 @@ export async function runSLADriftDetection(options?: {
           'autoResolvedCount',
           liveResult.autoResolvedCount,
           rollupResult.autoResolvedCount,
-          DEFAULT_TOLERANCE_FRACTION,
+          options?.toleranceFraction,
           DEFAULT_SMALL_COUNT_TOLERANCE
         ),
       ];
