@@ -1166,6 +1166,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               incidentClassificationPolicy={incidentClassificationPolicy}
               responseSupportHoursPolicy={responseSupportHoursPolicy}
               canManage={canManageService}
+              canManageSla={hasCapability(actor.role, CAPABILITIES.ADMIN_MANAGE)}
             />
           )}
 
