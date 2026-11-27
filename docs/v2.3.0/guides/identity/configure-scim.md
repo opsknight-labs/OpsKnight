@@ -262,6 +262,13 @@ administrator binding. Map `displayName`, `name.formatted`, `name.givenName`,
 `department` as needed. Profile images accept HTTP(S) URLs. Unmapped attributes,
 privilege changes and unsupported PATCH paths fail with SCIM errors.
 
+SCIM cannot change the email of an administrator account, because that address is
+the sign-in name and where a password reset is sent. A PATCH or PUT that would
+move it is refused with HTTP 400 `mutability`, nothing in the request is applied,
+and a `user.update_refused` event is recorded in the SCIM activity log. Sending
+the administrator's current email again (in any letter case) is not a change.
+Change an administrator's email in OpsKnight.
+
 For Entra, use Enterprise applications → Provisioning → Automatic. Enter the Tenant
 URL and one-time Secret Token. Map `objectId` to `externalId`. Change the default
 `userPrincipalName` → `userName` mapping to `mail` → `userName`, and keep `mail` →
