@@ -82,7 +82,10 @@ describe('approval commit crash and replay safety', () => {
     });
     const delta = (await baseline.teamRevision()) - before;
     expect(delta).toBeGreaterThan(0);
-    expect(counter.consultations).toBeGreaterThan(8);
+    // The result-recording checkpoint was removed on purpose: a write that already committed must be
+    // reported as success, so a late deadline can no longer fail it. The loop below still injects a
+    // failure at every checkpoint that remains.
+    expect(counter.consultations).toBeGreaterThanOrEqual(8);
 
     let crashedAfterEffect = 0;
     for (let failAt = 1; failAt <= counter.consultations + 1; failAt++) {
