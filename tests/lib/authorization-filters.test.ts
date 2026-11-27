@@ -44,6 +44,15 @@ describe('authorization query filters', () => {
     expect(postmortemReadWhere({ ...user, role: 'ADMIN' as const })).not.toHaveProperty('status');
   });
 
+  it('hides the items of draft and archived postmortems from actors without postmortem.draft.read', () => {
+    const auditor = { ...user, role: 'AUDITOR' as const, teamIds: [] };
+    const responder = { ...user, role: 'RESPONDER' as const, teamIds: [] };
+    expect(actionItemReadWhere(auditor)).toEqual({
+      postmortem: { incident: {}, status: 'PUBLISHED' },
+    });
+    expect(actionItemReadWhere(responder)).toEqual({ postmortem: { incident: {} } });
+  });
+
   it('returns global filters for global readers', () => {
     expect(incidentReadWhere({ ...user, role: 'AUDITOR', teamIds: [] })).toEqual({});
     expect(serviceReadWhere({ ...user, role: 'RESPONDER', teamIds: [] })).toEqual({});
@@ -52,7 +61,7 @@ describe('authorization query filters', () => {
   it('scopes every related directory through the same actor policy', () => {
     expect(serviceReadWhere(user)).toEqual({ teamId: { in: ['team-1'] } });
     expect(teamReadWhere(user)).toEqual({ id: { in: ['team-1'] } });
-    expect(actionItemReadWhere(user)).toEqual({ incident: incidentReadWhere(user) });
+    expect(actionItemReadWhere(user)).toEqual({ postmortem: postmortemReadWhere(user) });
     expect(postmortemReadWhere(user)).toEqual({
       incident: incidentReadWhere(user),
       status: 'PUBLISHED',

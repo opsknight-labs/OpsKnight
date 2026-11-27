@@ -114,7 +114,7 @@ These work in a war-room channel and run as you, with your normal permissions.
 
 ## Action items
 
-`/incident action Add a canary to the deploy [@person] [due:2026-12-05]` adds a follow-up to the incident's postmortem, creating a draft postmortem if there isn't one. The title is at most 200 characters, a due date must be a real date (up to a day in the past is accepted), and an identical open title is refused as a duplicate. The owner must have an OpsKnight account. `/incident actions` lists the open, in-progress, and blocked items privately (ten at most). You need permission to manage the incident to add items. Items created this way are marked manual.
+`/incident action Add a canary to the deploy [@person] [due:2026-12-05]` adds a follow-up to the incident's postmortem, creating a draft postmortem if there isn't one. The title is at most 200 characters, a due date must be a real date (up to a day in the past is accepted), and an identical open title is refused as a duplicate. The owner must have an OpsKnight account. `/incident actions` lists the open, in-progress, and blocked items privately (ten at most); items of a draft or archived postmortem are listed only if you have the `postmortem.draft.read` permission. You need permission to manage the incident to add items. Items created this way are marked manual.
 
 ## How a command answers
 

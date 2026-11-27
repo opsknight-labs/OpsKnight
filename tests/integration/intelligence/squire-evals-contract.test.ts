@@ -96,7 +96,7 @@ describe('Squire structural evaluation (no model)', () => {
       },
     });
     const postmortem = await db.postmortem.create({
-      data: { incidentId: incidents[6].id, title: 'Database pool postmortem', status: 'DRAFT' },
+      data: { incidentId: incidents[6].id, title: 'Database pool postmortem', status: 'PUBLISHED' },
     });
     await db.actionItem.create({
       data: {

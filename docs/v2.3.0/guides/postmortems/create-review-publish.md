@@ -124,7 +124,10 @@ Anyone who can read the incident can read its **Published** postmortem. **Draft*
 and **Archived** postmortems are working material and are visible only to people
 with the `postmortem.draft.read` permission (**View draft postmortems**): the
 built-in Admin and Responder roles, and any custom role or temporary access that
-includes it. Users and Auditors see published postmortems only.
+includes it. Users and Auditors see published postmortems only. Action items follow
+the postmortem they belong to everywhere: the Action Items page, API v2, Slack
+`/incident actions` and Squire's follow-up answers and duplicate checks show an
+item of a draft or archived postmortem only to people who can read that postmortem.
 
 - On **Postmortems**, the Drafts and Archived counts and the matching status
   filter options appear only for people who can read them. A `DRAFT` or

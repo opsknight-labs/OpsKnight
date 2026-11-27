@@ -238,7 +238,7 @@ describe('non-AI operational questions', () => {
         incidentId: w.own.id,
         title: 'Checkout review',
         rootCause: 'Pool limit too small',
-        status: 'DRAFT',
+        status: 'PUBLISHED',
       },
     });
     await db.postmortem.create({ data: { incidentId: w.other.id, title: 'Secret postmortem' } });

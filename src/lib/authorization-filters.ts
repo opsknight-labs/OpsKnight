@@ -131,8 +131,12 @@ export function actorMetricReadScope(
     : { authorizationScope: { actorId: actor.id, teamIds: [...actor.teamIds] } };
 }
 
+/**
+ * Action items live on a postmortem, so they follow its read rule: a draft or archived postmortem's
+ * items need `postmortem.draft.read` (and incident read), like the postmortem itself.
+ */
 export function actionItemReadWhere(actor: AuthorizationActor): Prisma.ActionItemWhereInput {
-  return { incident: incidentReadWhere(actor) };
+  return { postmortem: postmortemReadWhere(actor) };
 }
 
 /**

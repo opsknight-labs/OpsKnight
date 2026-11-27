@@ -10,6 +10,7 @@ import prisma from '@/lib/prisma';
 import { escapeSlack } from '@/lib/chatops/squire/render';
 import { getBaseUrl } from '@/lib/env-validation';
 import { resolveUserActor } from '@/lib/authorization-actors';
+import { postmortemReadWhere } from '@/lib/authorization-filters';
 import { authorizeChatOpsIncident } from '@/lib/incidents/chatops-lifecycle';
 import { executeChatOpsPostmortemCommand } from '@/lib/incidents/chatops-postmortem';
 import { assertPostmortemAccess, postmortemEditWhere } from '@/lib/postmortems/authorization';
@@ -147,8 +148,12 @@ export async function handleActionsListCommand(input: {
   actor: { id: string };
 }): Promise<Reply> {
   await authorizeChatOpsIncident(input.incident.id, input.actor.id, 'READ');
+  const actorForAccess = await resolveUserActor(input.actor.id);
+  if (!actorForAccess) return refuse('Your OpsKnight account is not active.');
   const where = {
     incidentId: input.incident.id,
+    // Items of a draft postmortem need postmortem.draft.read, like the postmortem itself.
+    postmortem: postmortemReadWhere(actorForAccess),
     status: { in: ['OPEN', 'IN_PROGRESS', 'BLOCKED'] as Array<'OPEN' | 'IN_PROGRESS' | 'BLOCKED'> },
   };
   const [rows, total] = await Promise.all([
