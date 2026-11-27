@@ -394,10 +394,11 @@ test.describe.serial('AIOps overview', () => {
     // Phone width, dark mode: no sideways scroll and the row link is a 44 px target.
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/alerts?service=${serviceId}`);
-    await expect(table).toBeVisible();
+    const mobileList = page.getByRole('list', { name: 'Alerts, newest first' });
+    await expect(mobileList).toBeVisible();
     await page.evaluate(() => document.documentElement.classList.add('dark'));
     await noHorizontalOverflow(page);
-    const target = await table
+    const target = await mobileList
       .getByRole('link', { name: `${prefix}suppressed disk alarm` })
       .boundingBox();
     expect(target?.height ?? 0).toBeGreaterThanOrEqual(44);
@@ -449,10 +450,11 @@ test.describe.serial('AIOps overview', () => {
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/changes?service=${serviceId}`);
-    await expect(table).toBeVisible();
+    const mobileList = page.getByRole('list', { name: 'Changes, newest first' });
+    await expect(mobileList).toBeVisible();
     await page.evaluate(() => document.documentElement.classList.add('dark'));
     await noHorizontalOverflow(page);
-    const target = await table
+    const target = await mobileList
       .getByRole('link', { name: `${prefix}checkout v43 rollout` })
       .boundingBox();
     expect(target?.height ?? 0).toBeGreaterThanOrEqual(44);

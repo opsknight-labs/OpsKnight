@@ -14,9 +14,9 @@ const TONE_DOT: Record<StripChipTone, string> = {
 
 // The page's chip shape (field-styles CHIP_CLASS); the incident page's touch scope (.incident-dense) gives each a 44px hit area.
 const CHIP_CLASS =
-  'inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-input bg-background px-2.5 text-xs font-medium text-foreground shadow-2xs transition-colors hover:bg-muted/60 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
+  'inline-flex h-11 shrink-0 sm:h-8 items-center gap-1.5 whitespace-nowrap rounded-md border border-input bg-background px-2.5 text-xs font-medium text-foreground shadow-2xs transition-colors hover:bg-muted/60 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
 const OPENER_CLASS =
-  'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
+  'inline-flex h-11 shrink-0 sm:h-8 items-center gap-1.5 rounded-md px-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
 
 /**
  * One row of intelligence under the command bar: a chip per fact that has content, and one freshness dot while
