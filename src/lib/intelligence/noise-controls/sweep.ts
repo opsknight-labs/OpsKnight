@@ -448,19 +448,19 @@ export async function runNoiseSweep(
 }
 
 const schedule = { checkedAt: 0 };
+const inlineSchedule = { checkedAt: 0 };
 
 /** Tests only: forget when the sweeps were last scheduled. */
 export function resetNoiseSweepSchedule(): void {
   schedule.checkedAt = 0;
+  inlineSchedule.checkedAt = 0;
 }
 
 /**
  * Called once per lane cycle: nothing between intervals, then one indexed existence probe, and a coalesced
  * item only for a sweep that has candidates (no suppressed incident / no open storm link: no work queued).
  */
-export async function scheduleNoiseSweeps(now: number): Promise<number> {
-  if (now - schedule.checkedAt < NOISE_SWEEP_INTERVAL_MS) return 0;
-  schedule.checkedAt = now;
+async function dueNoiseSweeps(): Promise<string[]> {
   // Both probes read only partial indexes (idx_sla_pause_open_noise, idx_incident_relationship_storm_open).
   const [due] = await prisma.$queryRaw<Array<{ unsuppress: boolean; cascade: boolean }>>`
     SELECT EXISTS (
@@ -477,12 +477,37 @@ export async function scheduleNoiseSweeps(now: number): Promise<number> {
                AND p.status = 'RESOLVED'
                AND c.status IN ('OPEN', 'ACKNOWLEDGED')
            ) AS cascade`;
-  const subjects = [
+  return [
     ...(due?.unsuppress ? [NOISE_SWEEP_SUBJECTS.unsuppress] : []),
     ...(due?.cascade ? [NOISE_SWEEP_SUBJECTS.stormCascade] : []),
   ];
+}
+
+export async function scheduleNoiseSweeps(now: number): Promise<number> {
+  if (now - schedule.checkedAt < NOISE_SWEEP_INTERVAL_MS) return 0;
+  schedule.checkedAt = now;
+  const subjects = await dueNoiseSweeps();
   if (!subjects.length) return 0;
   return enqueueWorkItems(
     subjects.map(subjectKey => ({ kind: WORK_KINDS.NOISE_SWEEP, subjectKey }))
   );
+}
+
+/**
+ * With Intelligence switched off the lane queues no work, yet incidents that noise controls suppressed
+ * must still page when their reason ends (the switch is also the emergency stop). So the sweeps run
+ * straight from the cycle, at the same interval, a few pages at most.
+ */
+export async function runNoiseSweepsInline(now: number, budget: Budget): Promise<void> {
+  if (now - inlineSchedule.checkedAt < NOISE_SWEEP_INTERVAL_MS) return;
+  inlineSchedule.checkedAt = now;
+  for (const subject of await dueNoiseSweeps()) {
+    for (let page = 0; page < 5; page += 1) {
+      const more =
+        subject === NOISE_SWEEP_SUBJECTS.stormCascade
+          ? await runStormCascadeSweep(budget)
+          : await runUnsuppressSweep(budget);
+      if (!more) break;
+    }
+  }
 }

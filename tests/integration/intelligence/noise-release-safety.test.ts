@@ -8,6 +8,7 @@ import {
   setPrePagingDeadlineMs,
 } from '@/lib/intelligence/noise-controls';
 import { disconnectNoiseLookupClient } from '@/lib/intelligence/noise-controls/lookup-client';
+import { createLaneState, runIntelligenceCycle } from '@/lib/intelligence/jobs/runner';
 import {
   resetNoiseSweepSchedule,
   runUnsuppressSweep,
@@ -329,6 +330,28 @@ describe('the audit trail never beats paging (N11)', () => {
 
     const incident = incidentOf(await send(service.id, { severity: 'warning' }));
     expect(incident.status).toBe('OPEN');
+    expect(await pagingJobs(incident.id)).toHaveLength(1);
+  });
+});
+
+describe('suppressed incidents are released even with Intelligence switched off (N5)', () => {
+  it('pages the still-firing alert after its window ends, when the master switch is off', async () => {
+    const service = await createTestService('Checkout');
+    const window = await activeWindow(service.id);
+    await policy(service.id);
+    const incident = incidentOf(await send(service.id, { severity: 'warning' }));
+    expect(incident.status).toBe('SUPPRESSED');
+
+    await db.intelligenceSettings.update({ where: { id: 'default' }, data: { enabled: false } });
+    await db.noiseMaintenanceWindow.update({
+      where: { id: window.id },
+      data: { startsAt: new Date(Date.now() - 7_200_000), endsAt: new Date(Date.now() - 1_000) },
+    });
+    resetNoiseSweepSchedule();
+    await runIntelligenceCycle(createLaneState(), { getCriticalLagMs: async () => 0 });
+
+    const after = await db.incident.findUniqueOrThrow({ where: { id: incident.id } });
+    expect(after.status).toBe('OPEN');
     expect(await pagingJobs(incident.id)).toHaveLength(1);
   });
 });
