@@ -1110,6 +1110,9 @@ async function pushSnapshotToServingStore(
  * An incident became private: stop serving the previous projection (which still shows it) on every
  * page that publishes its service, then rebuild right away rather than waiting for the projector.
  * A rebuild that cannot finish leaves the page withheld; the projector retries it.
+ *
+ * Every page is revoked before any is rebuilt, and one page failing never stops the others: the
+ * first failure is thrown only after all of them were tried, so no page keeps serving the incident.
  */
 export async function withholdStatusPagesForService(serviceId: string) {
   const mappings = await prisma.statusPageService.findMany({
@@ -1117,10 +1120,19 @@ export async function withholdStatusPagesForService(serviceId: string) {
     select: { statusPageId: true },
     distinct: ['statusPageId'],
   });
+  const store = getStatusPageServingStore();
+  const revoked = await Promise.allSettled(
+    mappings.map(({ statusPageId }) => store.revoke(statusPageId, 'PRIVACY'))
+  );
+  let failure = revoked.find(result => result.status === 'rejected');
   for (const { statusPageId } of mappings) {
-    await getStatusPageServingStore().revoke(statusPageId, 'PRIVACY');
-    await publishStatusPageSnapshot(statusPageId);
+    try {
+      await publishStatusPageSnapshot(statusPageId);
+    } catch (error) {
+      failure ??= { status: 'rejected', reason: error };
+    }
   }
+  if (failure?.status === 'rejected') throw failure.reason;
 }
 
 /** Bounded reconciliation also advances maintenance boundaries and time-derived uptime. */

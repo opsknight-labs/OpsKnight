@@ -37,6 +37,33 @@ describe('withholdStatusPagesForService', () => {
     ]);
   });
 
+  it('revokes every page before rebuilding any of them', async () => {
+    db.statusPageService.findMany.mockResolvedValue([
+      { statusPageId: 'page-1' },
+      { statusPageId: 'page-2' },
+    ]);
+    await withholdStatusPagesForService('svc-1');
+
+    const lastRevoke = Math.max(...store.revoke.mock.invocationCallOrder);
+    const firstRebuild = Math.min(...db.$queryRaw.mock.invocationCallOrder);
+    expect(lastRevoke).toBeLessThan(firstRebuild);
+  });
+
+  it('still revokes the other pages when one revoke fails, then reports the failure', async () => {
+    db.statusPageService.findMany.mockResolvedValue([
+      { statusPageId: 'page-1' },
+      { statusPageId: 'page-2' },
+      { statusPageId: 'page-3' },
+    ]);
+    store.revoke.mockRejectedValueOnce(new Error('store unavailable'));
+
+    await expect(withholdStatusPagesForService('svc-1')).rejects.toThrow('store unavailable');
+
+    expect(store.revoke.mock.calls.map(call => call[0])).toEqual(['page-1', 'page-2', 'page-3']);
+    // The pages after the failed one were still rebuilt, which is what takes the incident down.
+    expect(db.$queryRaw).toHaveBeenCalled();
+  });
+
   it('does nothing for a service no page publishes', async () => {
     db.statusPageService.findMany.mockResolvedValue([]);
     await withholdStatusPagesForService('svc-2');
