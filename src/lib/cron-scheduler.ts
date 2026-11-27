@@ -46,6 +46,7 @@ let activeRun: Promise<void> | null = null;
 let initialized = false;
 let lastJobCleanup = 0;
 let lastSessionCleanup = 0;
+let lastInboundDeliveryCleanup = 0;
 let schedulerProfile: SchedulerProfile = 'full';
 let activeLeaseEpoch: number | null = null;
 
@@ -760,6 +761,18 @@ async function runOnce() {
             return deleted;
           })
         : null;
+    // Inbound delivery dedupe rows: hourly, bounded batches, isolated so it cannot block the steps below.
+    const inboundDeliveryCleanup =
+      Date.now() - lastInboundDeliveryCleanup > 60 * 60 * 1000
+        ? await maintenanceStep('Inbound delivery retention', async () => {
+            const { cleanupInboundDeliveries, INBOUND_DELIVERY_RETENTION_PER_RUN } =
+              await import('./integrations/delivery-retention');
+            const removed = await cleanupInboundDeliveries();
+            // A full run means more is waiting: keep going on the next tick instead of in an hour.
+            if (removed < INBOUND_DELIVERY_RETENTION_PER_RUN) lastInboundDeliveryCleanup = Date.now();
+            return removed;
+          })
+        : null;
     const rateLimitCleanup = await maintenanceStep('Rate limit cleanup', cleanupExpiredRateLimits);
     // MCP maintenance failure must not block incident-response maintenance; it logs and counts
     // its own failures.
@@ -813,6 +826,7 @@ async function runOnce() {
     logger.info('[Cron] Maintenance tasks processed', {
       tokenCleanup,
       sessionCleanup,
+      inboundDeliveryCleanup,
       rateLimitCleanup,
       notificationCapacityCleanup,
       privacyExportArtifactsExpired,

@@ -59,3 +59,13 @@ service mapping. A `serviceId` in the body is ignored.
 
 A repeated delivery is answered as `change_duplicate` instead of recording a
 second change.
+
+## Delivery history retention
+
+Each inbound delivery leaves one row that de-duplicates retries and feeds the
+integration's diagnostics and usage views. The scheduler deletes finished
+deliveries after 30 days, in batches of 1,000 and at most 10,000 per hourly run,
+and never touches one that is still being processed. An identical payload that
+arrives again after its row is gone is treated as new. Set
+`OPSKNIGHT_INBOUND_DELIVERY_RETENTION_DAYS` (1 to 3650) to change the window; see
+the [configuration reference](../reference/configuration/).
