@@ -25,13 +25,20 @@ vi.mock('@/components/reports/DashboardGrid', () => ({
     widgets,
     isEditing,
     onRemoveWidget,
+    onAddWidget,
   }: {
     widgets: Array<{ id: string }>;
     isEditing: boolean;
     onRemoveWidget: (id: string) => void;
+    onAddWidget?: () => void;
   }) => (
     <div data-testid="dashboard-grid">
       <span>{widgets.length} widgets in grid</span>
+      {onAddWidget && (
+        <button data-testid="grid-add-widget-btn" onClick={onAddWidget}>
+          Add from empty state
+        </button>
+      )}
       {isEditing && (
         <button
           data-testid="remove-widget-btn"
@@ -94,6 +101,7 @@ describe('DashboardViewer Component', () => {
     isTemplate: false,
     dashboardId: 'dash-123',
     canManage: true,
+    isOwner: true,
   };
 
   beforeEach(() => {
@@ -393,6 +401,41 @@ describe('DashboardViewer Component', () => {
 
       rerender(<DashboardViewer {...defaultProps} isTemplate canManage={false} />);
       expect(screen.queryByRole('button', { name: /Clone Dashboard/i })).toBeNull();
+    });
+  });
+
+  describe('who can edit', () => {
+    const openSettings = () =>
+      fireEvent.pointerDown(screen.getByRole('button', { name: 'Dashboard settings' }), {
+        button: 0,
+      });
+
+    it('hides edit and delete from a user who does not own the saved dashboard', async () => {
+      render(<DashboardViewer {...defaultProps} isOwner={false} />);
+      openSettings();
+
+      expect(await screen.findByText(/Export as PDF/i)).toBeDefined();
+      expect(screen.queryByText(/Edit Dashboard/i)).toBeNull();
+      expect(screen.queryByText(/Delete Dashboard/i)).toBeNull();
+    });
+
+    it('still lets a report manager play with a template without owning it', async () => {
+      render(
+        <DashboardViewer {...defaultProps} isTemplate dashboardId={undefined} isOwner={false} />
+      );
+      openSettings();
+
+      expect(await screen.findByText(/Edit Dashboard/i)).toBeDefined();
+    });
+
+    it('offers the grid empty-state Add widget only while editing', async () => {
+      render(<DashboardViewer {...defaultProps} />);
+      expect(screen.queryByTestId('grid-add-widget-btn')).toBeNull();
+
+      openSettings();
+      fireEvent.click(await screen.findByText(/Edit Dashboard/i));
+
+      expect(await screen.findByTestId('grid-add-widget-btn')).toBeDefined();
     });
   });
 });

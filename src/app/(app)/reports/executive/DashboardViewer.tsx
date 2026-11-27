@@ -84,6 +84,8 @@ type DashboardViewerProps = {
   layout?: { columns?: number; rowHeight?: number };
   /** report.manage: without it the dashboard is read-only (no clone, edit, share settings or delete). */
   canManage: boolean;
+  /** The signed-in user owns this saved dashboard; only the owner can save edits or delete it. */
+  isOwner?: boolean;
 };
 
 const TIME_WINDOWS = [
@@ -112,9 +114,12 @@ export default function DashboardViewer({
   dashboardId,
   layout,
   canManage,
+  isOwner = false,
 }: DashboardViewerProps) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
+  // A template is edited as a local preview (no save); a saved dashboard only by its owner.
+  const canEdit = canManage && (isTemplate || isOwner);
   const [isCloning, setIsCloning] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isWidgetLibraryOpen, setIsWidgetLibraryOpen] = useState(false);
@@ -899,7 +904,7 @@ export default function DashboardViewer({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {canManage && (
+                {canEdit && (
                   <DropdownMenuItem onClick={() => setIsEditing(!isEditing)}>
                     <LayoutDashboard className="h-4 w-4 mr-2" />
                     {isEditing ? 'Exit Edit Mode' : 'Edit Dashboard'}
@@ -918,7 +923,7 @@ export default function DashboardViewer({
                   <Share2 className="h-4 w-4 mr-2" />
                   Share Dashboard
                 </DropdownMenuItem>
-                {canManage && !isTemplate && dashboardId && (
+                {canManage && isOwner && !isTemplate && dashboardId && (
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
@@ -1101,7 +1106,7 @@ export default function DashboardViewer({
         columns={layout?.columns ?? 4}
         rowHeight={layout?.rowHeight ?? 150}
         gap={16}
-        onAddWidget={() => setIsWidgetLibraryOpen(true)}
+        onAddWidget={isEditing ? () => setIsWidgetLibraryOpen(true) : undefined}
         onUpdateLayout={newWidgets => setLocalWidgets(newWidgets)}
         onRemoveWidget={widgetId => setLocalWidgets(prev => prev.filter(w => w.id !== widgetId))}
         onConfigureWidget={widgetId => {

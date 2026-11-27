@@ -149,6 +149,7 @@ export default async function SavedDashboardPage({ params, searchParams }: PageP
       layout={dashboard.layout as { columns?: number; rowHeight?: number } | undefined}
       dashboardId={dashboard.id}
       canManage={actorHasCapability(actor, CAPABILITIES.REPORT_MANAGE)}
+      isOwner={isOwner}
     />
   );
 }
