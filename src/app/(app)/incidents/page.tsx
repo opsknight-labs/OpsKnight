@@ -241,6 +241,8 @@ export default async function IncidentsPage({
   const baseDrilldown = {
     search: currentSearch || undefined,
     urgency: currentUrgency !== 'all' ? (currentUrgency as IncidentUrgency) : undefined,
+    priority: currentPriority,
+    sort: currentSort,
     teamId: currentTeamId !== 'all' ? currentTeamId : undefined,
     serviceId: currentServiceId !== 'all' ? currentServiceId : undefined,
     assignee: currentAssignee,
