@@ -218,7 +218,7 @@ export default async function RunbookDetailPage({
 
   async function handleRestoreRunbook() {
     'use server';
-    await restoreRunbookAction(id);
+    return restoreRunbookAction(id);
   }
   const selectedVersion = query.version
     ? await prisma.runbookVersion.findFirst({

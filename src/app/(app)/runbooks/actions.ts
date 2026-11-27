@@ -59,6 +59,19 @@ import { parseRunbookMetadataForm } from '@/lib/runbooks/metadata-form';
 
 const idSchema = z.string().cuid();
 
+/**
+ * Runbook rule violations (a checksum mismatch, a stale details sheet, an archived runbook) carry a
+ * message written for the person. Return it so the form shows it; anything else is rethrown.
+ */
+async function reportRunbookErrors<T>(run: () => Promise<T>): Promise<T | { error: string }> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof RunbookError) return { error: error.userMessage };
+    throw error;
+  }
+}
+
 function revalidateAgentFleet() {
   revalidatePath('/runbooks/agents');
   revalidatePath('/runbooks/agents/pools');
@@ -173,20 +186,22 @@ export async function importRunbookAction(formData: FormData) {
 export async function updateRunbookMetadataAction(runbookId: string, formData: FormData) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
   const id = idSchema.parse(runbookId);
-  await updateRunbookMetadata(
-    id,
-    {
-      name: readString(formData, 'name'),
-      slug: readString(formData, 'slug'),
-      description: readString(formData, 'description'),
-      ...parseRunbookMetadataForm(formData),
-    },
-    actor.id,
-    undefined,
-    z.coerce.number().int().positive().parse(formData.get('expectedRevision'))
-  );
-  revalidatePath('/runbooks');
-  revalidatePath(`/runbooks/${id}`);
+  return reportRunbookErrors(async () => {
+    await updateRunbookMetadata(
+      id,
+      {
+        name: readString(formData, 'name'),
+        slug: readString(formData, 'slug'),
+        description: readString(formData, 'description'),
+        ...parseRunbookMetadataForm(formData),
+      },
+      actor.id,
+      undefined,
+      z.coerce.number().int().positive().parse(formData.get('expectedRevision'))
+    );
+    revalidatePath('/runbooks');
+    revalidatePath(`/runbooks/${id}`);
+  });
 }
 
 export async function saveDraftAction(versionId: string, runbookId: string, formData: FormData) {
@@ -228,33 +243,41 @@ export async function saveDraftAction(versionId: string, runbookId: string, form
 
 export async function publishDraftAction(versionId: string, runbookId: string) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_PUBLISH);
-  await publishDraftVersion(idSchema.parse(versionId), actor.id);
-  // Recompute the runbook's health soon; a queue failure must not fail the publish.
-  await enqueueOpsInsights({ type: 'RUNBOOK', id: idSchema.parse(runbookId) }).catch(() => 0);
-  revalidatePath('/runbooks');
-  revalidatePath(`/runbooks/${idSchema.parse(runbookId)}`);
+  return reportRunbookErrors(async () => {
+    await publishDraftVersion(idSchema.parse(versionId), actor.id);
+    // Recompute the runbook's health soon; a queue failure must not fail the publish.
+    await enqueueOpsInsights({ type: 'RUNBOOK', id: idSchema.parse(runbookId) }).catch(() => 0);
+    revalidatePath('/runbooks');
+    revalidatePath(`/runbooks/${idSchema.parse(runbookId)}`);
+  });
 }
 
 export async function cloneVersionAction(versionId: string, runbookId: string) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
-  await cloneVersionToDraft(idSchema.parse(versionId), actor.id);
-  revalidatePath(`/runbooks/${idSchema.parse(runbookId)}`);
+  return reportRunbookErrors(async () => {
+    await cloneVersionToDraft(idSchema.parse(versionId), actor.id);
+    revalidatePath(`/runbooks/${idSchema.parse(runbookId)}`);
+  });
 }
 
 export async function archiveRunbookAction(runbookId: string) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
-  await archiveRunbook(idSchema.parse(runbookId), actor.id);
-  revalidatePath('/runbooks');
-  redirect('/runbooks');
+  return reportRunbookErrors(async () => {
+    await archiveRunbook(idSchema.parse(runbookId), actor.id);
+    revalidatePath('/runbooks');
+    redirect('/runbooks');
+  });
 }
 
 export async function restoreRunbookAction(runbookId: string) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
   const id = idSchema.parse(runbookId);
-  const restored = await restoreRunbook(id, actor.id);
-  revalidatePath('/runbooks');
-  revalidatePath(`/runbooks/${id}`);
-  return { success: true, id: restored.id };
+  return reportRunbookErrors(async () => {
+    const restored = await restoreRunbook(id, actor.id);
+    revalidatePath('/runbooks');
+    revalidatePath(`/runbooks/${id}`);
+    return { success: true, id: restored.id };
+  });
 }
 
 export async function checkRunbookDeleteEligibilityAction(runbookId: string) {
@@ -279,9 +302,11 @@ export async function deleteRunbookAction(runbookId: string, confirmationText: s
 export async function duplicateRunbookAction(runbookId: string) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
   const id = idSchema.parse(runbookId);
-  const duplicated = await duplicateRunbook(id, actor.id);
-  revalidatePath('/runbooks');
-  redirect(`/runbooks/${duplicated.id}`);
+  return reportRunbookErrors(async () => {
+    const duplicated = await duplicateRunbook(id, actor.id);
+    revalidatePath('/runbooks');
+    redirect(`/runbooks/${duplicated.id}`);
+  });
 }
 
 export type AgentEnrollmentState = {
