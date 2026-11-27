@@ -194,6 +194,19 @@ export async function groups(request: NextRequest, id?: string) {
       document.externalId !== existing.scimExternalId
     )
       throw new ScimFailure(400, 'externalId is immutable.', 'mutability');
+    // NULL externalIds never collide on the unique index, so a retried POST would add a duplicate.
+    if (!existing && !document.externalId) {
+      const duplicate = await tx.scimGroup.findFirst({
+        where: {
+          connectorId: principal.connectorId,
+          name: document.displayName,
+          scimExternalId: null,
+        },
+        select: { id: true },
+      });
+      if (duplicate)
+        throw new ScimFailure(409, 'A group with this displayName already exists.', 'uniqueness');
+    }
     const ids = [...new Set((document.members ?? []).map(m => m.value))];
     const found = await tx.scimIdentity.count({
       where: { connectorId: principal.connectorId, userId: { in: ids }, deletedAt: null },
