@@ -11,7 +11,7 @@ import { sendPasswordChangedNotice } from '@/lib/password-reset';
 import { revalidatePath } from 'next/cache';
 import { generateApiKey } from '@/lib/api-keys';
 import { assertApiKeyCapacity } from '@/lib/api-key-capacity';
-import { disallowedScopesForRole } from '@/lib/api-scope-registry';
+import { adminOnlyScopes, disallowedScopesForRole } from '@/lib/api-scope-registry';
 import { validatePasswordStrength } from '@/lib/passwords';
 import { getPushConfig } from '@/lib/notification-providers';
 import { logger } from '@/lib/logger';
@@ -667,6 +667,10 @@ export async function createApiKey(
     const finalScopes = requestedScopes;
     if (!Number.isInteger(expirationDays) || expirationDays < 1 || expirationDays > 365) {
       return { error: 'API keys must expire between 1 and 365 days.' };
+    }
+    // A key with administrator scopes is a long-lived admin credential: ask for a recent sign-in, as MCP tokens do.
+    if (adminOnlyScopes(finalScopes).length > 0) {
+      await assertRecentAuthentication(undefined, 'creating an API key with administrator scopes');
     }
 
     const expiresAt = new Date(Date.now() + expirationDays * 24 * 60 * 60 * 1000);

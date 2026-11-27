@@ -39,6 +39,9 @@ included. At the limit, creating another key fails with "This account already ha
 keys, the maximum" until you revoke a key or one expires. Rate limits are counted per key, which is
 why the number of keys is capped. Service account tokens are not counted against this limit.
 
+A key that carries an administrator-only scope (for example `users:write` or `admin:manage`) needs a sign-in
+within the last 15 minutes. Otherwise the form asks you to sign in again and no key is created.
+
 A service account with the Admin role is an administrator identity that keeps working after a temporary
 grant ends. Creating one, or issuing any token for one, needs an assigned administrator who signed in within
 the last 15 minutes. Anyone using temporary admin access, or whose sign-in is older, is refused and nothing is

@@ -195,6 +195,11 @@ Granting the Admin role needs a sign-in within the last 15 minutes. Anyone using
 temporary admin access needs the same recent sign-in for every role change.
 Otherwise the Users page asks you to sign in again and nothing changes.
 
+Adding a user with the Admin role, and **Get Invite Link** for an invited administrator, follow the same
+rule and need an assigned administrator: temporary admin access cannot do either. Anyone using temporary
+admin access also needs the recent sign-in to add any user. API keys can never grant the Admin role or
+invite an administrator; do it here.
+
 For multiple users, select rows and use the bulk role action. Bulk demotion also
 checks that at least one active administrator remains and refuses self-demotion.
 The bulk action has the same recent sign-in rule.

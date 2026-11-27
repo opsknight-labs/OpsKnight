@@ -573,3 +573,13 @@ export function disallowedScopesForRole(role: string, requested: readonly ApiSco
   const allowed = new Set(issuableScopesForRole(role).map(definition => definition.scope));
   return requested.filter(scope => !allowed.has(scope));
 }
+
+/** Scopes among `requested` that only an ADMIN may issue (the ones that need a fresh sign-in to mint). */
+export function adminOnlyScopes(requested: readonly ApiScope[]): ApiScope[] {
+  return ALL_API_SCOPE_DEFINITIONS.filter(
+    definition =>
+      requested.includes(definition.scope) &&
+      definition.issuableBy.length === 1 &&
+      definition.issuableBy[0] === 'ADMIN'
+  ).map(definition => definition.scope);
+}

@@ -185,6 +185,9 @@ export async function addUser(
       .toLowerCase();
     const role = formData.get('role');
     if (!isAssignableRole(role)) return { error: 'Select a valid user role.' };
+    // Inviting an administrator grants ADMIN: same assigned-admin and recent sign-in rule as a role change.
+    await assertPermanentAdminForAdminTargets(admin, [], role);
+    await assertRoleChangeStepUp(admin, role);
     const { headers } = await import('next/headers');
     const headerList = await headers();
     const { checkRateLimit } = await import('@/lib/password-reset');
@@ -407,12 +410,23 @@ export async function generateInvite(
         async tx => ({
           policy: await readInvitationPolicy(tx, actor),
           invitation: await readUserInvitation(tx, userId, actor),
-          user: await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true } }),
+          user: await tx.user.findUniqueOrThrow({
+            where: { id: userId },
+            select: { email: true, role: true },
+          }),
         }),
         { isolationLevel: 'Serializable' }
       ),
       prepareUserInvitation(),
     ]);
+    // The link for an invited administrator takes over that account, like an admin password reset link.
+    if (snapshot.user.role === 'ADMIN') {
+      await assertPermanentAdminForAdminTargets(admin, [userId]);
+      await assertRecentAuthentication(
+        undefined,
+        'generating an invitation link for an administrator'
+      );
+    }
     const { headers } = await import('next/headers');
     const headerList = await headers();
     const { checkRateLimit } = await import('@/lib/password-reset');
