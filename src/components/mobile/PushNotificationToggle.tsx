@@ -98,6 +98,63 @@ type PushStage =
   | 'VERIFY_REGISTRATION'
   | 'UNSUBSCRIBE';
 
+async function fetchApplicationServerKey(): Promise<Uint8Array> {
+  const keyResponse = await fetchWithTimeout(
+    '/api/system/vapid-public-key',
+    { cache: 'no-store' },
+    REQUEST_TIMEOUT_MS
+  );
+  if (keyResponse.status === 404) {
+    throw new ClientAppError({
+      code: 'PUSH_VAPID_NOT_CONFIGURED',
+      error: 'Push is not configured by your administrator.',
+      action: 'Push is not configured by your administrator.',
+      retryable: false,
+    });
+  }
+  if (!keyResponse.ok) {
+    throw await errorFromResponse(keyResponse, 'Push configuration is unavailable.');
+  }
+
+  const keyData = (await keyResponse.json()) as {
+    key?: string;
+    publicKey?: string;
+    enabled?: boolean;
+  };
+  if (keyData.enabled === false) {
+    throw new ClientAppError({
+      code: 'PUSH_VAPID_NOT_CONFIGURED',
+      error: 'Push is not configured by your administrator.',
+      action: 'Push is not configured by your administrator.',
+      retryable: false,
+    });
+  }
+  const normalized = normalizeVapidKey(String(keyData.publicKey || keyData.key || ''));
+  if (!normalized.key) {
+    throw new ClientAppError({
+      code: 'PUSH_VAPID_INVALID',
+      error: normalized.error || 'Push public key is invalid.',
+      action: 'Contact your administrator to correct the Web Push VAPID configuration.',
+      retryable: false,
+    });
+  }
+
+  const applicationServerKey = urlBase64ToUint8Array(normalized.key);
+  if (applicationServerKey.length !== 65) {
+    throw new ClientAppError({
+      code: 'PUSH_VAPID_INVALID',
+      error: 'Push public key length is invalid.',
+      action: 'Contact your administrator to correct the Web Push VAPID configuration.',
+      retryable: false,
+    });
+  }
+  return applicationServerKey;
+}
+
+function sameBytes(a: Uint8Array, b: Uint8Array) {
+  return a.length === b.length && a.every((byte, index) => byte === b.at(index));
+}
+
 type PreparedPush = {
   registration: ServiceWorkerRegistration;
   subscription: PushSubscription | null;
@@ -170,63 +227,43 @@ export default function PushNotificationToggle() {
     // An existing browser subscription can be reconciled with the server
     // without fetching VAPID again. This also avoids making healthy devices
     // depend on a configuration endpoint during every settings-page visit.
+    // The one exception is a subscription that reports its key: an administrator
+    // may have rotated VAPID since, and a subscription stays bound to the key it was
+    // created with, so it is replaced to keep receiving pushes. A failed key lookup
+    // never disturbs a healthy device.
     if (subscription) {
+      const subscribedKey = subscription.options?.applicationServerKey;
+      const serverKey = subscribedKey ? await fetchApplicationServerKey().catch(() => null) : null;
+      if (!subscribedKey || !serverKey || sameBytes(new Uint8Array(subscribedKey), serverKey)) {
+        return {
+          registration,
+          subscription,
+          applicationServerKey: null,
+        };
+      }
+      await promiseWithTimeout(
+        subscription.unsubscribe(),
+        REQUEST_TIMEOUT_MS,
+        'Push subscription reset timed out.'
+      );
+      // Permission is already granted, so subscribing again needs no tap; the saved server
+      // record is repaired from the Repair action. If the browser refuses, Enable does it.
+      const renewed = await promiseWithTimeout(
+        registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: serverKey as unknown as BufferSource,
+        }),
+        REQUEST_TIMEOUT_MS,
+        'Push subscription creation timed out.'
+      ).catch(() => null);
       return {
         registration,
-        subscription,
-        applicationServerKey: null,
+        subscription: renewed,
+        applicationServerKey: renewed ? null : serverKey,
       };
     }
 
-    const keyResponse = await fetchWithTimeout(
-      '/api/system/vapid-public-key',
-      { cache: 'no-store' },
-      REQUEST_TIMEOUT_MS
-    );
-    if (keyResponse.status === 404) {
-      throw new ClientAppError({
-        code: 'PUSH_VAPID_NOT_CONFIGURED',
-        error: 'Push is not configured by your administrator.',
-        action: 'Push is not configured by your administrator.',
-        retryable: false,
-      });
-    }
-    if (!keyResponse.ok) {
-      throw await errorFromResponse(keyResponse, 'Push configuration is unavailable.');
-    }
-
-    const keyData = (await keyResponse.json()) as {
-      key?: string;
-      publicKey?: string;
-      enabled?: boolean;
-    };
-    if (keyData.enabled === false) {
-      throw new ClientAppError({
-        code: 'PUSH_VAPID_NOT_CONFIGURED',
-        error: 'Push is not configured by your administrator.',
-        action: 'Push is not configured by your administrator.',
-        retryable: false,
-      });
-    }
-    const normalized = normalizeVapidKey(String(keyData.publicKey || keyData.key || ''));
-    if (!normalized.key) {
-      throw new ClientAppError({
-        code: 'PUSH_VAPID_INVALID',
-        error: normalized.error || 'Push public key is invalid.',
-        action: 'Contact your administrator to correct the Web Push VAPID configuration.',
-        retryable: false,
-      });
-    }
-
-    const applicationServerKey = urlBase64ToUint8Array(normalized.key);
-    if (applicationServerKey.length !== 65) {
-      throw new ClientAppError({
-        code: 'PUSH_VAPID_INVALID',
-        error: 'Push public key length is invalid.',
-        action: 'Contact your administrator to correct the Web Push VAPID configuration.',
-        retryable: false,
-      });
-    }
+    const applicationServerKey = await fetchApplicationServerKey();
 
     return {
       registration,

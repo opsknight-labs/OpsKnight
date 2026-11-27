@@ -1895,4 +1895,59 @@ describe('PushNotificationToggle', () => {
       expect(screen.getByRole('button', { name: /Disable/i })).toBeInTheDocument();
     });
   });
+
+  it('replaces a subscription made with an old VAPID key after the administrator rotated it', async () => {
+    const keyBytes = (fill: number) => new Uint8Array(65).fill(fill);
+    const toBase64Url = (bytes: Uint8Array) =>
+      btoa(String.fromCharCode(...bytes))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+    const unsubscribe = vi.fn().mockResolvedValue(true);
+    const renewed = { endpoint: 'https://push.example.com/renewed-endpoint', unsubscribe: vi.fn() };
+    const subscribe = vi.fn().mockResolvedValue(renewed);
+    const registration = {
+      active: { scriptURL: 'https://opsknight.example/sw.js' },
+      waiting: null,
+      installing: null,
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue({
+          endpoint: 'https://push.example.com/old-endpoint',
+          options: { applicationServerKey: keyBytes(3).buffer },
+          unsubscribe,
+        }),
+        subscribe,
+      },
+    };
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        getRegistration: vi.fn().mockResolvedValue(registration),
+        register: vi.fn().mockResolvedValue(registration),
+        ready: Promise.resolve(registration),
+      },
+      configurable: true,
+    });
+    mockFetch.mockImplementation(async (url: string) => {
+      if (url.includes('/api/system/vapid-public-key')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ publicKey: toBase64Url(keyBytes(4)) }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ deviceRegistered: false, accountEnabled: true }),
+      };
+    });
+
+    render(<PushNotificationToggle />);
+
+    await waitFor(() => expect(subscribe).toHaveBeenCalledTimes(1));
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect(new Uint8Array(subscribe.mock.calls[0][0].applicationServerKey)).toEqual(keyBytes(4));
+    // The renewed endpoint is not saved on the server yet, so the Repair action is offered.
+    expect(await screen.findByRole('button', { name: /Repair/i })).toBeInTheDocument();
+  });
 });
