@@ -52,10 +52,42 @@ describe('dashboard analytics cache', () => {
     expect(mocks.calculate).toHaveBeenCalledOnce();
   });
 
-  it('rejects a different cold key while heavy-query capacity is occupied', async () => {
+  it('lets a different cold key wait for the heavy-query slot instead of failing', async () => {
+    let finishFirst!: (value: typeof metrics) => void;
+    mocks.calculate.mockReturnValueOnce(new Promise(resolve => (finishFirst = resolve)));
+    mocks.calculate.mockResolvedValueOnce(metrics);
+    const first = getDashboardAnalytics(actor, { rangeDays: 30 });
+    const second = getDashboardAnalytics(actor, { rangeDays: 7 });
+    await Promise.resolve();
+    expect(mocks.calculate).toHaveBeenCalledOnce();
+
+    finishFirst(metrics);
+
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+    expect(mocks.calculate).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects a cold key that waits longer than the queue limit', async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.calculate.mockReturnValue(new Promise(() => undefined));
+      void getDashboardAnalytics(actor, { rangeDays: 30 });
+      const waiting = getDashboardAnalytics(actor, { rangeDays: 7 });
+      const outcome = expect(waiting).rejects.toBeInstanceOf(DashboardAnalyticsUnavailableError);
+      await vi.advanceTimersByTimeAsync(10_000);
+      await outcome;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('rejects at once when the wait queue is full', async () => {
     mocks.calculate.mockReturnValue(new Promise(() => undefined));
-    void getDashboardAnalytics(actor, { rangeDays: 30 });
-    await expect(getDashboardAnalytics(actor, { rangeDays: 7 })).rejects.toBeInstanceOf(
+    void getDashboardAnalytics(actor, { rangeDays: 1 }).catch(() => undefined);
+    for (let days = 2; days <= 9; days += 1) {
+      void getDashboardAnalytics(actor, { rangeDays: days }).catch(() => undefined);
+    }
+    await expect(getDashboardAnalytics(actor, { rangeDays: 10 })).rejects.toBeInstanceOf(
       DashboardAnalyticsUnavailableError
     );
   });

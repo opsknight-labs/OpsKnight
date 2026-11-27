@@ -83,6 +83,10 @@ const MAX_ENTRIES = 500;
 const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<CacheEntry>>();
 let activeCalculations = 0;
+/** Cold requests for other keys wait their turn for the one heavy-query slot, within these bounds. */
+const MAX_QUEUED = 8;
+const QUEUE_WAIT_MS = 10_000;
+const slotWaiters: Array<() => void> = [];
 let lastSuccessAt: Date | null = null;
 let lastFailureAt: Date | null = null;
 
@@ -128,8 +132,6 @@ async function calculate(
   actor: AuthorizationActor,
   filters: DashboardAnalyticsFilters
 ): Promise<CacheEntry> {
-  activeCalculations += 1;
-  setOperationalGauge('opsknight_dashboard_analytics_inflight', activeCalculations);
   const startedAt = Date.now();
   try {
     const [metrics, sourceGeneration] = await Promise.all([
@@ -211,22 +213,56 @@ async function calculate(
     });
     throw error;
   } finally {
-    activeCalculations -= 1;
-    setOperationalGauge('opsknight_dashboard_analytics_inflight', activeCalculations);
+    releaseSlot();
   }
+}
+
+function releaseSlot() {
+  const next = slotWaiters.shift();
+  if (next) next();
+  else activeCalculations -= 1;
+  setOperationalGauge('opsknight_dashboard_analytics_inflight', activeCalculations);
+}
+
+/** Resolves when the slot has been handed over; rejects if the turn does not come in time. */
+function queueForSlot(): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const grant = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      const index = slotWaiters.indexOf(grant);
+      if (index >= 0) slotWaiters.splice(index, 1);
+      reject(new DashboardAnalyticsUnavailableError());
+    }, QUEUE_WAIT_MS);
+    slotWaiters.push(grant);
+  });
 }
 
 function startCalculation(
   key: string,
   actor: AuthorizationActor,
-  filters: DashboardAnalyticsFilters
+  filters: DashboardAnalyticsFilters,
+  options: { queue?: boolean } = {}
 ) {
   const existing = inFlight.get(key);
   if (existing) return existing;
-  if (activeCalculations >= 1) return null;
-  const request = calculate(key, actor, filters).finally(() => {
-    if (inFlight.get(key) === request) inFlight.delete(key);
-  });
+  let slot: Promise<void>;
+  if (activeCalculations < 1) {
+    activeCalculations += 1;
+    setOperationalGauge('opsknight_dashboard_analytics_inflight', activeCalculations);
+    slot = Promise.resolve();
+  } else if (options.queue && slotWaiters.length < MAX_QUEUED) {
+    slot = queueForSlot();
+  } else {
+    return null;
+  }
+  const request = slot
+    .then(() => calculate(key, actor, filters))
+    .finally(() => {
+      if (inFlight.get(key) === request) inFlight.delete(key);
+    });
   inFlight.set(key, request);
   return request;
 }
@@ -255,7 +291,7 @@ export async function getDashboardAnalytics(
     return { ...entry.snapshot, freshness: 'stale' };
   }
   addOperationalMetric('opsknight_dashboard_analytics_cache_hits_total', 1, { state: 'miss' });
-  const request = startCalculation(key, actor, filters);
+  const request = startCalculation(key, actor, filters, { queue: true });
   if (!request) throw new DashboardAnalyticsUnavailableError();
   const calculated = await request;
   return { ...calculated.snapshot, freshness: 'fresh' };
@@ -273,6 +309,7 @@ export function getDashboardAnalyticsHealth() {
 export function resetDashboardAnalyticsCacheForTests() {
   cache.clear();
   inFlight.clear();
+  slotWaiters.length = 0;
   activeCalculations = 0;
   lastSuccessAt = null;
   lastFailureAt = null;

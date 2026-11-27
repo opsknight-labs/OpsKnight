@@ -56,6 +56,8 @@ An empty chart is not automatically a runtime failure. It can mean no matching i
 
 If the query behind the **Incident Heatmap** fails, the widget (and the incident history on the Dashboard) says "Incident history is temporarily unavailable." instead of drawing an empty calendar, so a grey calendar always means no incidents.
 
+The Dashboard's **Trends & insights** are calculated one at a time per server process. A request for a view that is not cached waits its turn (up to 10 seconds, with at most eight others queued) and only then reports "Trends are temporarily unavailable"; a cached view is served at once, marked stale while it refreshes.
+
 The **Updated** timestamp reports when the server rendered the current view.
 Open **Live** to refresh immediately or select automatic refresh every 30
 seconds, 1 minute, or 5 minutes. The countdown pauses while the browser tab is
