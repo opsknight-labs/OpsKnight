@@ -78,7 +78,11 @@ export async function readBoundedRequestBody(request: Request, maxBytes: number)
 }
 
 export class RunbookAgentRateLimitedError extends Error {
-  constructor(public readonly retryAfterSeconds: number) {
+  constructor(
+    public readonly retryAfterSeconds: number,
+    /** The counter store failed; the agent is not over any quota. */
+    public readonly unavailable = false
+  ) {
     super('Too many agent requests.');
     this.name = 'RunbookAgentRateLimitedError';
   }
@@ -92,9 +96,11 @@ const AGENT_ENROLL_PER_MINUTE = 20;
 export async function enforceAgentRateLimit(key: string, limit: number) {
   const result = await checkRateLimit(key, limit, 60_000);
   if (!result.allowed) {
-    throw new RunbookAgentRateLimitedError(
-      Math.max(1, Math.ceil((result.resetAt - Date.now()) / 1000))
-    );
+    throw result.unavailable
+      ? new RunbookAgentRateLimitedError(5, true)
+      : new RunbookAgentRateLimitedError(
+          Math.max(1, Math.ceil((result.resetAt - Date.now()) / 1000))
+        );
   }
 }
 
@@ -151,10 +157,13 @@ export function agentApiError(error: unknown) {
   }
 
   if (error instanceof RunbookAgentRateLimitedError || name === 'RunbookAgentRateLimitedError') {
-    const retryAfter = (error as RunbookAgentRateLimitedError).retryAfterSeconds ?? 60;
-    return jsonError('Too many agent requests.', 429, undefined, {
-      'Retry-After': String(retryAfter),
-    });
+    const limited = error as RunbookAgentRateLimitedError;
+    const retryAfter = String(limited.retryAfterSeconds ?? 60);
+    return limited.unavailable
+      ? jsonError('Rate limiting is temporarily unavailable.', 503, undefined, {
+          'Retry-After': retryAfter,
+        })
+      : jsonError('Too many agent requests.', 429, undefined, { 'Retry-After': retryAfter });
   }
 
   if (

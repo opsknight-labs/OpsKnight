@@ -45,10 +45,14 @@ beforeEach(() => {
 
 describe('authenticated agent routes', () => {
   it('does not read the body when the request fails pre-authentication', async () => {
-    mocks.preauthenticateAgentRequest.mockRejectedValue(new Error('Missing agent authentication headers.'));
+    mocks.preauthenticateAgentRequest.mockRejectedValue(
+      new Error('Missing agent authentication headers.')
+    );
     const request = post('x'.repeat(1024));
     const text = vi.spyOn(request, 'text');
-    await expect(authenticatedAgentJson(request, 15 * 1024 * 1024)).rejects.toThrow('Missing agent');
+    await expect(authenticatedAgentJson(request, 15 * 1024 * 1024)).rejects.toThrow(
+      'Missing agent'
+    );
     expect(request.bodyUsed).toBe(false);
     expect(text).not.toHaveBeenCalled();
     expect(mocks.verifyAgentRequestSignature).not.toHaveBeenCalled();
@@ -68,6 +72,20 @@ describe('authenticated agent routes', () => {
     expect(response.status).toBe(429);
     expect(Number(response.headers.get('Retry-After'))).toBeGreaterThanOrEqual(11);
     expect(mocks.checkRateLimit.mock.calls[0][0]).toContain('agent-1');
+  });
+
+  it('answers 503, not 429, when the rate-limit store itself is down', async () => {
+    mocks.checkRateLimit.mockResolvedValue({
+      allowed: false,
+      remaining: 0,
+      resetAt: Date.now() + 60_000,
+      count: 1201,
+      unavailable: true,
+    });
+    const failure = await authenticatedAgentJson(post('{}')).catch(error => error);
+    const response = agentApiError(failure);
+    expect(response.status).toBe(503);
+    expect(response.headers.get('Retry-After')).toBe('5');
   });
 
   it('reads and verifies the body once the request passes pre-authentication', async () => {
