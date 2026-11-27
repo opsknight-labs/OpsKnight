@@ -132,6 +132,9 @@ export async function POST(req: NextRequest) {
         id: subscription.id,
         verificationToken: hashSubscriptionToken(parsed.data.token),
         unsubscribedAt: null,
+        // A complaint, bounce or suppression keeps its token in the old mail; it must not be
+        // confirmable back to ACTIVE.
+        state: { in: ['PENDING', 'ACTIVE'] },
       },
       data: {
         verified: true,
