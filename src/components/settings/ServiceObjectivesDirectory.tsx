@@ -213,6 +213,7 @@ function definition(item: ServiceObjectiveItem) {
     version: item.version,
     name: item.name,
     description: item.description,
+    metricType: item.metricType,
     target: item.target,
     comparator: item.comparator,
     windowType: item.windowType,

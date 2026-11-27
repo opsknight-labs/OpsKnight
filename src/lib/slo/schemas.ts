@@ -40,6 +40,19 @@ function validateWindowAndTarget(
       message: 'Percentage targets cannot exceed 100',
     });
   }
+  // A percentage must stay at or above its target and a duration at or below it; the opposite
+  // direction counts slow responders as compliant and fast ones as breached.
+  const percentMetric = ['UPTIME', 'AVAILABILITY'].includes(value.metricType);
+  const expectedComparator = percentMetric ? 'GREATER_THAN_OR_EQUAL' : 'LESS_THAN_OR_EQUAL';
+  if (value.comparator !== expectedComparator) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['comparator'],
+      message: percentMetric
+        ? 'Uptime and availability objectives must use GREATER_THAN_OR_EQUAL'
+        : 'MTTA and MTTR objectives must use LESS_THAN_OR_EQUAL',
+    });
+  }
   if (['UPTIME', 'AVAILABILITY'].includes(value.metricType) && !value.serviceId) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
