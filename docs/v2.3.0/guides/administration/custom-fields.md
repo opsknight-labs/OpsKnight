@@ -59,6 +59,8 @@ Empty input becomes no value. An empty required field is rejected with `<field n
 
 When an incident is created without a value for a field, its default is used. On the New incident form a field starts with its default; clear an optional field to leave it empty and the empty value is kept (the default is not applied again). Clearing a required field shows `Required field missing` and the incident is not created. API clients can do the same by sending the field with an empty value.
 
+On an incident's detail page, a field with no stored value (for example on an incident created before the default was set) shows its default only as a hint, "Default: … (not saved)". The field stays empty, and a required field still blocks resolve, until a responder enters or selects a value; entering the same value as the default saves it.
+
 The create-definition endpoint accepts a default as text. Test that the default is valid for its type before relying on it; incident value validation is authoritative.
 
 ## Edit a definition
