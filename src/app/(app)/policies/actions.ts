@@ -7,6 +7,7 @@ import {
   lockResponderPolicy,
 } from '@/lib/escalation/automation-snapshot';
 import {
+  countOpenIncidentsMidEscalation,
   readEscalationStepOrder,
   remapOpenIncidentEscalationCursors,
 } from '@/lib/escalation/step-cursor';
@@ -752,6 +753,19 @@ export async function reorderPolicySteps(
     revalidatePath(`/policies/${policyId}`);
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Failed to reorder escalation steps' };
+  }
+}
+
+/** Open incidents mid-escalation on this policy, read before the console deletes or reorders a step. */
+export async function countPolicyIncidentsMidEscalation(
+  policyId: string
+): Promise<{ count?: number; error?: string }> {
+  try {
+    await assertAdmin();
+    const id = z.string().min(1).max(100).parse(policyId);
+    return { count: await countOpenIncidentsMidEscalation(prisma, id) };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to count open escalations' };
   }
 }
 

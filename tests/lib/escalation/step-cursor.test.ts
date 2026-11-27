@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Prisma } from '@prisma/client';
 import {
+  countOpenIncidentsMidEscalation,
   matchReplacementSteps,
   readEscalationStepOrder,
   remapEscalationCursor,
@@ -154,6 +155,48 @@ describe('remapOpenIncidentEscalationCursors', () => {
     expect(sql).toContain('FOR UPDATE OF i');
     expect(sql).toContain(`d.mode::text <> 'LIVE'`);
     expect(sql).toContain(`i."escalationStatus" IN ('ESCALATING', 'PAUSED')`);
+  });
+});
+
+describe('countOpenIncidentsMidEscalation', () => {
+  const sqlOf = (mock: ReturnType<typeof vi.fn>) => {
+    const [strings, ...values] = mock.mock.calls[0] as [TemplateStringsArray, ...unknown[]];
+    return { sql: strings.join('?'), values };
+  };
+
+  it('counts the open incidents on the policy', async () => {
+    const db = { $queryRaw: vi.fn().mockResolvedValue([{ count: 4 }]) };
+    await expect(countOpenIncidentsMidEscalation(db, 'pol-1')).resolves.toBe(4);
+    expect(sqlOf(db.$queryRaw).values).toEqual(['pol-1']);
+  });
+
+  it('is zero when the policy has none', async () => {
+    const db = { $queryRaw: vi.fn().mockResolvedValue([{ count: 0 }]) };
+    await expect(countOpenIncidentsMidEscalation(db, 'pol-1')).resolves.toBe(0);
+    const empty = { $queryRaw: vi.fn().mockResolvedValue([]) };
+    await expect(countOpenIncidentsMidEscalation(empty, 'pol-1')).resolves.toBe(0);
+  });
+
+  it('uses the filter that remapOpenIncidentEscalationCursors moves, so the warning matches the move', async () => {
+    const db = { $queryRaw: vi.fn().mockResolvedValue([{ count: 1 }]) };
+    await countOpenIncidentsMidEscalation(db, 'pol-1');
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      $executeRaw: vi.fn(),
+      incident: { updateMany: vi.fn() },
+    };
+    await remapOpenIncidentEscalationCursors(tx as unknown as Prisma.TransactionClient, {
+      policyId: 'pol-1',
+      before: ['A', 'B'],
+      after: ['B'],
+    });
+
+    const count = sqlOf(db.$queryRaw).sql;
+    const remap = sqlOf(tx.$queryRaw).sql;
+    const where = (sql: string) => sql.slice(sql.indexOf('WHERE')).replace(/\s*FOR UPDATE OF i\s*$/, '');
+    expect(where(count).replace(/\s+/g, ' ').trim()).toBe(where(remap).replace(/\s+/g, ' ').trim());
+    expect(count).toContain(`d.mode::text <> 'LIVE'`);
+    expect(count).not.toContain('FOR UPDATE');
   });
 });
 

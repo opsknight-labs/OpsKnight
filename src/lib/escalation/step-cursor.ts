@@ -112,6 +112,29 @@ export async function remapOpenIncidentEscalationCursors(
   return moved;
 }
 
+/**
+ * How many open incidents are mid-escalation on a policy: the ones a step delete or
+ * reorder would move. The filter is the one `remapOpenIncidentEscalationCursors`
+ * locks (keep them identical), so the console warns about exactly the incidents it moves.
+ */
+export async function countOpenIncidentsMidEscalation(
+  db: Pick<Prisma.TransactionClient, '$queryRaw'>,
+  policyId: string
+): Promise<number> {
+  const rows = await db.$queryRaw<Array<{ count: number }>>`
+    SELECT COUNT(*)::int AS count
+    FROM "Incident" i
+    JOIN "Service" s ON s.id = i."serviceId"
+    LEFT JOIN "IncidentAutomationDecision" d ON d."incidentId" = i.id
+    WHERE s."escalationPolicyId" = ${policyId}
+      AND i."escalationStatus" IN ('ESCALATING', 'PAUSED')
+      AND i."currentEscalationStep" IS NOT NULL
+      AND i.status::text IN ('OPEN', 'SNOOZED', 'SUPPRESSED')
+      AND (d."incidentId" IS NULL OR d.mode::text <> 'LIVE')
+  `;
+  return rows.at(0)?.count ?? 0;
+}
+
 interface StepContent {
   targetType: string;
   targetUserId: string | null;

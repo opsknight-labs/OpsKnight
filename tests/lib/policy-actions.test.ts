@@ -5,8 +5,10 @@ import {
   assertResponderPolicySnapshotSafe,
   bumpResponderPolicyRevision,
 } from '@/lib/escalation/automation-snapshot';
+import { assertAdmin } from '@/lib/rbac';
 import {
   addPolicyStep,
+  countPolicyIncidentsMidEscalation,
   deletePolicyStep,
   movePolicyStep,
   reorderPolicySteps,
@@ -256,6 +258,30 @@ describe('Policy Step Actions', () => {
 
       // step-a is paged and still first; the unpaged tiers just swap, so the cursor stays.
       expect(prismaMock.incident.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('countPolicyIncidentsMidEscalation', () => {
+    it('returns how many open incidents are mid-escalation on the policy', async () => {
+      prismaMock.$queryRaw.mockResolvedValue([{ count: 3 }]);
+      await expect(countPolicyIncidentsMidEscalation('pol-1')).resolves.toEqual({ count: 3 });
+      const [, ...values] = prismaMock.$queryRaw.mock.calls[0] as unknown[];
+      expect(values).toEqual(['pol-1']);
+    });
+
+    it('is for admins only and reads nothing for anyone else', async () => {
+      vi.mocked(assertAdmin).mockRejectedValueOnce(new Error('Unauthorized. Admin access required.'));
+      await expect(countPolicyIncidentsMidEscalation('pol-1')).resolves.toEqual({
+        error: 'Unauthorized. Admin access required.',
+      });
+      expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+    });
+
+    it('rejects an empty policy id', async () => {
+      const result = await countPolicyIncidentsMidEscalation('');
+      expect(result.count).toBeUndefined();
+      expect(result.error).toBeTruthy();
+      expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
     });
   });
 
