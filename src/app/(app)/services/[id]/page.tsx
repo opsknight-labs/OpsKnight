@@ -27,7 +27,11 @@ import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-pars
 import { logger } from '@/lib/logger';
 import { resolveIntegrationKeysForDisplay } from '@/lib/integrations/display-key';
 import { getAppUrl } from '@/lib/app-url';
-import { getWebhookUrl } from '@/lib/integrations/ingest-url';
+import {
+  getWebhookUrl,
+  INTEGRATION_KEY_HEADER,
+  URL_ONLY_INTEGRATION_TYPES,
+} from '@/lib/integrations/ingest-url';
 
 // UI Components
 import {
@@ -780,6 +784,12 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               canManageService && displayKey
                 ? getWebhookUrl(appBaseUrl, integrationType, integration.id, displayKey)
                 : null;
+            const keylessWebhookUrl =
+              canManageService && displayKey
+                ? getWebhookUrl(appBaseUrl, integrationType, integration.id, displayKey, {
+                    includeKey: false,
+                  })
+                : null;
 
             return (
               <Card
@@ -930,19 +940,81 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                       </div>
                     ) : webhookUrl ? (
                       <div className="space-y-2">
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between">
-                            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                              Webhook Ingest URL
-                            </Label>
-                            <CopyButton text={webhookUrl} />
+                        {URL_ONLY_INTEGRATION_TYPES.has(integration.type) ? (
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                Webhook Ingest URL
+                              </Label>
+                              <CopyButton text={webhookUrl} />
+                            </div>
+                            <Input
+                              readOnly
+                              value={webhookUrl}
+                              className="font-mono text-[11px] bg-muted/40 h-7 text-ellipsis"
+                            />
+                            <p className="text-[10.5px] text-muted-foreground leading-tight">
+                              This sender cannot add a header, so the URL carries the key. Treat the
+                              whole URL as a secret.
+                            </p>
                           </div>
-                          <Input
-                            readOnly
-                            value={webhookUrl}
-                            className="font-mono text-[11px] bg-muted/40 h-7 text-ellipsis"
-                          />
-                        </div>
+                        ) : (
+                          <>
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                  Webhook Ingest URL (no key)
+                                </Label>
+                                <CopyButton text={keylessWebhookUrl ?? ''} />
+                              </div>
+                              <Input
+                                readOnly
+                                value={keylessWebhookUrl ?? ''}
+                                className="font-mono text-[11px] bg-muted/40 h-7 text-ellipsis"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                                  <Key className="h-2.5 w-2.5" /> Key header (recommended)
+                                </Label>
+                                <CopyButton text={`${INTEGRATION_KEY_HEADER}: ${displayKey}`} />
+                              </div>
+                              <Input
+                                readOnly
+                                value={`${INTEGRATION_KEY_HEADER}: ${displayKey}`}
+                                className="font-mono text-[11px] bg-muted/40 h-7 text-ellipsis"
+                              />
+                              <p className="text-[10.5px] text-muted-foreground leading-tight">
+                                A header keeps the key out of proxy access logs and the sender&apos;s
+                                own history. <code>Authorization: Bearer</code> works too.
+                              </p>
+                            </div>
+                            <details className="group rounded-lg border border-border/70 bg-card overflow-hidden">
+                              <summary className="flex min-h-7 cursor-pointer list-none items-center justify-between gap-2 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/30 select-none [&::-webkit-details-marker]:hidden">
+                                <span>Sender can only be given a URL?</span>
+                                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-180" />
+                              </summary>
+                              <div className="space-y-1 border-t border-border/70 p-2">
+                                <div className="flex items-center justify-between">
+                                  <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                    URL with key
+                                  </Label>
+                                  <CopyButton text={webhookUrl} />
+                                </div>
+                                <Input
+                                  readOnly
+                                  value={webhookUrl}
+                                  className="font-mono text-[11px] bg-muted/40 h-7 text-ellipsis"
+                                />
+                                <p className="text-[10.5px] text-muted-foreground leading-tight">
+                                  The key then appears in proxy logs and the sender&apos;s history.
+                                  Treat the whole URL as a secret.
+                                </p>
+                              </div>
+                            </details>
+                          </>
+                        )}
 
                         {(!UNSIGNABLE_INTEGRATION_TYPES.has(integration.type) ||
                           integration.signatureSecret) && (

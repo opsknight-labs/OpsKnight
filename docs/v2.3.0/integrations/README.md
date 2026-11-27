@@ -35,6 +35,24 @@ or durable delivery fencing merely because another provider does.
   authenticated webhooks.
 - [Voice paging](./communication/voice) — Twilio voice delivery and callbacks.
 
+## Where to send the routing key
+
+Prefer a header. Send the integration key as `X-Integration-Key: <key>`,
+`Authorization: Bearer <key>` or `Authorization: Token token=<key>`. A key in the
+URL (`?integrationKey=...`) is accepted because some senders can only be given a
+URL, but it ends up in proxy and load-balancer access logs and in the sender's own
+configuration history, where anyone who can read them can send alerts as the
+integration. The service Integrations tab therefore shows the URL without the key
+and the header first, and offers the URL with the key under "Sender can only be
+given a URL?". CloudWatch, Azure and Google Cloud Monitoring cannot add a header,
+so they show the URL with the key.
+
+OpsKnight itself never writes the key from a query string to its logs, audit
+rows or error messages: the values of `key`, `integrationKey`, `routingKey`,
+`token` and `secret` (and their underscore forms) are replaced with `[REDACTED]`
+in any logged or audited text, absolute or relative. Rotate the key if a URL
+carrying it was shared.
+
 ## Change events
 
 Change endpoints record deploys, configuration, feature-flag and

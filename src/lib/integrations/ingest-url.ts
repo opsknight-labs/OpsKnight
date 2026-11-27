@@ -1,5 +1,14 @@
 import type { IntegrationType } from '@/components/service/integration-types';
 
+export const INTEGRATION_KEY_HEADER = 'X-Integration-Key';
+
+/** Providers whose senders cannot add a request header: the key has to travel in the URL. */
+export const URL_ONLY_INTEGRATION_TYPES: ReadonlySet<string> = new Set([
+  'CLOUDWATCH',
+  'AZURE',
+  'GOOGLE_CLOUD_MONITORING',
+]);
+
 /**
  * Build the URL an external monitoring tool posts alerts to for one integration.
  *
@@ -7,15 +16,20 @@ import type { IntegrationType } from '@/components/service/integration-types';
  * NEXT_PUBLIC_APP_URL, then NEXTAUTH_URL; see `getAppUrl()` in `@/lib/app-url`). Resolve it
  * once per render and pass it in so this stays pure. Trailing slashes are removed so the
  * result never contains `//api`.
+ *
+ * `includeKey: false` returns the same URL without the key, for senders that can carry it in
+ * the `X-Integration-Key` header instead (preferred: a URL ends up in proxy logs and provider history).
  */
 export function getWebhookUrl(
   appBaseUrl: string,
   integrationType: IntegrationType,
   integrationId: string,
-  integrationKey: string
+  integrationKey: string,
+  options: { includeKey?: boolean } = {}
 ): string {
   const baseUrl = appBaseUrl.replace(/\/+$/, '');
-  const keyParam = `&integrationKey=${encodeURIComponent(integrationKey)}`;
+  const keyParam =
+    options.includeKey === false ? '' : `&integrationKey=${encodeURIComponent(integrationKey)}`;
 
   switch (integrationType) {
     case 'CLOUDWATCH':

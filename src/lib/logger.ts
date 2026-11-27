@@ -198,6 +198,17 @@ const AUDIT_PROFILE: RedactionProfile = {
 const URI_USER_PASSWORD_PATTERN = /([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)([^:\s/@]+):([^@\s/]+)@/g;
 const URI_PASSWORD_ONLY_PATTERN = /([a-zA-Z][a-zA-Z0-9+.-]*:\/\/):([^@\s/]+)@/g;
 
+// Routing keys travel in query strings (`?integrationKey=...`) for senders that cannot set a header.
+// The pattern above only sees absolute URLs; this one also covers a relative `/path?x=1&key=...`
+// and a bare query string, so no log line, audit row or error message keeps the value.
+const ROUTING_KEY_QUERY_PARAM =
+  /([?&](?:integration[_-]?key|routing[_-]?key|api[_-]?key|key|token|secret)=)[^&\s#"']*/gi;
+
+/** Replace the value of every routing-key style query parameter, keeping the parameter name. */
+export function redactRoutingKeyParams(value: string): string {
+  return value.replace(ROUTING_KEY_QUERY_PARAM, '$1[REDACTED]');
+}
+
 export function sanitizeString(val: string, profile: RedactionProfile = LOG_PROFILE): string {
   if (typeof val !== 'string' || val.length === 0) return val;
   // Bound string length to prevent ReDoS on huge uncontrolled inputs
@@ -209,7 +220,7 @@ export function sanitizeString(val: string, profile: RedactionProfile = LOG_PROF
   for (const pattern of profile.patterns) {
     result = result.replace(pattern, '[REDACTED]');
   }
-  return result;
+  return redactRoutingKeyParams(result);
 }
 
 export function sanitizeContext(
