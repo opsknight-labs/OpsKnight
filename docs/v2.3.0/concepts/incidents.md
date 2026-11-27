@@ -89,7 +89,16 @@ per-incident choice.
 
 - Public incidents can participate in status-page/customer communication when
   the relevant status configuration includes the service.
-- Private incidents remain internal and have tighter scoped-user visibility.
+- Private incidents are left off the public status page and its subscriber
+  notifications.
+
+`PRIVATE` governs the public status page only. It does not restrict who in your
+organization can see the incident: every authorised team member who can read the
+service still sees it in the console and in internal feeds such as the SLA
+stream, with its title. Slack and Microsoft Teams war rooms are not affected
+either. Use it to keep an incident off the public page; it is not a way to hide
+an incident from colleagues, and OpsKnight has no setting for truly restricted
+incidents.
 
 Making an incident private takes effect on status pages at once. Every status page that publishes the incident's service stops serving its last projection, which still shows the incident, and is rebuilt immediately instead of waiting for the projector's next pass (up to about a minute). If the rebuild cannot finish, the page stays withheld and the projector retries. Making an incident public still waits for the projector, because that only widens what the page shows.
 
