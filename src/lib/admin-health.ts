@@ -637,9 +637,16 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
         id: 'scheduler',
         label: 'Scheduler and workers',
         category: 'workers',
-        status: !schedulerEnabled ? 'unknown' : state?.lastError || stale ? 'unhealthy' : 'healthy',
+        // Disabled by configuration (split web/worker): an absent heartbeat here is expected. The
+        // jobs check degrades when the externally driven work is actually overdue.
+        required: schedulerEnabled,
+        status: !schedulerEnabled
+          ? 'informational'
+          : state?.lastError || stale
+            ? 'unhealthy'
+            : 'healthy',
         summary: !schedulerEnabled
-          ? 'Internal scheduler is disabled; an external worker must own scheduled work.'
+          ? 'External scheduler: the internal scheduler is disabled (ENABLE_INTERNAL_CRON=false); an external worker owns scheduled work.'
           : state?.lastError
             ? 'The scheduler recorded an error.'
             : stale

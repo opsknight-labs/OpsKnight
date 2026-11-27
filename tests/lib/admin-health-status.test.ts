@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const m = vi.hoisted(() => ({
   jobCount: vi.fn(),
@@ -39,6 +39,7 @@ vi.mock('@/lib/prisma', () => {
 });
 
 import {
+  calculateOperationalScore,
   JOB_FAILURES_UNHEALTHY_PER_HOUR,
   NOTIFICATIONS_STUCK_UNHEALTHY,
   backgroundJobsStatus,
@@ -131,5 +132,26 @@ describe('what the health report counts', () => {
       .find(w => w.status === 'PENDING');
     expect(stuck).toHaveProperty('nextAttemptAt');
     expect(stuck).not.toHaveProperty('createdAt');
+  });
+});
+
+describe('scheduler check when the internal cron is disabled', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    resetAdminHealthCacheForTests();
+  });
+
+  it('reports an external scheduler as informational instead of degrading the page', async () => {
+    vi.stubEnv('ENABLE_INTERNAL_CRON', 'false');
+    resetAdminHealthCacheForTests();
+    m.jobCount.mockResolvedValue(0);
+    m.notificationCount.mockResolvedValue(0);
+
+    const report = await collectAdminHealth({ force: true });
+    const scheduler = report.checks.find(check => check.id === 'scheduler');
+
+    expect(scheduler?.status).toBe('informational');
+    expect(scheduler?.summary).toContain('External scheduler');
+    expect(calculateOperationalScore(scheduler ? [scheduler] : []).overall).toBe('healthy');
   });
 });

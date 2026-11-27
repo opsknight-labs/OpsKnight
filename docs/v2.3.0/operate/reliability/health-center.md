@@ -61,6 +61,10 @@ database state, an external dependency, or only the replica serving the page.
   database-migration runbook before changing `_prisma_migrations`.
 - **Scheduler** reads the singleton scheduler state and heartbeat. A current
   heartbeat proves only that its owner updated state, not that every job ran.
+  On a replica started with `ENABLE_INTERNAL_CRON=false` (a split web/worker
+  deployment) it reads **External scheduler** and is informational: it does not
+  lower the score or degrade the page. Overdue scheduled work still degrades
+  **Background jobs**.
 - **Background jobs** summarizes durable queue state and age. A failure in the
   last hour or pending work more than five minutes past its schedule degrades the
   check; five or more failures in an hour, or a job processing for over ten
