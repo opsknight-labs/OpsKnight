@@ -4,6 +4,7 @@
  * a section keeps whole lines until its budget is spent and says how many it left out. Callers pass facts
  * the reader is already allowed to see; nothing here reads the database.
  */
+import { neutralizeInstructions } from './redact';
 
 export interface BriefSection {
   heading?: string;
@@ -93,62 +94,68 @@ export function incidentBrief(input: IncidentBriefInput): string {
     input.acknowledgedAt ? `Acknowledged: ${iso(input.acknowledgedAt)}` : 'Acknowledged: not yet',
     input.resolvedAt ? `Resolved: ${iso(input.resolvedAt)}` : 'Resolved: not yet',
   ];
-  return renderBrief([
-    { lines: header, budget: BRIEF_BUDGETS.header },
-    {
-      lines: input.description ? [`Description: ${input.description}`] : [],
-      budget: BRIEF_BUDGETS.text,
-    },
-    {
-      lines: input.resolutionNote ? [`Resolution note: ${input.resolutionNote}`] : [],
-      budget: BRIEF_BUDGETS.text,
-    },
-    {
-      heading: 'Timeline (oldest first):',
-      lines: (input.timeline ?? []).map(event => `- ${iso(event.at)} ${clipText(event.text, 300)}`),
-      budget: BRIEF_BUDGETS.timeline,
-      keep: 'tail',
-    },
-    {
-      heading: 'Responder notes (oldest first):',
-      lines: (input.notes ?? []).map(
-        note => `- ${iso(note.at)} ${note.author}: ${clipText(note.text, 600)}`
-      ),
-      budget: BRIEF_BUDGETS.notes,
-      keep: 'tail',
-    },
-    {
-      heading: 'Changes shortly before onset (correlation only, not confirmed causes):',
-      lines: (input.changes ?? []).map(
-        change => `- ${clipText(change.label, 240)} (${change.minutesBefore} min before)`
-      ),
-      budget: BRIEF_BUDGETS.changes,
-    },
-    {
-      heading: 'Upstream incidents shortly before (correlation only):',
-      lines: (input.upstream ?? []).map(
-        item =>
-          `- ${clipText(item.title, 200)} on ${item.serviceName}, ${item.minutesBefore} min before`
-      ),
-      budget: BRIEF_BUDGETS.upstream,
-    },
-    {
-      heading: 'Similar past incidents:',
-      lines: (input.similar ?? []).map(
-        item =>
-          `- ${clipText(item.label, 200)} (${item.matchPercent}% match)${
-            item.resolution ? `; resolved with: ${clipText(item.resolution, 200)}` : ''
-          }`
-      ),
-      budget: BRIEF_BUDGETS.similar,
-    },
-    {
-      heading: 'Runbooks that have worked on this service:',
-      lines: (input.runbooks ?? []).map(
-        runbook =>
-          `- ${clipText(runbook.label, 200)} (${runbook.succeeded} of ${runbook.eligible} runs succeeded)`
-      ),
-      budget: BRIEF_BUDGETS.runbooks,
-    },
-  ]);
+  // Every field here was written by an alert, a person or an integration: defang instruction-shaped text once,
+  // after assembly, so no section can be missed.
+  return neutralizeInstructions(
+    renderBrief([
+      { lines: header, budget: BRIEF_BUDGETS.header },
+      {
+        lines: input.description ? [`Description: ${input.description}`] : [],
+        budget: BRIEF_BUDGETS.text,
+      },
+      {
+        lines: input.resolutionNote ? [`Resolution note: ${input.resolutionNote}`] : [],
+        budget: BRIEF_BUDGETS.text,
+      },
+      {
+        heading: 'Timeline (oldest first):',
+        lines: (input.timeline ?? []).map(
+          event => `- ${iso(event.at)} ${clipText(event.text, 300)}`
+        ),
+        budget: BRIEF_BUDGETS.timeline,
+        keep: 'tail',
+      },
+      {
+        heading: 'Responder notes (oldest first):',
+        lines: (input.notes ?? []).map(
+          note => `- ${iso(note.at)} ${note.author}: ${clipText(note.text, 600)}`
+        ),
+        budget: BRIEF_BUDGETS.notes,
+        keep: 'tail',
+      },
+      {
+        heading: 'Changes shortly before onset (correlation only, not confirmed causes):',
+        lines: (input.changes ?? []).map(
+          change => `- ${clipText(change.label, 240)} (${change.minutesBefore} min before)`
+        ),
+        budget: BRIEF_BUDGETS.changes,
+      },
+      {
+        heading: 'Upstream incidents shortly before (correlation only):',
+        lines: (input.upstream ?? []).map(
+          item =>
+            `- ${clipText(item.title, 200)} on ${item.serviceName}, ${item.minutesBefore} min before`
+        ),
+        budget: BRIEF_BUDGETS.upstream,
+      },
+      {
+        heading: 'Similar past incidents:',
+        lines: (input.similar ?? []).map(
+          item =>
+            `- ${clipText(item.label, 200)} (${item.matchPercent}% match)${
+              item.resolution ? `; resolved with: ${clipText(item.resolution, 200)}` : ''
+            }`
+        ),
+        budget: BRIEF_BUDGETS.similar,
+      },
+      {
+        heading: 'Runbooks that have worked on this service:',
+        lines: (input.runbooks ?? []).map(
+          runbook =>
+            `- ${clipText(runbook.label, 200)} (${runbook.succeeded} of ${runbook.eligible} runs succeeded)`
+        ),
+        budget: BRIEF_BUDGETS.runbooks,
+      },
+    ])
+  );
 }
