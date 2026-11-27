@@ -8,6 +8,7 @@ import { z } from 'zod/v3';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import prisma from '@/lib/prisma';
+import { isRetryableTransactionError, runSerializableTransaction } from '@/lib/db-utils';
 import { getCurrentUser, getUserPermissions } from '@/lib/rbac';
 import {
   getMcpConfigurationStatus,
@@ -758,173 +759,172 @@ export async function decideMcpConsent(form: FormData) {
     });
   let location: string;
   try {
-    location = await prisma.$transaction(
-      async tx => {
-        const policy = await tx.mcpPolicy.findUnique({ where: { id: 'default' } });
-        requireMcp(policy?.enabled, 'MCP_DISABLED', 503);
-        const pending = await tx.mcpConsentRequest.findUnique({ where: { id: input.id } });
+    // Many people consenting to one shared client, or a double submit, conflict here; retry briefly.
+    location = await runSerializableTransaction(async tx => {
+      const policy = await tx.mcpPolicy.findUnique({ where: { id: 'default' } });
+      requireMcp(policy?.enabled, 'MCP_DISABLED', 503);
+      const pending = await tx.mcpConsentRequest.findUnique({ where: { id: input.id } });
+      requireMcp(
+        pending &&
+          pending.userId === actor.id &&
+          !pending.consumedAt &&
+          pending.expiresAt > new Date(),
+        'MCP_CONSENT_EXPIRED'
+      );
+      const client = await tx.mcpClient.findUnique({ where: { id: pending.clientId } });
+      requireMcp(
+        client && !client.revokedAt && redirectUriAllowed(client.redirectUris, pending.redirectUri),
+        'invalid_client'
+      );
+      // Bind consent to the current registration policy, not a stale pending form.
+      await tx.$queryRaw`SELECT id FROM "McpClient" WHERE id = ${client.id} FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM "McpPolicy" WHERE id = 'default' FOR SHARE`;
+      const currentClient = await tx.mcpClient.findUniqueOrThrow({ where: { id: client.id } });
+      const currentPolicy = await tx.mcpPolicy.findUnique({ where: { id: 'default' } });
+      const ceiling = effectiveMcpClientScopes(currentClient, currentPolicy);
+      requireMcp(
+        ceiling && pending.scopes.every(scope => ceiling.includes(scope)),
+        'invalid_scope'
+      );
+      const user = await tx.user.findUnique({
+        where: { id: actor.id },
+        select: { status: true, tokenVersion: true, mcpRevocationVersion: true, role: true },
+      });
+      requireMcp(
+        user?.status === 'ACTIVE' &&
+          user.tokenVersion === actor.tokenVersion &&
+          isAppRole(user.role),
+        'MCP_INACTIVE_PRINCIPAL',
+        403
+      );
+      // Recompute exactly what the page offered from the pending request and the current role;
+      // the submitted form only chooses among those and is never trusted to add to them.
+      const { offered: roleOffered } = partitionScopesForRole(pending.scopes, user.role);
+      // A policy that requires view-only connections offers reads only, as the page does.
+      const offered = currentPolicy?.requireReadOnlyConnections
+        ? roleOffered.filter(isMcpViewScope)
+        : roleOffered;
+      const chosen = new Set(input.scopes);
+      const selected = offered.filter(
+        scope => chosen.has(scope) && (!input.viewOnly || isMcpViewScope(scope))
+      );
+      if (input.decision === 'allow') {
         requireMcp(
-          pending &&
-            pending.userId === actor.id &&
-            !pending.consumedAt &&
-            pending.expiresAt > new Date(),
-          'MCP_CONSENT_EXPIRED'
-        );
-        const client = await tx.mcpClient.findUnique({ where: { id: pending.clientId } });
-        requireMcp(
-          client &&
-            !client.revokedAt &&
-            redirectUriAllowed(client.redirectUris, pending.redirectUri),
-          'invalid_client'
-        );
-        // Bind consent to the current registration policy, not a stale pending form.
-        await tx.$queryRaw`SELECT id FROM "McpClient" WHERE id = ${client.id} FOR UPDATE`;
-        await tx.$queryRaw`SELECT id FROM "McpPolicy" WHERE id = 'default' FOR SHARE`;
-        const currentClient = await tx.mcpClient.findUniqueOrThrow({ where: { id: client.id } });
-        const currentPolicy = await tx.mcpPolicy.findUnique({ where: { id: 'default' } });
-        const ceiling = effectiveMcpClientScopes(currentClient, currentPolicy);
-        requireMcp(
-          ceiling && pending.scopes.every(scope => ceiling.includes(scope)),
+          input.scopes.every(scope => offered.includes(scope)),
           'invalid_scope'
         );
-        const user = await tx.user.findUnique({
-          where: { id: actor.id },
-          select: { status: true, tokenVersion: true, mcpRevocationVersion: true, role: true },
+        requireMcp(selected.length > 0, 'MCP_CONSENT_NO_SCOPES');
+      }
+      const consumed = await tx.mcpConsentRequest.updateMany({
+        where: { id: pending.id, consumedAt: null },
+        data: { consumedAt: new Date() },
+      });
+      requireMcp(consumed.count === 1, 'MCP_CONSENT_REPLAY');
+      const target = new URL(pending.redirectUri);
+      if (pending.state) target.searchParams.set('state', pending.state);
+      target.searchParams.set('iss', mcpIssuer());
+      if (input.decision === 'deny') {
+        target.searchParams.set('error', 'access_denied');
+        return target.href;
+      }
+      if (currentClient.dynamicRegistration && !currentClient.firstAuthorizedAt)
+        await tx.mcpClient.update({
+          where: { id: client.id },
+          data: { firstAuthorizedAt: new Date() },
         });
-        requireMcp(
-          user?.status === 'ACTIVE' &&
-            user.tokenVersion === actor.tokenVersion &&
-            isAppRole(user.role),
-          'MCP_INACTIVE_PRINCIPAL',
-          403
-        );
-        // Recompute exactly what the page offered from the pending request and the current role;
-        // the submitted form only chooses among those and is never trusted to add to them.
-        const { offered: roleOffered } = partitionScopesForRole(pending.scopes, user.role);
-        // A policy that requires view-only connections offers reads only, as the page does.
-        const offered = currentPolicy?.requireReadOnlyConnections
-          ? roleOffered.filter(isMcpViewScope)
-          : roleOffered;
-        const chosen = new Set(input.scopes);
-        const selected = offered.filter(
-          scope => chosen.has(scope) && (!input.viewOnly || isMcpViewScope(scope))
-        );
-        if (input.decision === 'allow') {
-          requireMcp(
-            input.scopes.every(scope => offered.includes(scope)),
-            'invalid_scope'
-          );
-          requireMcp(selected.length > 0, 'MCP_CONSENT_NO_SCOPES');
-        }
-        const consumed = await tx.mcpConsentRequest.updateMany({
-          where: { id: pending.id, consumedAt: null },
-          data: { consumedAt: new Date() },
-        });
-        requireMcp(consumed.count === 1, 'MCP_CONSENT_REPLAY');
-        const target = new URL(pending.redirectUri);
-        if (pending.state) target.searchParams.set('state', pending.state);
-        target.searchParams.set('iss', mcpIssuer());
-        if (input.decision === 'deny') {
-          target.searchParams.set('error', 'access_denied');
-          return target.href;
-        }
-        if (currentClient.dynamicRegistration && !currentClient.firstAuthorizedAt)
-          await tx.mcpClient.update({
-            where: { id: client.id },
-            data: { firstAuthorizedAt: new Date() },
-          });
-        // Abandoned earlier sign-ins for this assistant are found before the new grant exists.
-        // Connections in use (e.g. the same assistant on another device) stay signed in.
-        const superseded = await tx.mcpGrant.findMany({
-          where: supersededUnusedMcpGrantsWhere(actor.id, currentClient),
-          select: { id: true },
-        });
-        const grant = await tx.mcpGrant.create({
-          data: {
-            userId: actor.id,
-            userTokenVersion: user.tokenVersion,
-            userRevocationVersion: user.mcpRevocationVersion,
-            clientId: client.id,
-            scopes: selected,
-            resource: mcpResource(),
-            ...mcpSessionDates(new Date(), currentPolicy?.sessionIdleDays),
+      // Abandoned earlier sign-ins for this assistant are found before the new grant exists.
+      // Connections in use (e.g. the same assistant on another device) stay signed in.
+      const superseded = await tx.mcpGrant.findMany({
+        where: supersededUnusedMcpGrantsWhere(actor.id, currentClient),
+        select: { id: true },
+      });
+      const grant = await tx.mcpGrant.create({
+        data: {
+          userId: actor.id,
+          userTokenVersion: user.tokenVersion,
+          userRevocationVersion: user.mcpRevocationVersion,
+          clientId: client.id,
+          scopes: selected,
+          resource: mcpResource(),
+          ...mcpSessionDates(new Date(), currentPolicy?.sessionIdleDays),
+        },
+      });
+      const response = new OAuth2Server.Response();
+      await mcpOAuthServer(tx, () => {}).authorize(
+        new OAuth2Server.Request({
+          method: 'GET',
+          headers: {},
+          body: {},
+          query: {
+            client_id: client.id,
+            redirect_uri: pending.redirectUri,
+            response_type: 'code',
+            ...(pending.state ? { state: pending.state } : {}),
+            scope: selected.join(' '),
+            code_challenge: pending.challenge,
+            code_challenge_method: 'S256',
           },
+        }),
+        response,
+        {
+          // OAuth makes state optional; PKCE is what binds the code to this request.
+          allowEmptyState: true,
+          requirePKCE: true,
+          authorizationCodeLifetime: 60,
+          authenticateHandler: { handle: async () => ({ id: actor.id, grantId: grant.id }) },
+        }
+      );
+      requireMcp(response.headers?.location, 'MCP_AUTHORIZATION_FAILED');
+      const authorized = new URL(response.headers.location);
+      requireMcp(authorized.searchParams.has('code'), 'MCP_AUTHORIZATION_FAILED');
+      authorized.searchParams.set('iss', mcpIssuer());
+      await logAudit(
+        {
+          source: 'UI',
+          action: 'mcp.grant.consented',
+          entityType: 'SYSTEM_CONFIG',
+          entityId: grant.id,
+          actorId: actor.id,
+          details: {
+            scopes: grant.scopes,
+            clientId: client.id,
+            selectedScopeCount: selected.length,
+            selectedScopes: selected,
+            offeredScopeCount: offered.length,
+            viewOnly: input.viewOnly,
+            role: user.role,
+          },
+        },
+        tx
+      );
+      // Reconnecting replaces the old connection rather than leaving a second live credential.
+      if (superseded.length) {
+        const ids = superseded.map(item => item.id);
+        await tx.mcpGrant.updateMany({
+          where: { id: { in: ids }, revokedAt: null },
+          data: { revokedAt: new Date() },
         });
-        const response = new OAuth2Server.Response();
-        await mcpOAuthServer(tx, () => {}).authorize(
-          new OAuth2Server.Request({
-            method: 'GET',
-            headers: {},
-            body: {},
-            query: {
-              client_id: client.id,
-              redirect_uri: pending.redirectUri,
-              response_type: 'code',
-              ...(pending.state ? { state: pending.state } : {}),
-              scope: selected.join(' '),
-              code_challenge: pending.challenge,
-              code_challenge_method: 'S256',
-            },
-          }),
-          response,
-          {
-            // OAuth makes state optional; PKCE is what binds the code to this request.
-            allowEmptyState: true,
-            requirePKCE: true,
-            authorizationCodeLifetime: 60,
-            authenticateHandler: { handle: async () => ({ id: actor.id, grantId: grant.id }) },
-          }
-        );
-        requireMcp(response.headers?.location, 'MCP_AUTHORIZATION_FAILED');
-        const authorized = new URL(response.headers.location);
-        requireMcp(authorized.searchParams.has('code'), 'MCP_AUTHORIZATION_FAILED');
-        authorized.searchParams.set('iss', mcpIssuer());
         await logAudit(
           {
             source: 'UI',
-            action: 'mcp.grant.consented',
+            action: 'mcp.grant.superseded',
             entityType: 'SYSTEM_CONFIG',
             entityId: grant.id,
             actorId: actor.id,
-            details: {
-              scopes: grant.scopes,
-              clientId: client.id,
-              selectedScopeCount: selected.length,
-              selectedScopes: selected,
-              offeredScopeCount: offered.length,
-              viewOnly: input.viewOnly,
-              role: user.role,
-            },
+            details: { clientId: client.id, supersededGrantIds: ids },
           },
           tx
         );
-        // Reconnecting replaces the old connection rather than leaving a second live credential.
-        if (superseded.length) {
-          const ids = superseded.map(item => item.id);
-          await tx.mcpGrant.updateMany({
-            where: { id: { in: ids }, revokedAt: null },
-            data: { revokedAt: new Date() },
-          });
-          await logAudit(
-            {
-              source: 'UI',
-              action: 'mcp.grant.superseded',
-              entityType: 'SYSTEM_CONFIG',
-              entityId: grant.id,
-              actorId: actor.id,
-              details: { clientId: client.id, supersededGrantIds: ids },
-            },
-            tx
-          );
-        }
-        return authorized.href;
-      },
-      { isolationLevel: 'Serializable', timeout: 5000 }
-    );
+      }
+      return authorized.href;
+    }, 3);
   } catch (error) {
     // Show what happened and what to do, not the generic settings error.
     if (error instanceof McpBoundaryError)
       redirect(`/oauth/mcp/consent/result?code=${encodeURIComponent(error.code)}`);
+    // Still conflicting after the retries: the same "busy, try again" page as a refused sign-in.
+    if (isRetryableTransactionError(error))
+      redirect('/oauth/mcp/consent/result?code=temporarily_unavailable');
     throw error;
   }
   redirect(location);
