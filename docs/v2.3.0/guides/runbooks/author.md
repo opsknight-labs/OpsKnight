@@ -32,7 +32,10 @@ policy before deployment.
 ## Create a draft
 
 1. Open **Runbooks → Library → New Runbook**.
-2. Enter a name, unique slug, and optional description.
+2. Enter a name, unique slug, and optional description. If the slug is already
+   in use, the dialog stays open with what you typed and shows "A runbook with
+   this slug already exists. Choose a different slug." inline and as a message;
+   other validation errors appear the same way.
 3. Select a template:
    - **Empty** — blank workflow.
    - **Diagnostics** — read-only system inspection.
@@ -218,6 +221,9 @@ Reference inputs in step configuration using the `${{ inputs.key }}` syntax:
 - Keys must be lowercase.
 
 `SECRET_REF` inputs use the `secret://` protocol: `secret://payments-api-token`.
+Only `SECRET_REF` inputs may hold a `secret://` value. A `STRING` or `SELECT`
+input, including a value mapped from incident context, rejects one, so a plain
+text input can never be used to make an Agent decrypt a secret.
 Never paste plaintext credentials into definitions or binding values. Secrets
 require HTTPS transport and a scoped grant on the target Agent or pool.
 

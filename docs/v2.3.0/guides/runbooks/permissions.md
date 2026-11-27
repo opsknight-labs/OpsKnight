@@ -29,14 +29,14 @@ capabilities.
 | --------------------------- | --------------------------- | ----------------------------------------------------------------------- |
 | `runbook.read.all`          | `RUNBOOK_READ_ALL`          | View all Runbooks, executions, Agents, and health                       |
 | `runbook.read.scoped`       | `RUNBOOK_READ_SCOPED`       | View only service-scoped Runbooks (reserved for future scoped views)    |
-| `runbook.manage`            | `RUNBOOK_MANAGE`            | Create/edit/archive/delete drafts, manage service bindings, set budgets |
+| `runbook.manage`            | `RUNBOOK_MANAGE`            | Create/edit/archive/delete drafts, manage service bindings              |
 | `runbook.publish`           | `RUNBOOK_PUBLISH`           | Publish an immutable version, retire versions                           |
 | `runbook.execute`           | `RUNBOOK_EXECUTE`           | Start executions, request cancellation, re-run                          |
 | `runbook.approve`           | `RUNBOOK_APPROVE`           | Approve a step's exact plan                                             |
 | `runbook.agent.manage`      | `RUNBOOK_AGENT_MANAGE`      | Enroll/revoke Agents, manage pools, rotate signing keys                 |
 | `runbook.secret.manage`     | `RUNBOOK_SECRET_MANAGE`     | Create secrets, manage grants, rotate values                            |
 | `runbook.artifact.download` | `RUNBOOK_ARTIFACT_DOWNLOAD` | Download step output artifacts                                          |
-| `admin.manage`              | `ADMIN_MANAGE`              | Set artifact retention policy                                           |
+| `admin.manage`              | `ADMIN_MANAGE`              | Set artifact retention policy and automatic-remediation budgets         |
 
 The built-in `ADMIN` role holds `runbook.artifact.download`. `RESPONDER` and
 `AUDITOR` do not. Downloads are audited and sanitized, including artifacts

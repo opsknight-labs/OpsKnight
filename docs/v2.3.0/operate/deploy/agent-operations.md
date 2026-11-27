@@ -59,6 +59,8 @@ Confirm the actual HTTPS endpoint reachable from the Agent, independently of the
 
 Do not share an identity volume between running replicas. A token is single-use. Create a distinct enrollment for every independent Agent.
 
+Before the Agent spends the token it checks that the identity location is writable, so a read-only or unwritable `/var/lib/opsknight-agent` fails the start without consuming the token. If saving the identity still fails after the server has accepted the enrollment, the Agent keeps the issued identity in memory and retries the save rather than enrolling again: fix the volume permissions and the running Agent saves it, and you do not need a new token. A temporary file left by an earlier run does not block the save.
+
 Keep bootstrap Secrets while deployment manifests reference them. Once enrolled, the Agent uses its persisted identity and does not read the consumed token again. Removing a still-referenced Kubernetes/Swarm Secret can prevent redeployment. A native environment token can be removed after enrollment; always keep the pinned execution public key.
 
 ## Request checks and limits
