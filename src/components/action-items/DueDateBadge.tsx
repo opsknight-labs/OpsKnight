@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { cn } from '@/lib/utils';
 import { formatDateTime } from '@/lib/timezone';
+import { actionItemOverdueBefore } from '@/lib/action-item-due-dates';
 import { AlertTriangle, Clock, Calendar, CheckCircle2 } from 'lucide-react';
 
 export type DueDateBadgeProps = {
@@ -31,10 +32,11 @@ export function getDueDateStatus(
     return { type: 'none' };
   }
 
-  // A due date is a calendar date stored at 00:00Z: read it in UTC, and compare it with the
-  // viewer's own today so it is never shifted a day by their zone.
+  // A due date is a calendar date stored at 00:00Z. Compare it with today's UTC day, the same rule
+  // as the board count, the API filter and the reminders (actionItemOverdueBefore), so the badge
+  // never disagrees with them whichever side of UTC the viewer is on.
   const dueDay = Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate());
-  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const today = actionItemOverdueBefore(now).getTime();
   const msPerDay = 1000 * 60 * 60 * 24;
   const daysDiff = Math.round((dueDay - today) / msPerDay);
 
