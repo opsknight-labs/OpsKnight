@@ -336,7 +336,11 @@ uniqueness rule.
 
 Check whether the target is the acting administrator or the last active admin.
 Create and verify another administrator before repeating the operation. For
-role-source conflicts, update the intended authority—manual, OIDC, or SCIM.
+role-source conflicts, update the intended authority—manual, OIDC, or SCIM. The
+Users page shows the rule's own message in a toast for a refused role change,
+deactivation, team add or team removal (including a last-administrator conflict
+lost to a concurrent change). An unexpected failure shows a generic message and
+no internal detail.
 
 ### Permanent deletion is blocked
 
