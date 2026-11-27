@@ -500,6 +500,12 @@ export async function POST(request: NextRequest) {
         : '';
   const slackUserId = typeof payload.user?.id === 'string' ? payload.user.id : '';
   if (!workspaceId) return NextResponse.json({ error: 'Missing Slack workspace' }, { status: 400 });
+  // SlackOps: shortcuts, update/status modals (opened inline for trigger_id), Home "Declare".
+  {
+    const { handleSlackOpsInteractive } = await import('@/lib/slack/update-actions');
+    const handled = await handleSlackOpsInteractive(payload, signature);
+    if (handled) return handled;
+  }
   // `/incident declare` modal submit: validated inline (errors show on the form), then queued.
   if (
     payload.type === 'view_submission' &&

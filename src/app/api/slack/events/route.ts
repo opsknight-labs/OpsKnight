@@ -87,6 +87,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
+      // App Home tab: queued like mentions; the worker publishes the viewer's view.
+      if (event.type === 'app_home_opened') {
+        const { enqueueAppHome } = await import('@/lib/slack/home');
+        await enqueueAppHome(payload);
+        return NextResponse.json({ ok: true });
+      }
+
       // @squire mention: queued durably and answered in the thread by the worker (Slack wants a reply
       // to the event within three seconds; an answer can take longer).
       if (event.type === 'app_mention') {

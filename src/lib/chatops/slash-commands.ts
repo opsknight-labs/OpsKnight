@@ -14,6 +14,7 @@ import { z } from 'zod/v3';
 import { normalizeError } from '@/lib/errors';
 import { enqueueChatOpsIntent } from '@/lib/chatops/intents';
 import { escapeSlack } from '@/lib/chatops/squire/render';
+import { UPDATE_SUBCOMMANDS, handleUpdateSlashCommand } from '@/lib/chatops/slash/update-commands';
 import { SLACK_COMMAND_USAGE_HINT } from '@/lib/slack/app-manifest';
 import {
   chatOpsLifecycleErrorMessage,
@@ -480,6 +481,8 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
     'investigate',
     'role',
     'roles',
+    // SlackOps update commands (priority, urgency, title, describe, status).
+    ...UPDATE_SUBCOMMANDS,
   ]);
   const actor =
     mutatingCommands.has(subcommand) && botToken
@@ -751,6 +754,20 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
       });
     }
 
+    case 'priority':
+    case 'urgency':
+    case 'title':
+    case 'describe':
+    case 'status':
+      return handleUpdateSlashCommand({
+        subcommand,
+        args,
+        incidentId: incident.id,
+        actor: { id: actor!.id, name: actor!.name },
+        idempotency,
+        rethrowIfTransient: error => rethrowIfTransient(error, payload),
+      });
+
     default:
       return {
         response_type: 'ephemeral',
@@ -794,7 +811,7 @@ const declareMetadataSchema = z.object({
 });
 
 /** The bot token of the installation for this Slack workspace (rotating tokens refreshed). */
-async function workspaceBotToken(teamId: string): Promise<string | null> {
+export async function workspaceBotToken(teamId: string): Promise<string | null> {
   const installation = teamId
     ? await prisma.slackIntegration.findFirst({
         where: { workspaceId: teamId, enabled: true },
