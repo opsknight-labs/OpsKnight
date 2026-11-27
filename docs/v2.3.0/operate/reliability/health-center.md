@@ -88,7 +88,7 @@ database state, an external dependency, or only the replica serving the page.
   that backed-up keys are recoverable.
 - **Version and upgrades** reports the running version/update signal exposed to
   this replica; compare every replica and the deployed image digest.
-- **Analytics rollups** checks the latest completed daily rollup.
+- **Analytics rollups** checks the latest completed daily rollup. To rebuild a range by hand, an administrator calls `POST /api/admin/rollups/backfill` with `fromDate`, `toDate` (`YYYY-MM-DD`, at most 366 days) and an optional `serviceId`. It answers `status: "completed"` only when every service rollup was generated. If some failed it answers HTTP 500 with `status: "partial"`, `failedServiceRollups` and `failedDays`; those days have no complete rollup, so run the range again.
 - **Integration delivery control plane** detects stale durable external
   operations and inbound delivery leases plus recent terminal failures.
 - **Local durable-job worker** and **Realtime event control plane** are

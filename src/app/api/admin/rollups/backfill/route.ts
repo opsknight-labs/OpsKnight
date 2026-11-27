@@ -75,8 +75,31 @@ export async function POST(req: NextRequest) {
 
   const startedAt = Date.now();
   try {
-    await backfillRollups(fromDate, toDate, body.serviceId);
+    const summary = await backfillRollups(fromDate, toDate, body.serviceId);
     const durationMs = Date.now() - startedAt;
+    if (summary.failures > 0) {
+      // Same rule as the daily cron: a day with failed service rollups is not complete.
+      logger.error('[Admin] Backfill finished with failed service rollups', {
+        fromDate: body.fromDate,
+        toDate: body.toDate,
+        serviceId: body.serviceId,
+        failedServiceRollups: summary.failures,
+        failedDays: summary.failedDays,
+      });
+      return NextResponse.json(
+        {
+          status: 'partial',
+          error: `${summary.failures} service rollup(s) failed; those days have no complete rollup. Re-run the range to retry.`,
+          fromDate: body.fromDate,
+          toDate: body.toDate,
+          serviceId: body.serviceId ?? null,
+          failedServiceRollups: summary.failures,
+          failedDays: summary.failedDays,
+          durationMs,
+        },
+        { status: 500 }
+      );
+    }
     logger.info('[Admin] Backfill complete', {
       fromDate: body.fromDate,
       toDate: body.toDate,
