@@ -314,7 +314,15 @@ export async function syncLinkedEntitiesForJiraIssue(
           where: { id: postmortemId },
           select: { actionItems: true },
         });
-        if (!Array.isArray(postmortem?.actionItems)) continue;
+        if (!postmortem) continue;
+        if (!Array.isArray(postmortem.actionItems)) {
+          // No legacy JSON to mirror, but the parent must still change so its revision advances.
+          await tx.postmortem.update({
+            where: { id: postmortemId },
+            data: { updatedAt: new Date() },
+          });
+          continue;
+        }
         const byId = new Map(records.map(record => [record.id, record]));
         const synced = postmortem.actionItems.map(item => {
           if (!item || typeof item !== 'object' || Array.isArray(item)) return item;

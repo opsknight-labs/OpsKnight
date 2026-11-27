@@ -77,7 +77,7 @@ Use the statuses consistently:
 - **Blocked** — progress cannot continue; record the blocker in the linked work or postmortem context.
 - **Completed** — the expected outcome has been verified, not merely implemented.
 
-Selecting **Completed** records a completion time. Moving the item back to another state clears that completion time. The application keeps normalized action-item records and compatible postmortem data aligned during the migration boundary.
+Selecting **Completed** records a completion time. Moving the item back to another state clears that completion time. The application keeps normalized action-item records and compatible postmortem data aligned during the migration boundary. Every status change, whether made on the board or synced from a linked Jira issue, also advances the postmortem's revision, so an open editor or an API client that read the postmortem before the change gets `412` on its next `If-Match` write instead of silently reverting it.
 
 A due date is a calendar date, shown as entered whatever your time zone. An item is **Due today** all through its due date and becomes overdue when the next UTC day begins (the global board count, the `overdue` filter in API v2, the daily reminders, Analytics and handoff summaries all use this rule).
 
