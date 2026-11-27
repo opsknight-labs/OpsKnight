@@ -195,9 +195,6 @@ export async function findSlackIncidentForChannel(workspaceId: string, channelId
   });
 }
 
-const NOT_AN_INCIDENT_CHANNEL =
-  'I answer in OpsKnight incident channels. Open the incident in OpsKnight to ask about anything else.';
-
 /**
  * The bot token of the installation in this workspace. With several workspaces installed, a service's own
  * integration (or the global one) may belong to another workspace, whose token cannot read or post here.
@@ -302,7 +299,6 @@ export async function answerSlackSquireMention(
     __teamId: payload.team_id,
     ...(canCustomize ? { __sender: sender } : {}),
   });
-  if (!incident) return reply(NOT_AN_INCIDENT_CHANNEL);
   const [history, placeholder] = await Promise.all([
     payload.thread_ts
       ? readSlackThread(
@@ -338,7 +334,9 @@ export async function answerSlackSquireMention(
     provider: 'SLACK',
     userId: user!.id,
     question: questionFromMention(payload.text),
-    incidentId: incident.id,
+    // In a normal channel there is no incident to scope to: the question is answered as a general one,
+    // still as the asker and still limited to the channel-safe read tools (the answer is public here).
+    incidentId: incident?.id ?? null,
     history,
     inChannel: true,
     ...(editor ? { onProgress: (text: string) => editor.push(text) } : {}),

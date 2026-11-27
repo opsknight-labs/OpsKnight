@@ -766,6 +766,9 @@ const DECLARE_BLOCKS = {
   title: { block: 'declare_title', action: 'value' },
   service: { block: 'declare_service', action: 'value' },
   urgency: { block: 'declare_urgency', action: 'value' },
+  priority: { block: 'declare_priority', action: 'value' },
+  visibility: { block: 'declare_visibility', action: 'value' },
+  assignee: { block: 'declare_assignee', action: 'value' },
   description: { block: 'declare_description', action: 'value' },
 } as const;
 
@@ -773,6 +776,14 @@ const declareSubmissionSchema = z.object({
   title: z.string().trim().min(3, 'Give the incident a title of at least 3 characters.').max(200),
   serviceId: z.string().trim().min(1, 'Pick the affected service.').max(64),
   urgency: z.enum(['LOW', 'MEDIUM', 'HIGH']),
+  // Optional, like on the web form: blank priority comes from the service's policy, blank visibility
+  // from the service's default, and no assignee leaves it to the escalation policy.
+  priority: z.enum(['P1', 'P2', 'P3', 'P4', 'P5']).optional(),
+  visibility: z.enum(['PUBLIC', 'PRIVATE']).optional(),
+  assigneeSlackId: z
+    .string()
+    .regex(/^[UW][A-Z0-9]{2,20}$/)
+    .optional(),
   description: z.string().trim().max(3000).optional(),
 });
 export type SlackDeclareInput = z.infer<typeof declareSubmissionSchema>;
@@ -860,6 +871,50 @@ export function buildSlackDeclareModal(input: {
       },
       {
         type: 'input',
+        block_id: DECLARE_BLOCKS.priority.block,
+        optional: true,
+        label: plain('Priority'),
+        element: {
+          type: 'static_select',
+          action_id: DECLARE_BLOCKS.priority.action,
+          placeholder: plain("Set by the service's policy"),
+          options: [
+            { text: plain('P1 · Crisis'), value: 'P1' },
+            { text: plain('P2 · High'), value: 'P2' },
+            { text: plain('P3 · Medium'), value: 'P3' },
+            { text: plain('P4 · Low'), value: 'P4' },
+            { text: plain('P5 · Informational'), value: 'P5' },
+          ],
+        },
+      },
+      {
+        type: 'input',
+        block_id: DECLARE_BLOCKS.visibility.block,
+        optional: true,
+        label: plain('Visibility'),
+        element: {
+          type: 'static_select',
+          action_id: DECLARE_BLOCKS.visibility.action,
+          placeholder: plain("The service's default"),
+          options: [
+            { text: plain('Customer-facing (status pages)'), value: 'PUBLIC' },
+            { text: plain('Internal only'), value: 'PRIVATE' },
+          ],
+        },
+      },
+      {
+        type: 'input',
+        block_id: DECLARE_BLOCKS.assignee.block,
+        optional: true,
+        label: plain('Assign to'),
+        element: {
+          type: 'users_select',
+          action_id: DECLARE_BLOCKS.assignee.action,
+          placeholder: plain('Left to the on-call policy'),
+        },
+      },
+      {
+        type: 'input',
         block_id: DECLARE_BLOCKS.description.block,
         optional: true,
         label: plain('Description'),
@@ -877,7 +932,10 @@ export function buildSlackDeclareModal(input: {
 type SlackViewState = {
   values?: Record<
     string,
-    Record<string, { value?: unknown; selected_option?: { value?: unknown } | null }>
+    Record<
+      string,
+      { value?: unknown; selected_option?: { value?: unknown } | null; selected_user?: unknown }
+    >
   >;
 };
 
@@ -890,13 +948,16 @@ export function parseSlackDeclareSubmission(
   const read = (block: string) => {
     const entry = Object.entries(values).find(([id]) => id === block)?.[1];
     const field = entry ? Object.values(entry)[0] : undefined;
-    const raw = field?.selected_option?.value ?? field?.value;
+    const raw = field?.selected_option?.value ?? field?.selected_user ?? field?.value;
     return typeof raw === 'string' ? raw : undefined;
   };
   const parsed = declareSubmissionSchema.safeParse({
     title: read(DECLARE_BLOCKS.title.block) ?? '',
     serviceId: read(DECLARE_BLOCKS.service.block) ?? '',
     urgency: read(DECLARE_BLOCKS.urgency.block) ?? 'HIGH',
+    priority: read(DECLARE_BLOCKS.priority.block) || undefined,
+    visibility: read(DECLARE_BLOCKS.visibility.block) || undefined,
+    assigneeSlackId: read(DECLARE_BLOCKS.assignee.block) || undefined,
     description: read(DECLARE_BLOCKS.description.block) || undefined,
   });
   if (parsed.success) return { ok: true, value: parsed.data };
@@ -904,6 +965,9 @@ export function parseSlackDeclareSubmission(
     ['title', DECLARE_BLOCKS.title.block],
     ['serviceId', DECLARE_BLOCKS.service.block],
     ['urgency', DECLARE_BLOCKS.urgency.block],
+    ['priority', DECLARE_BLOCKS.priority.block],
+    ['visibility', DECLARE_BLOCKS.visibility.block],
+    ['assigneeSlackId', DECLARE_BLOCKS.assignee.block],
     ['description', DECLARE_BLOCKS.description.block],
   ]);
   const errors = new Map<string, string>();
@@ -1076,6 +1140,11 @@ export async function handleSlackDeclareSubmission(
         text: `🚫 You do not have permission to declare incidents on *${escapeSlack(service.name)}*.`,
       };
     }
+    // The picked Slack person must map to an OpsKnight user; if not, the incident is still declared
+    // and left to the escalation policy, and the reply says so.
+    let assignee: { id: string; name: string | null } | null = null;
+    if (input.assigneeSlackId && token)
+      assignee = await resolveOpsKnightUser(input.assigneeSlackId, token, workspace);
     const { executeIdempotentIncidentCreation } =
       await import('@/lib/incidents/idempotent-commands');
     const execution = await executeIdempotentIncidentCreation(
@@ -1083,6 +1152,9 @@ export async function handleSlackDeclareSubmission(
         title: input.title,
         description: input.description ?? null,
         urgency: input.urgency,
+        ...(input.priority ? { priority: input.priority } : {}),
+        ...(input.visibility ? { visibility: input.visibility } : {}),
+        ...(assignee ? { assigneeId: assignee.id } : {}),
         serviceId: service.id,
         teamId: service.teamId ?? null,
         source: 'WEB',
@@ -1098,11 +1170,15 @@ export async function handleSlackDeclareSubmission(
       incidentId: execution.value.id,
       outcome: execution.value.outcome,
     });
+    const unmatchedAssignee =
+      input.assigneeSlackId && !assignee
+        ? ` <@${input.assigneeSlackId}> has no matching OpsKnight account, so the on-call policy will assign it.`
+        : '';
     return {
       response_type: 'ephemeral',
       text:
         execution.value.outcome === 'CREATED'
-          ? `🚨 Declared <${url}|${escapeSlack(input.title)}> on *${escapeSlack(service.name)}*. A war room opens if the service's policy calls for one.`
+          ? `🚨 Declared <${url}|${escapeSlack(input.title)}> on *${escapeSlack(service.name)}*. A war room opens if the service's policy calls for one.${unmatchedAssignee}`
           : `ℹ️ This matched an open incident, so it was added there: <${url}|open incident>.`,
     };
   } catch (error) {
