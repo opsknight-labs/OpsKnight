@@ -32,6 +32,8 @@ Open **Settings → Status Pages**, select the page, then use its announcements,
 ## Configure delivery and access
 
 1. Create announcements with type, schedule, message, and affected services; preview before publishing.
+
+   An announcement created through the API (`POST /api/v2/status-pages/{id}/announcements`) or an MCP assistant notifies subscribers when it is published, the same as one created in the console. Create it with `isActive: false` to hold it back without notifying. The API cannot yet end or cancel an announcement: set `endDate` when you create it, or end it from the page workspace.
 2. Review verified active subscribers separately from unverified/unsubscribed records.
 3. Configure webhook endpoints and use the built-in test before relying on them.
 4. Create a page-scoped API token, copy it once to the approved secret manager, and record its owner/purpose.
