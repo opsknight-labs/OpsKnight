@@ -493,6 +493,9 @@ export async function processChatOpsIntent(intentId: string): Promise<void> {
         response = await processSlackReactionPin(
           payload as unknown as Parameters<typeof processSlackReactionPin>[0]
         );
+      } else if (payload.__kind === 'INCIDENT_UPDATE_SUBMISSION' || payload.__kind === 'APP_HOME') {
+        const { processSlackOpsIntent } = await import('@/lib/slack/update-actions');
+        response = (await processSlackOpsIntent(payload)) as unknown as Prisma.JsonValue;
       } else if (payload.__kind === 'DECLARE_SUBMISSION') {
         const { handleSlackDeclareSubmission } = await import('@/lib/chatops/slash-commands');
         response = (await handleSlackDeclareSubmission(
