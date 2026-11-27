@@ -43,6 +43,12 @@ incident's **Postmortem** tab. Select the incident when prompted.
 2. Keep status **Draft** while evidence and reviewers are incomplete.
 3. Use **Auto-Draft** when useful, then verify every generated statement against
    incident evidence; generated text is a starting point, not an approval.
+   **Auto-Draft** replaces the summary, root cause, resolution, lessons,
+   timeline, impact, Five Whys and contributing factors in one step and cannot
+   be undone. When any of them already has content, it first asks **Replace what
+   you have written?**; choose **Keep my content** to leave the form unchanged.
+   An empty form is drafted straight away. It needs read access to the
+   incident; for an incident you cannot read it answers `Incident not found`.
 4. Review and correct timeline events.
 5. Record impact metrics with known units and scope.
 6. Document root cause narrative, contributing factors, and Five Whys without
@@ -84,7 +90,11 @@ Change status to **Published** only after reviewers accept the learning record.
 The first publication records its publication time. Publishing does not complete
 action items. Use the public-status control separately when the postmortem is
 appropriate for a status-page audience; verify the public rendering contains no
-internal-only detail.
+internal-only detail. The public page serves only **Published** postmortems. On
+a draft the control reads **Allow on Status Page** and the badge reads **Public
+once published**; customers see nothing until the status is **Published**. If
+the visibility change fails, a message shows the reason and the setting stays as
+it was.
 
 ## Remove, archive, or follow up
 
