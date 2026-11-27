@@ -8,7 +8,7 @@ import { enqueueCentralNotification } from './notification-control-plane';
 import { formatWebhookPayloadByType } from './webhooks';
 import { getBaseUrl } from './env-validation';
 import { configuredSlackWebhookUrl } from './slack';
-import { readSlackWebhookUrl, slackWebhookHandle } from './slack-webhook-secret';
+import { sendServiceSlaNotifications } from './service-notifications';
 import { deriveNextSlaTransition } from '@/lib/incident-sla/next-transition';
 import {
   addOperationalMetric,
@@ -339,70 +339,28 @@ async function notifyBreachWarning(
     message: plainText,
   });
   const eventKey = `${warning.breachType}:${isBreached ? 'breached' : 'warning'}:${warning.targetMinutes}`;
-  const incidentPresentation = {
-    id: warning.incidentId,
-    title: warning.title,
-    status: warning.status,
-    urgency: warning.urgency,
-    serviceName: warning.serviceName,
-    assigneeName: warning.assigneeName,
-  };
-
-  // 1. Send Slack notification if enabled
+  // 1. Chat destinations: the same targets the lifecycle notifications use (every linked Slack
+  // destination, the legacy channel and webhook, every Microsoft Teams channel), each notified once
+  // per breach state. A failed enqueue keeps `materialized` false so the next cycle retries it.
   if (config.notifySlack) {
-    const channels = warning.serviceNotificationChannels || [];
-    const hasSlackEnabled = channels.includes('SLACK');
-    const slackChannel = warning.slackChannel?.trim();
-    // The service webhook is stored encrypted: queue rows keep that stored form (delivery decrypts it)
-    // and the recipient shows only a non-secret handle.
-    const storedSlackWebhook = warning.slackWebhookUrl?.trim();
-    const slackWebhookUrl =
-      (await readSlackWebhookUrl(storedSlackWebhook)) || configuredSlackWebhookUrl();
-
-    // Do not create a synthetic Slack recipient. A service target is preferred,
-    // with a configured global webhook as the deliberate fallback.
-    if (hasSlackEnabled && (slackChannel || slackWebhookUrl)) {
-      // One incident's enqueue failure must not abort the whole check (and the scheduler cycle).
-      try {
-        await enqueueCentralNotification({
-          category: 'SLA',
-          channel: 'SLACK',
-          recipientType: slackChannel ? 'SLACK_CHANNEL' : 'WEBHOOK',
-          recipientId: warning.serviceId,
-          recipientAddress: slackChannel || slackWebhookHandle(slackWebhookUrl!),
-          incidentId: warning.incidentId,
-          templateKey: `sla-${warning.breachType}-${isBreached ? 'breached' : 'warning'}`,
-          sourceType: 'INCIDENT_SLA',
-          sourceId: warning.incidentId,
-          eventKey,
-          displayMessage: plainText,
-          priority: isBreached ? 0 : 1,
-          payload: slackChannel
-            ? {
-                kind: 'SLACK_CHANNEL',
-                channel: slackChannel,
-                incident: incidentPresentation,
-                eventType: 'triggered',
-                includeInteractiveButtons: true,
-                serviceId: warning.serviceId,
-                additionalMessage: message,
-              }
-            : {
-                kind: 'SLACK_WEBHOOK',
-                incident: incidentPresentation,
-                eventType: 'triggered',
-                webhookUrl: storedSlackWebhook || slackWebhookUrl,
-                additionalMessage: message,
-              },
-        });
-        durableIntentCount++;
-      } catch (error) {
-        materialized = false;
-        logger.error('[SLA Breach Monitor] Error enqueueing Slack notification', {
-          incidentId: warning.incidentId,
-          error,
-        });
-      }
+    const chat = await sendServiceSlaNotifications(
+      warning.incidentId,
+      {
+        breachType: warning.breachType,
+        breached: isBreached,
+        eventKey,
+        message,
+        text: plainText,
+      },
+      { fallbackSlackWebhookUrl: configuredSlackWebhookUrl() }
+    );
+    durableIntentCount += chat.queued;
+    if (!chat.success) {
+      materialized = false;
+      logger.error('[SLA Breach Monitor] Error enqueueing chat notifications', {
+        incidentId: warning.incidentId,
+        errors: chat.errors,
+      });
     }
   }
 

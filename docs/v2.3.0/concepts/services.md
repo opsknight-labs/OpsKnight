@@ -213,6 +213,14 @@ select the configured destinations/channels and choose lifecycle events:
 - incident resolved; and
 - SLA breached.
 
+An SLA warning or breach goes to every one of those destinations, the same ones
+the other lifecycle events use: each linked Slack destination (subject to its
+priority and urgency conditions), the legacy Slack channel and webhook, every
+linked Microsoft Teams channel (as a text post), and each webhook. A breach state
+(`ack` or `resolve`, warning or breached, per target) is sent once per
+destination, so a repeat check does not post again. Email alerts follow the SLA
+alert address setting.
+
 The service UI can link multiple Slack destinations, Microsoft Teams
 destinations, and outbound webhook integrations, subject to the corresponding
 workspace connection. Slack channels must be joined/connected where required;
