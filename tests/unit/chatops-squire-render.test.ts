@@ -119,6 +119,20 @@ describe('Squire chat rendering: links', () => {
 });
 
 describe('Squire chat rendering: Slack', () => {
+  it('shows timestamps in local time and names id-only sources by kind', () => {
+    const { blocks } = renderSlackAnswer(
+      answer({
+        text: 'It opened at 2026-11-27T06:33:49Z.',
+        citations: [{ kind: 'incident', label: 'inc_9', href: '/incidents/inc_9' }],
+      }),
+      { baseUrl: BASE, ownerUserId: 'u1' }
+    );
+    const json = JSON.stringify(blocks);
+    const unix = Date.parse('2026-11-27T06:33:49Z') / 1000;
+    expect(json).toContain(`<!date^${unix}^{date_short_pretty} at {time}|2026-11-27T06:33:49Z>`);
+    expect(json).toContain(`<${BASE}/incidents/inc_9|Incident>`);
+  });
+
   it('renders the answer, sources as links, and who it answered for', () => {
     const { text, blocks } = renderSlackAnswer(answer(), { baseUrl: BASE, ownerUserId: 'u1' });
     expect(text).toContain('payments');

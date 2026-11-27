@@ -5,6 +5,7 @@
  * ask, investigate.
  */
 
+import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { getSlackBotToken } from '@/lib/slack';
@@ -342,25 +343,28 @@ async function handleListCommand(actorId: string, args: string): Promise<SlackRe
       text: `⚠️ No service you can see matches \`${escapeSlack(args.slice(0, 100))}\`.`,
     };
   }
-  const incidents = await prisma.incident.findMany({
-    where: {
-      AND: [
-        incidentReadWhere(actor),
-        { status: { in: ['OPEN', 'ACKNOWLEDGED'] } },
-        service ? { serviceId: service.id } : { assigneeId: actorId },
-      ],
-    },
-    select: {
-      id: true,
-      title: true,
-      status: true,
-      urgency: true,
-      service: { select: { name: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 10,
-  });
-  const scope = service ? `on *${escapeSlack(service.name)}*` : 'assigned to you';
+  const findOpen = (filter: Prisma.IncidentWhereInput) =>
+    prisma.incident.findMany({
+      where: {
+        AND: [incidentReadWhere(actor), { status: { in: ['OPEN', 'ACKNOWLEDGED'] } }, filter],
+      },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        urgency: true,
+        service: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+    });
+  let incidents = await findOpen(service ? { serviceId: service.id } : { assigneeId: actorId });
+  let scope = service ? `on *${escapeSlack(service.name)}*` : 'assigned to you';
+  // Nothing of your own: show what is burning anyway rather than a bare "all clear".
+  if (incidents.length === 0 && !service) {
+    incidents = await findOpen({});
+    scope = 'you can see (none are assigned to you)';
+  }
   if (incidents.length === 0)
     return { response_type: 'ephemeral', text: `✅ No open incidents ${scope}.` };
   const base = getBaseUrl().replace(/\/+$/, '');

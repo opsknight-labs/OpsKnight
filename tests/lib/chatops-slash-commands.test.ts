@@ -412,6 +412,24 @@ describe('ChatOps Slash Command Dispatcher', () => {
         where: { AND: expect.arrayContaining([{ assigneeId: 'usr-alice' }]) },
       });
     });
+
+    it('falls back to the open incidents you can see when none are yours', async () => {
+      vi.mocked(prisma.incident.findFirst).mockResolvedValue(null);
+      vi.mocked(prisma.incident.findMany)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          {
+            id: 'inc-2',
+            title: 'API slow',
+            status: 'OPEN',
+            urgency: 'LOW',
+            service: { name: 'Api' },
+          },
+        ] as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      const result = await handleSlashCommand({ ...basePayload, text: 'list' });
+      expect(result.text).toContain('none are assigned to you');
+      expect(result.text).toContain('/incidents/inc-2|API slow>');
+    });
   });
 
   it('re-throws a transient failure in the durable worker so the intent is retried', async () => {

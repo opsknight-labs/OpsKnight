@@ -110,7 +110,14 @@ export function renderSlackWarRoomProjection(
     `*Urgency:* ${friendlySlackLabel(incident.urgency)}`,
     ...(incident.priority ? [`*Priority:* ${escapeSlack(incident.priority)}`] : []),
   ];
-  const summary = `*${title}*\n${facts.join(' · ')}`;
+  // The header already carries the title; repeating it here made the card read twice.
+  const summary = facts.join(' · ');
+  const emoji =
+    incident.status === 'SNOOZED'
+      ? '💤'
+      : incident.status === 'SUPPRESSED'
+        ? '🔕'
+        : PHASE_EMOJI[model.phase];
   const people = [
     ...(incident.assigneeName
       ? [`*Assignee:* ${mention(mentions.assignee, incident.assigneeName)}`]
@@ -172,14 +179,14 @@ export function renderSlackWarRoomProjection(
       ]
     : [];
   return {
-    text: `${PHASE_EMOJI[model.phase]} ${friendlySlackLabel(incident.status)}: ${title} (${escapeSlack(incident.serviceName)})`,
+    text: `${emoji} ${friendlySlackLabel(incident.status)}: ${title} (${escapeSlack(incident.serviceName)})`,
     blocks: [
       {
         type: 'header',
         text: {
           type: 'plain_text',
           // Slack decodes &lt; &gt; &amp; in plain text too, so escaping is safe and keeps it literal.
-          text: `${PHASE_EMOJI[model.phase]} ${title}`.slice(0, 150),
+          text: `${emoji} ${title}`.slice(0, 150),
           emoji: true,
         },
       },
