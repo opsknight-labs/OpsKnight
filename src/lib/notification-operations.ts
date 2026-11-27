@@ -46,6 +46,11 @@ export type NotificationOperationsFilters = {
   to?: Date;
   cursor?: string;
   limit?: number;
+  /**
+   * Show who each notification went to and let the search match recipients and message bodies.
+   * Only for holders of admin.manage; an audit.read reader sees delivery metadata without them.
+   */
+  includeRecipients?: boolean;
 };
 
 function encodeCursor(cursor: Cursor): string {
@@ -91,6 +96,7 @@ export async function getNotificationOperations(
   const cursor = decodeCursor(filters.cursor);
   const query = filters.query?.trim().slice(0, 120);
   const statusCondition = filters.status;
+  const includeRecipients = filters.includeRecipients === true;
 
   const baseFilters: Prisma.NotificationWhereInput = {
     ...(filters.channel ? { channel: filters.channel } : {}),
@@ -101,8 +107,12 @@ export async function getNotificationOperations(
     ...(query
       ? {
           OR: [
-            { message: { contains: query, mode: 'insensitive' } },
-            { recipientDisplay: { contains: query, mode: 'insensitive' } },
+            ...(includeRecipients
+              ? [
+                  { message: { contains: query, mode: 'insensitive' as const } },
+                  { recipientDisplay: { contains: query, mode: 'insensitive' as const } },
+                ]
+              : []),
             { sourceType: { contains: query, mode: 'insensitive' } },
             { sourceId: { contains: query, mode: 'insensitive' } },
             { incident: { title: { contains: query, mode: 'insensitive' } } },
@@ -154,7 +164,7 @@ export async function getNotificationOperations(
         status: true,
         category: true,
         recipientType: true,
-        recipientDisplay: true,
+        recipientDisplay: includeRecipients,
         templateKey: true,
         sourceType: true,
         attempts: true,
@@ -200,6 +210,7 @@ export async function getNotificationOperations(
   return {
     notifications: page.map(row => ({
       ...row,
+      recipientDisplay: includeRecipients ? row.recipientDisplay : null,
       errorMsg: redactNotificationError(row.errorMsg),
       payloadEncrypted: undefined,
       createdAt: row.createdAt.toISOString(),

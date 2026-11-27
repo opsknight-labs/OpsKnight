@@ -73,6 +73,7 @@ export async function GET(request: NextRequest) {
       limit: Number.isFinite(limit) ? limit : 50,
       from,
       to,
+      includeRecipients: capabilities.includes(CAPABILITIES.ADMIN_MANAGE),
     });
     return jsonOk(result, 200, { 'Cache-Control': 'private, no-store', Vary: 'Cookie' });
   } catch (error) {

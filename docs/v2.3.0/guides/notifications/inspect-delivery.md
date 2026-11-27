@@ -38,7 +38,10 @@ identifier when escalating.
    rule. Only administrators can retry. The status cards on the **Overview** tab
    show the last 7 days of counts as soon as the page opens; clicking a card
    opens the **Delivery Log** with that status.
-2. Filter by incident, channel, status, recipient, or provider.
+2. Filter by incident, channel, status, recipient, or provider. Recipients are shown, and
+   the search matches recipients and message text, only for administrators. Someone who
+   has `audit.read` but not `admin.manage` sees delivery metadata without the recipient
+   column, and the search covers the source and incident title only.
 3. Open the operation and record its notification ID and logical event time.
 4. Read attempts oldest to newest. Distinguish provider acceptance from a later
    delivery callback, rejection, expiry, or recipient feedback.

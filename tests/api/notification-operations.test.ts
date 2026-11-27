@@ -56,9 +56,17 @@ describe('notification operations authorization', () => {
     );
     expect(response.status).toBe(200);
     expect(getNotificationOperations).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'FAILED' })
+      expect.objectContaining({ status: 'FAILED', includeRecipients: false })
     );
     expect(response.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('shows recipients only to holders of admin.manage', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue(admin as never);
+    await GET(new NextRequest('https://example.com/api/admin/notifications/operations'));
+    expect(getNotificationOperations).toHaveBeenCalledWith(
+      expect.objectContaining({ includeRecipients: true })
+    );
   });
 
   it('allows a user whose custom role grants audit.read', async () => {
