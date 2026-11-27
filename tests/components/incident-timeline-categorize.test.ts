@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { categorize } from '@/components/incident/detail/IncidentTimeline';
+import { categorize, findNoteForEvent } from '@/components/incident/detail/IncidentTimeline';
 
 describe('IncidentTimeline categorize filter heuristic', () => {
   it('categorizes NOTIFICATION type directly into NOTIFICATIONS', () => {
@@ -42,5 +42,29 @@ describe('IncidentTimeline categorize filter heuristic', () => {
     expect(categorize('EVENT', 'Incident assigned to John Doe')).toBe('ASSIGNMENT');
     expect(categorize('EVENT', 'Jira issue PROJ-123 created')).toBe('INTEGRATIONS');
     expect(categorize('EVENT', 'Slack channel #inc-123 created')).toBe('INTEGRATIONS');
+  });
+});
+
+describe('IncidentTimeline findNoteForEvent', () => {
+  const notes = [
+    { id: 'far', time: 10_000 },
+    { id: 'near', time: 4_000 },
+  ];
+
+  it('pairs a note-added event with the nearest note within 15 seconds', () => {
+    expect(findNoteForEvent('Note added by Alex', 5_000, notes, new Set())?.id).toBe('near');
+    expect(findNoteForEvent('Resolution note added by Alex', 5_000, notes, new Set())?.id).toBe(
+      'near'
+    );
+  });
+
+  it('does not hand a note to a description edit or a ChatOps join', () => {
+    expect(findNoteForEvent('Description updated', 5_000, notes, new Set())).toBeUndefined();
+    expect(findNoteForEvent('Alex joined via Slack ChatOps', 5_000, notes, new Set())).toBeUndefined();
+  });
+
+  it('skips notes already paired and notes more than 15 seconds away', () => {
+    expect(findNoteForEvent('Note added by Alex', 5_000, notes, new Set(['near']))?.id).toBe('far');
+    expect(findNoteForEvent('Note added by Alex', 60_000, notes, new Set())).toBeUndefined();
   });
 });
