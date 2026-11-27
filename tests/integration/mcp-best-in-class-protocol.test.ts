@@ -304,7 +304,8 @@ describe('listActionItems through read_operation', () => {
       const service = await createTestService(title, teamId);
       const incident = await createTestIncident(title, service.id, { status: 'RESOLVED' });
       const postmortem = await db.postmortem.create({
-        data: { incidentId: incident.id, title, summary: title },
+        // Published, because a USER only sees published postmortems.
+        data: { incidentId: incident.id, title, summary: title, status: 'PUBLISHED' },
       });
       const item = await db.actionItem.create({
         data: { postmortemId: postmortem.id, incidentId: incident.id, title, ownerId: user.id },
