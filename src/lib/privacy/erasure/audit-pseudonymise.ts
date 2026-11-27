@@ -256,7 +256,7 @@ export async function pseudonymiseSubjectIncidentText(
     phone.length >= MIN_PHONE_LENGTH ? phone : '',
     name.length >= MIN_NAME_LENGTH ? name : '',
   ]
-    .filter(Boolean)
+    .filter((needle): needle is string => Boolean(needle))
     .map(needle => ({ message: { contains: needle, mode: 'insensitive' as const } }));
 
   const notes = await scrubTextRows(
