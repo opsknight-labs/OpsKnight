@@ -3,6 +3,9 @@
   "compilerOptions": {
     "module": "commonjs",
     "moduleResolution": "node",
+    "rootDir": ".",
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
     "noEmit": true,
     "paths": {
       "@/*": ["./src/*"],

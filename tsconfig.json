@@ -5,6 +5,7 @@
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
+    "types": ["node"],
     "noEmit": true,
     "esModuleInterop": true,
     "module": "esnext",
@@ -14,7 +15,6 @@
     "jsx": "react-jsx",
     "incremental": true,
     "assumeChangesOnlyAffectDirectDependencies": true,
-    "baseUrl": ".",
     "plugins": [
       {
         "name": "next"
