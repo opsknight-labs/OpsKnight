@@ -10,6 +10,7 @@ import { randomBytes } from 'crypto';
 import { encrypt } from '@/lib/encryption';
 import { integrationKeyFingerprint } from '@/lib/integrations/credentials';
 import { logAudit } from '@/lib/audit';
+import { isAdministratorRole } from '@/lib/authorization';
 import { storeSlackWebhookUrl } from '@/lib/slack-webhook-secret';
 import { assertAdmin, assertCanModifyService } from '@/lib/rbac';
 import { assertServiceNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
@@ -140,7 +141,7 @@ export async function updateService(serviceId: string, formData: FormData) {
   const teamId = formData.get('teamId') as string;
   const escalationPolicyId = formData.get('escalationPolicyId') as string;
 
-  if (currentUser.role !== 'ADMIN') {
+  if (!isAdministratorRole(currentUser.role)) {
     // Same rule as team service assignment: only administrators move a service between teams.
     const current = await prisma.service.findUnique({
       where: { id: serviceId },

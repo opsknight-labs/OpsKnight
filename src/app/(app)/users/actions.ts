@@ -22,7 +22,7 @@ import {
   assertPermanentAdminForAdminTargets,
   getCurrentUser,
 } from '@/lib/rbac';
-import { isAssignableRole } from '@/lib/authorization';
+import { isAdministratorRole, isAssignableRole } from '@/lib/authorization';
 import { assertRecentAuthentication } from '@/lib/access/step-up';
 import type { Prisma, Role } from '@prisma/client';
 import { removeTeamMembership } from '@/lib/teams/membership-commands';
@@ -245,7 +245,7 @@ function actionFailure(error: unknown, fallback: string) {
 
 /** A role change made with temporary admin access, or one that grants ADMIN, needs a fresh sign-in. */
 async function assertRoleChangeStepUp(actor: { baseRole: string }, role: unknown) {
-  if (role === 'ADMIN' || actor.baseRole !== 'ADMIN') {
+  if (isAdministratorRole(role) || !isAdministratorRole(actor.baseRole)) {
     await assertRecentAuthentication(undefined, 'changing a role');
   }
 }
@@ -420,7 +420,7 @@ export async function generateInvite(
       prepareUserInvitation(),
     ]);
     // The link for an invited administrator takes over that account, like an admin password reset link.
-    if (snapshot.user.role === 'ADMIN') {
+    if (isAdministratorRole(snapshot.user.role)) {
       await assertPermanentAdminForAdminTargets(admin, [userId]);
       await assertRecentAuthentication(
         undefined,

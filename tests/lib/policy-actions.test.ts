@@ -208,7 +208,8 @@ describe('Policy Step Actions', () => {
       expect(movedCursors()).toEqual([1]);
       expect(prismaMock.incident.updateMany).toHaveBeenCalledWith({
         where: { id: { in: ['inc-1'] } },
-        data: { currentEscalationStep: 1 },
+        // The lease is cleared too, so a worker that had claimed the old step cannot strand the incident.
+        data: { currentEscalationStep: 1, escalationProcessingAt: null },
       });
     });
 

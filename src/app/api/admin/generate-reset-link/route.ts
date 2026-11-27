@@ -7,6 +7,7 @@ import { AppError, isAppError } from '@/lib/errors';
 import { logger, withRequestContext } from '@/lib/logger';
 import { assertAdmin, assertPermanentAdminForAdminTargets } from '@/lib/rbac';
 import { getClientIp } from '@/lib/client-ip';
+import { isAdministratorRole } from '@/lib/authorization';
 import { emitAuditEvent } from '@/lib/audit';
 import { assertRecentAuthentication } from '@/lib/access/step-up';
 import { createInAppNotifications } from '@/lib/in-app-notifications';
@@ -63,7 +64,7 @@ async function postGenerateResetLink(req: NextRequest) {
     // A takeover-capable link for an administrator needs an assigned admin, not a JIT grant.
     await assertPermanentAdminForAdminTargets(sessionUser, [user.id]);
     // A link for another administrator is account takeover: require a fresh sign-in.
-    const targetsOtherAdmin = user.role === 'ADMIN' && user.id !== sessionUser.id;
+    const targetsOtherAdmin = isAdministratorRole(user.role) && user.id !== sessionUser.id;
     if (targetsOtherAdmin) {
       await assertRecentAuthentication(
         undefined,

@@ -19,7 +19,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { getDefaultAvatar } from '@/lib/avatar';
 import { logAudit } from '@/lib/audit';
 import { isValidTimeZone } from '@/lib/timezone';
-import { CAPABILITIES, isApiScope, capabilitiesOf } from '@/lib/authorization';
+import { CAPABILITIES, isApiScope, capabilitiesOf, isAdministratorRole } from '@/lib/authorization';
 import { assertPermanentAdminForAdminTargets, getCurrentUser } from '@/lib/rbac';
 import {
   createServiceAccount,
@@ -777,7 +777,7 @@ export async function createServiceAccountAction(
       return { error: 'Service account name is required.' };
     }
     // An ADMIN identity outlives a time-boxed grant, so only an assigned admin with a fresh sign-in mints one.
-    if (role === 'ADMIN') {
+    if (isAdministratorRole(role)) {
       await assertPermanentAdminForAdminTargets(user, [], role);
       await assertRecentAuthentication(undefined, 'creating an administrator service account');
     }
@@ -832,7 +832,7 @@ export async function issueServiceAccountTokenAction(
       where: { id: serviceAccountId },
       select: { role: true },
     });
-    if (account?.role === 'ADMIN') {
+    if (isAdministratorRole(account?.role)) {
       await assertPermanentAdminForAdminTargets(user, [serviceAccountId]);
       await assertRecentAuthentication(
         undefined,

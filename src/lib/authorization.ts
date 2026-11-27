@@ -359,6 +359,11 @@ export function hasCapability(role: AppRole, capability: Capability): boolean {
   return ROLE_CAPABILITIES.get(role)?.has(capability) ?? false;
 }
 
+/** Whether a role value (an account's, or one being assigned) is a role that holds admin.manage. */
+export function isAdministratorRole(role: unknown): boolean {
+  return isAppRole(role) && hasCapability(role, CAPABILITIES.ADMIN_MANAGE);
+}
+
 /**
  * Whether `current` already includes every permission of `requested`. Built-in roles are not a
  * strict ladder (Auditors hold audit and compliance permissions Responders lack), so compare

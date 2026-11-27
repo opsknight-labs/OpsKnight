@@ -15,6 +15,7 @@ import {
   PAGEABLE_USER_WHERE,
   capabilitiesOf,
   hasCapability,
+  isAdministratorRole,
   type AppRole,
 } from '@/lib/authorization';
 import { AppError } from '@/lib/errors';
@@ -374,7 +375,7 @@ export async function getIncidentCreationContext() {
     }),
     prisma.customField.findMany({ orderBy: { order: 'asc' } }),
     prisma.team.findMany({ where: teamScope, orderBy: { name: 'asc' } }),
-    getAllTemplates(permissions.id, permissions.role === 'ADMIN'),
+    getAllTemplates(permissions.id, isAdministratorRole(permissions.role)),
   ]);
 
   return { canCreateIncident: true as const, services, users, teams, customFields, templates };
