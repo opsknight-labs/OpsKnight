@@ -466,7 +466,8 @@ export async function processUpdateSubmission(payload: SubmissionPayload) {
   });
   const incident = await loadIncidentForWorkspace(
     String(payload.incidentId),
-    String(payload.team_id)
+    String(payload.team_id),
+    payload.enterprise_id ?? ''
   );
   if (!incident) return reply('⚠️ Incident not found.');
   try {

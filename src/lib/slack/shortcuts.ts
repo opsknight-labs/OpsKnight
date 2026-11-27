@@ -7,6 +7,7 @@ import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { normalizeError } from '@/lib/errors';
 import { callSlackApi } from '@/lib/slack/api';
+import { toSlackResponseUrl } from '@/lib/slack-signature';
 
 export {
   DECLARE_FROM_MESSAGE_CALLBACK,
@@ -67,7 +68,7 @@ export async function handleSlackShortcut(payload: ShortcutPayload): Promise<Res
   const isMessage = payload.type === 'message_action' && callback === DECLARE_FROM_MESSAGE_CALLBACK;
   const isGlobal = payload.type === 'shortcut' && callback === DECLARE_GLOBAL_CALLBACK;
   if ((!isMessage && !isGlobal) || !teamId || !triggerId) return ok();
-  const responseUrl = str(payload.response_url) || undefined;
+  const responseUrl = toSlackResponseUrl(payload.response_url) ?? undefined;
   const whisper = async (text: string) => {
     if (!isMessage || !responseUrl) return;
     await fetch(responseUrl, {
