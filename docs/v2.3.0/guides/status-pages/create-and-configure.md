@@ -38,6 +38,8 @@ Open **Settings → Status Pages**. If no page exists, select **Create Status Pa
 
 The page workspace builds a public/preview snapshot from mapped services, incidents, announcements, privacy policy, and routing configuration. Disabled pages remain administrative drafts. Default routing, slug, subdomain, and custom domain are distinct resolution paths.
 
+Creating a page (`status_page.created`) and making a page the default (`status_page.updated`) are recorded in the [audit log](../administration/audit-logs) with the acting administrator.
+
 ## Verify the page
 
 Open the exact public URL in a private browser. Confirm access behavior, branding, service order/status, announcement visibility, and absence of private fields. Trigger and resolve a synthetic incident and verify the projected update.
