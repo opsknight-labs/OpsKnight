@@ -92,7 +92,11 @@ The page tells you:
 - a **Request access** form.
 
 For a specific incident, service or team outside your teams, OpsKnight shows only which team owns
-it, never its contents.
+it, never its contents. It does this only when you really cannot open the item: for an item you
+can open, or one that does not exist, the page reveals no owning team. The names and email
+addresses of the people who can give you access are shown only to people who can read the user
+directory (Responders, Auditors, Admins and custom roles with that permission); a User sees the
+owning team and "Ask an administrator or the owning team, or send a request below."
 
 ## Request access
 
@@ -137,7 +141,10 @@ everything done with it is in the audit log. Administrators can turn it off.
   certifies their own access unless they are the only reviewer (this is recorded). Reviews can be
   cancelled without changes, and only Admins complete a review and apply removals. Roles that come
   from your identity provider must be removed there; the evidence says so instead of marking them
-  removed. Completing a review removes what you marked, and the
+  removed. Each decision on an item is recorded in the audit log as
+  `access_review.item_decided` with the reviewer, the decision and the decision it replaced, and a
+  decision cannot land after the review is completed ("This review is closed."). Completing a
+  review removes what you marked, and the
   evidence can be downloaded for SOC 2 (CC6.2/CC6.3) or ISO 27001 (A.5.18) audits. Reviews can
   start automatically every month, quarter, half-year or year.
 - **Custom roles** — add specific permissions to specific people without promoting them, for
