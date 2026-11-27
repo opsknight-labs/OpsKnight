@@ -369,7 +369,11 @@ export async function archiveCustomRole(actorId: string, id: string) {
     }
     const holders = await tx.user.findMany({ where: { customRoleId: id }, select: { id: true } });
     await tx.user.updateMany({ where: { customRoleId: id }, data: { customRoleId: null } });
-    await tx.customRole.update({ where: { id }, data: { archivedAt: new Date() } });
+    // The name column is unique, so an archived role gives its name back for reuse.
+    await tx.customRole.update({
+      where: { id },
+      data: { archivedAt: new Date(), name: `${role.name} (archived ${id})` },
+    });
     await logAudit(
       {
         action: 'custom_role.archived',

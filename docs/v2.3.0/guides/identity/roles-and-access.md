@@ -154,7 +154,9 @@ everything done with it is in the audit log. Administrators can turn it off.
 - **Custom roles** — add specific permissions to specific people without promoting them, for
   example letting an Auditor run runbooks, or making someone an access reviewer. Organization
   administration can only be given with the Admin role. Changes take effect immediately and do
-  not sign anyone out.
+  not sign anyone out. Removing a custom role unassigns it from everyone and frees its name, so
+  you can create a role with the same name again. The removed role stays in the audit trail
+  renamed to its old name plus "(archived" and its id.
 - **Most denied** — the pages and actions people were blocked from most in the last 7 days, a
   quick way to spot someone who needs a team or role.
 - **Access policy** — turn incident work for Users, access requests, and emergency access on or
