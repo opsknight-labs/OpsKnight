@@ -91,7 +91,9 @@ A metric with no qualifying incidents shows **No data**, never 0.
 
 **Export CSV** (top right, needs `REPORT_EXPORT`) downloads the current view — same range, filters
 and access scope — as a UTF-8 CSV that opens cleanly in Excel. The file reads the same data as the
-page, so its totals match what you see. It contains:
+page, so its totals match what you see. Each export recomputes every section live, so exports are
+limited to 10 per minute per user; beyond that the export answers `429` ("Too many exports. Try
+again in a minute.") until the minute has passed. It contains:
 
 1. A header block: generation time, period start and end, your timezone, the business-hours
    timezone, the active filters and a note if retention shortened the range.
