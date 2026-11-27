@@ -60,6 +60,18 @@ again. Use **Revoke all sessions** for a lost device, suspected credential
 exposure, or uncertain scope. This increments the identity token version and
 invalidates existing browser sessions, including other trusted devices.
 
+## Change your password
+
+On **Settings -> Security**, the password form changes your local password. It
+allows 10 attempts per 15 minutes; a wrong current password counts as an
+attempt, and further attempts are refused with "Too many password change
+attempts. Try again in a few minutes." An account that signs in only through SSO
+has no current password, so it can set its first local password only after a
+sign-in within the last 15 minutes; otherwise OpsKnight asks you to sign in again
+first. After each successful change OpsKnight sends the same security notice as
+a password reset: an email, or an SMS when email is off and you have SMS turned
+on with a phone number.
+
 ## How session revocation works
 
 After emergency revocation, change the password when direct authentication is

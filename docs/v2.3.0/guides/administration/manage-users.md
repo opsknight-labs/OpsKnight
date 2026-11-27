@@ -118,6 +118,21 @@ Disabled users must be reactivated first.
 Invitation links are bearer capabilities. Do not put them in issue trackers,
 shared chat channels, screenshots, or documentation.
 
+### Reset an active user's password
+
+For an `ACTIVE` user, open the card action menu and select **Reset Password**
+(hidden when the authentication mode is SSO Required). OpsKnight generates a
+password reset link and shows it in a dialog; the request is rate-limited. Treat the
+link as a bearer capability, like an invitation link.
+
+A link for another administrator lets whoever opens it take over that account,
+so OpsKnight requires you to have signed in within the last 15 minutes ("For
+your security, sign in again before generating a sign-in link for another
+administrator.") and sends the target administrator an in-app **Security**
+notification, "Password reset link generated for your account", naming who
+generated it. Links for users who are not administrators, and for yourself, need
+neither.
+
 ## Add a user to a team
 
 From the user card, select **Assign team**, choose a team, and add the member.

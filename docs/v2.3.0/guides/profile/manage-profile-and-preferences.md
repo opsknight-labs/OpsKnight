@@ -56,14 +56,23 @@ Open **Settings → Profile**. The page contains **Profile & Identity**,
    provider can replace it. Picking an avatar yourself keeps it.
 
 2. Under **Notifications**, verify the phone number and enable only the personal
-   channels you can receive: email, SMS, voice, push, or WhatsApp.
+   channels you can receive: email, SMS, voice, push, or WhatsApp. Save is
+   refused when the phone number is not in international E.164 format (for
+   example `+14155550123`, not `555-1234`), when SMS, voice, or WhatsApp is
+   switched on without a phone number, or when you switch on a channel for which
+   an administrator has not configured a provider (for example "SMS
+   notifications cannot be enabled because no SMS provider is configured.").
+   Administrators editing someone else's profile in **Users** get the same
+   checks.
 3. Under **Appearance & Time**, choose **System**, **Light**, or **Dark**.
    **System** follows your operating system and changes with it. You can also
    switch from the user menu, the command palette (type "dark", "light", or
    "theme"), or **More** in the mobile app.
 4. In the same tab, select the timezone used for timestamps,
    schedules, and analytics. Enable quiet hours, set start/end times, and choose
-   whether weekends are quiet all day.
+   whether weekends are quiet all day. Quiet hours save only when both times are
+   filled in. If you clear a time to retype it, nothing is saved until both are
+   set again, and OpsKnight never substitutes the 18:00 to 08:00 default.
 5. Under **Teams & On-Call**, review team membership, teams you lead, schedule
    layers, escalation-policy participation, and the last-30-day response/SLA
    summary. These views are informational; change ownership in the relevant team,
