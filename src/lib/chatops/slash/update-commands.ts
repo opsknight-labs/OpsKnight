@@ -175,11 +175,7 @@ export async function postIncidentStatusUpdate(input: {
   const { resolveUserActor } = await import('@/lib/authorization-actors');
   const { CAPABILITIES } = await import('@/lib/authorization');
   const actor = await resolveUserActor(input.actor.id);
-  if (
-    !actor ||
-    actor.status !== 'ACTIVE' ||
-    !actor.capabilities?.includes(CAPABILITIES.ADMIN_MANAGE)
-  )
+  if (!actor || actor.status !== 'ACTIVE' || !actor.capabilities?.has(CAPABILITIES.ADMIN_MANAGE))
     return { ok: false, reason: 'You need admin access to publish status-page updates.' };
   await authorizeChatOpsIncident(input.incidentId, input.actor.id, 'READ');
   const incident = await prisma.incident.findUnique({

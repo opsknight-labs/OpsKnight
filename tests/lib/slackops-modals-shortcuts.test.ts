@@ -38,7 +38,7 @@ import {
   SLACK_UPDATE_CALLBACK_ID,
 } from '@/lib/slack/update-actions';
 
-const view = (values: Record<string, unknown>) => ({ state: { values } });
+const view = (values: Record<string, unknown>): any => ({ state: { values } });
 const input = (block: string, value: string) => ({ [block]: { value: { value } } });
 const select = (block: string, value: string) => ({
   [block]: { value: { selected_option: { value } } },
@@ -109,7 +109,7 @@ describe('submission validation', () => {
           .state,
       },
     };
-    const ok = await handleSlackOpsInteractive(payload, 'sig');
+    const ok = await handleSlackOpsInteractive(payload as any, 'sig');
     expect(ok?.status).toBe(200);
     expect(m.enqueue).toHaveBeenCalledWith(
       expect.objectContaining({

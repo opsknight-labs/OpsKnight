@@ -97,7 +97,10 @@ export async function handleSlackShortcut(payload: ShortcutPayload): Promise<Res
       services,
       ...(isMessage && responseUrl ? { responseUrl } : {}),
       ...(channelId ? { channelId } : {}),
-    }) as ReturnType<typeof buildSlackDeclareModal> & { blocks: Array<Record<string, any>> }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    }) as unknown as {
+      private_metadata?: string;
+      blocks: Array<{ block_id?: string; element: Record<string, unknown> }>;
+    };
     if (isMessage) {
       const permalink = await permalinkFor(token, channelId, ts);
       const { title, description } = prefillFromMessage(str(payload.message?.text), permalink);

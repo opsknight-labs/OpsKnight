@@ -69,6 +69,7 @@ describe('Slack Channels API', () => {
       enabled: true,
       refreshToken: null,
       tokenExpiresAt: null,
+      enterpriseId: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });

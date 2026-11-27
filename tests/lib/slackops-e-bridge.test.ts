@@ -10,7 +10,7 @@ const base: SlackCardIncident = {
 };
 const urls = (incident: SlackCardIncident) => {
   const card = buildIncidentCard(incident, { appUrl: 'https://x.test', interactive: true });
-  const actions = card.attachments[0].blocks.find(b => b.type === 'actions') as {
+  const actions = card.attachments[0].blocks.find(b => b.type === 'actions') as unknown as {
     elements: Array<{ action_id: string; url?: string; text?: { text: string } }>;
   };
   return actions.elements;

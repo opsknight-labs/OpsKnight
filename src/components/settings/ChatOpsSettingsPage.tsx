@@ -873,6 +873,7 @@ export default function ChatOpsSettingsPage({
               Invite these external people to every new Slack war room (up to 20, comma separated).
               Needs a paid Slack plan and the conversations.connect:write scope; skipped otherwise.
             </p>
+          </div>
           <div className="flex items-center justify-between gap-4 pt-2">
             <div className="space-y-0.5">
               <Label

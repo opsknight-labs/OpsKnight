@@ -126,11 +126,12 @@ describe('incident action modals', () => {
     const view = (
       values: unknown,
       meta = JSON.stringify({ incidentId: 'inc-1', channelId: 'C1' })
-    ) => ({
-      team: { id: 'T1' },
-      user: { id: 'U111' },
-      view: { state: { values }, private_metadata: meta },
-    });
+    ) =>
+      ({
+        team: { id: 'T1' },
+        user: { id: 'U111' },
+        view: { state: { values }, private_metadata: meta },
+      }) as never;
     expect(parseIncidentModalSubmission({}).ok).toBe(false);
     const invalid = await acceptIncidentModalSubmission('reassign', view({}), 'sig');
     expect(await invalid.json()).toMatchObject({ response_action: 'errors' });

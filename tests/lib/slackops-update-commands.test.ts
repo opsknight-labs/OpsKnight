@@ -112,11 +112,14 @@ describe('handleUpdateSlashCommand', () => {
 });
 
 describe('postIncidentStatusUpdate', () => {
-  const admin = { id: 'u1', status: 'ACTIVE', capabilities: ['admin:manage'] };
+  const admin = { id: 'u1', status: 'ACTIVE', capabilities: new Set(['admin:manage']) };
   const publicIncident = { id: 'i1', title: 'API down', visibility: 'PUBLIC', serviceId: 's1' };
   beforeEach(async () => {
     const { CAPABILITIES } = await import('@/lib/authorization');
-    m.resolveActor.mockResolvedValue({ ...admin, capabilities: [CAPABILITIES.ADMIN_MANAGE] });
+    m.resolveActor.mockResolvedValue({
+      ...admin,
+      capabilities: new Set([CAPABILITIES.ADMIN_MANAGE]),
+    });
     m.prisma.incident.findUnique.mockResolvedValue(publicIncident);
     m.prisma.statusPage.findMany.mockResolvedValue([{ id: 'p1', name: 'Main' }]);
     m.prisma.statusPageAnnouncement.create.mockResolvedValue({
@@ -152,7 +155,7 @@ describe('postIncidentStatusUpdate', () => {
   });
 
   it('refuses without the admin capability', async () => {
-    m.resolveActor.mockResolvedValue({ ...admin, capabilities: [] });
+    m.resolveActor.mockResolvedValue({ ...admin, capabilities: new Set() });
     const result = await postIncidentStatusUpdate({ incidentId: 'i1', actor, message: 'x y z' });
     expect(result).toMatchObject({ ok: false });
     expect(m.prisma.statusPageAnnouncement.create).not.toHaveBeenCalled();

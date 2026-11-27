@@ -39,13 +39,17 @@ const clip = (value: string, max: number) =>
   value.length > max ? `${value.slice(0, max - 1)}…` : value;
 
 /** Same gate as the web actions: runbook.execute and view access to the incident. */
-async function authorize(incidentId: string, userId: string) {
+type RunbookAuth =
+  | { error: string; actor?: undefined }
+  | { error?: undefined; actor: NonNullable<Awaited<ReturnType<typeof resolveUserActor>>> };
+
+async function authorize(incidentId: string, userId: string): Promise<RunbookAuth> {
   const actor = await resolveUserActor(userId);
   if (!actor || !actorHasCapability(actor, CAPABILITIES.RUNBOOK_EXECUTE)) {
-    return { error: 'You do not have permission to run runbooks.' } as const;
+    return { error: 'You do not have permission to run runbooks.' };
   }
   await authorizeChatOpsIncident(incidentId, userId, 'READ');
-  return { actor } as const;
+  return { actor };
 }
 
 /** Enabled bindings of the incident's service, i.e. what the incident page offers. */
@@ -74,7 +78,7 @@ async function loadRequest(incidentId: string, bindingId: string, userId: string
 /** `/incident runbook`: ephemeral list with one Preview button each. */
 export async function listIncidentRunbooks(incidentId: string, userId: string): Promise<Reply> {
   const auth = await authorize(incidentId, userId);
-  if ('error' in auth) return refuse(auth.error);
+  if (auth.error !== undefined) return refuse(auth.error);
   const bindings = await prisma.serviceAutomationRule.findMany({
     where: {
       enabled: true,
@@ -137,7 +141,7 @@ export async function handleRunbookButton(input: ButtonInput): Promise<Reply> {
   if (!bindingId) return refuse('This button is no longer valid. Run `/incident runbook` again.');
   try {
     const auth = await authorize(incidentId, actor.id);
-    if ('error' in auth) return refuse(auth.error);
+    if (auth.error !== undefined) return refuse(auth.error);
     const loaded = await loadRequest(incidentId, bindingId, actor.id);
     if (!loaded) return refuse('That runbook is no longer available for this incident.');
     return input.actionType === RUNBOOK_PREVIEW_ACTION
