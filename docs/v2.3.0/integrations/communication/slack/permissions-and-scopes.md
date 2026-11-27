@@ -7,12 +7,16 @@ product_area: chatops
 audience: [administrator, operator]
 verification:
   level: source
-  verified_at: 2026-11-27
+  verified_at: 2026-11-28
   evidence:
     - src/lib/slack/app-manifest.ts
     - src/lib/slack/health.ts
     - src/components/settings/slack/SlackHealthPanel.tsx
     - tests/lib/slack-app-manifest.test.ts
+    - src/lib/slack/workspace-match.ts
+    - src/app/api/slack/oauth/callback/route.ts
+    - tests/lib/slack-connect-grid.test.ts
+    - tests/lib/slackops-integration.test.ts
 ---
 
 # Slack permissions and scopes
@@ -83,6 +87,26 @@ Workspaces connected on 2.1 show `commands` as a missing required scope under
 
 Other Slack setup is unchanged; see
 [Connect Slack with OAuth](./connect-with-oauth.md).
+
+## Advanced scopes
+
+Three more scopes are requested with the rest but are never reported as a gap, because most workspaces don't use the features:
+
+| Scope | What it enables |
+| --- | --- |
+| `usergroups:read` | Lists Slack user groups when you map an on-call schedule to one. |
+| `usergroups:write` | Keeps a user group equal to who is on call (see [on-call user groups](./on-call-user-groups)). |
+| `conversations.connect:write` | Invites external people to a war room with Slack Connect. |
+
+Each feature says where it is configured when its scope is missing, and works as before without it.
+
+## Shortcuts and the Home tab
+
+The current manifest declares two shortcuts named **Declare incident**, turns on the Home tab, and subscribes to the `app_home_opened` event. These need no scope, but an app created before 2.3.0 must have its manifest updated and be reinstalled to get them. See [shortcuts and the Home tab](./shortcuts-and-app-home).
+
+## Slack Enterprise Grid
+
+An install made for a whole Enterprise Grid organization stores the organization's id, and requests from any workspace in that organization are accepted for it. To install for the organization, turn on **Org Level Apps** in the Slack app's settings and reinstall; the generated manifest leaves it off so that ordinary workspaces are unaffected. A normal single-workspace install behaves exactly as before. Grid installs were covered by automated tests only; they have not been run against a live Grid organization.
 
 ## Update an existing install
 

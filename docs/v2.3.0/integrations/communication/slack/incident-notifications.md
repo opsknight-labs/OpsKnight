@@ -8,7 +8,7 @@ audience: [administrator, responder, operator]
 keywords: [Slack incident notification, message update, lifecycle]
 verification:
   level: source
-  verified_at: 2026-11-27
+  verified_at: 2026-11-28
   evidence:
     - src/lib/slack/incident-card.ts
     - src/lib/slack/live-card.ts
@@ -17,6 +17,8 @@ verification:
     - src/lib/slack.ts
     - tests/lib/slack-incident-card.test.ts
     - tests/lib/slack-live-card.test.ts
+    - src/lib/slack/nudges.ts
+    - tests/lib/slack-nudges.test.ts
 ---
 
 # Understand Slack incident notifications
@@ -48,6 +50,15 @@ Thread replies are short: "Acknowledged by …" (with the time it took), "Assign
 Every escalation refreshes the card, whether it came from the escalation engine, the web app, the API, Slack, or Teams.
 
 ![A channel reply announcing that the incident escalated to level 2](/docs/v2.3.0/assets/slack-escalation-broadcast.png)
+
+## Reminders in the thread
+
+Two optional reminders post a reply on the incident's card. Set them under **Settings → Integrations → ChatOps**; leaving a field empty turns that reminder off.
+
+- **Nudge when unacknowledged (minutes):** while an incident is open and nobody has acknowledged it, OpsKnight replies "No one has acknowledged this yet" after this many minutes, and again every interval up to six times.
+- **Nudge when there is no update (minutes):** while an incident is open or acknowledged and has had no update for this long, OpsKnight replies "No update in N minutes", repeating up to six times. A note, an acknowledgement, a reassignment, a role change, a status change, a comment, or a captured chat message counts as an update. A status-page update does not.
+
+Each reminder checks the incident when it fires. An incident that has been acknowledged, resolved, snoozed, or suppressed in the meantime gets nothing, and turning a setting off stops the reminders. Values run from 1 to 1,440 minutes.
 
 ## Notification settings
 
