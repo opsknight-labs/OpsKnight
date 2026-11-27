@@ -9,6 +9,7 @@
  * transaction, or an incident skips a tier or pages one twice.
  */
 import type { Prisma } from '@prisma/client';
+import { moveIncidentEscalationCursors } from './repository';
 
 /** Step ids of a policy in escalation order. */
 export async function readEscalationStepOrder(
@@ -91,7 +92,7 @@ export async function remapOpenIncidentEscalationCursors(
 
   let moved = 0;
   for (const { from, to, ids } of moves.values()) {
-    await tx.incident.updateMany({ where: { id: { in: ids } }, data: { currentEscalationStep: to } });
+    await moveIncidentEscalationCursors(tx, ids, to);
     // The queued job names its step too; left stale it would lose the claim to the moved cursor.
     await tx.$executeRaw`
       UPDATE "BackgroundJob"

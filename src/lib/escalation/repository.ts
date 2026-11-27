@@ -728,3 +728,18 @@ export async function finalizeEscalationExecution(input: {
     return true;
   });
 }
+
+/**
+ * Points in-flight incidents at a different step index after a policy's steps were deleted or
+ * reordered. Callers run it inside the transaction that changed the steps (see step-cursor.ts).
+ */
+export async function moveIncidentEscalationCursors(
+  tx: Prisma.TransactionClient,
+  incidentIds: readonly string[],
+  stepIndex: number
+): Promise<void> {
+  await tx.incident.updateMany({
+    where: { id: { in: [...incidentIds] } },
+    data: { currentEscalationStep: stepIndex },
+  });
+}
