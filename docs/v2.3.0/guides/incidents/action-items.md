@@ -81,6 +81,10 @@ Selecting **Completed** records a completion time. Moving the item back to anoth
 
 Review unassigned, overdue, blocked, and high-priority items on a regular operational cadence. Closing or deleting a parent incident does not make remediation unnecessary.
 
+### Overdue reminders
+
+A daily job sends an in-app notice, **Overdue postmortem action item**, to the owner of each item that is past its due date and still **Open**, **In progress** or **Blocked**. An owner is told at most once per 24 hours for each item, and the notice opens **Action Items**. Every overdue item is covered, however many there are, up to 20,000 per run; a larger backlog continues on the next day's run. Administrators are not notified per item. Overdue items with no owner produce one in-app notice per active administrator, **Overdue action items have no owner**, with the count, once per 24 hours. A failure of this job is logged and does not stop the scheduler's other daily work.
+
 ## Link Jira work
 
 Where Jira capability is enabled for the service, an action item can create its own Jira issue or link an existing issue. Incident-owned Jira issues may also appear as inherited, read-only context; they are not the action item's own link.

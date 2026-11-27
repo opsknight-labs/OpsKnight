@@ -277,7 +277,14 @@ bulk click bypasses conflicts or required fields. On the **Incidents** list:
   the number of incidents actually changed. Select at most 100.
 - **Priority:** sets P1 to P5, or clears it (**Auto**). Each incident records a
   status-change timeline event and posts the war-room message, as the incident
-  page control does. Select at most 100.
+  page control does. Select at most 100. Any other value is refused ("Priority
+  must be one of P1, P2, P3, P4 or P5"), in the bulk bar and in the incident
+  page control, because escalation conditions match the exact `P1` to `P5` text.
+- **Confirmation:** choosing a value in the **Reassign**, **Priority**,
+  **Snooze**, **Urgency** or **Status** menu opens a confirmation that names the
+  change and the number of selected incidents, so an arrow key on a focused menu
+  cannot change 50 incidents. While a bulk update is running the menus and picker
+  buttons are disabled, so a double click cannot submit it twice.
 
 Anyone who can read an incident can follow or unfollow it themselves. Adding or
 removing other people as watchers needs `operations.manage` from any source: a
