@@ -640,7 +640,8 @@ describe('audit fixes', () => {
     });
     expect(ownItem.note).toContain('Self-certified');
 
-    // With another reviewer, self-certification needs the policy, and the evidence says so.
+    // With another reviewer, self-certification is refused even when the request self-approval
+    // policy is on: that policy covers access requests, not reviews.
     const otherAdmin = await createTestUser({ role: 'ADMIN' });
     const policyReview = await startAccessReview(admin.id, { name: 'Policy review' });
     const ownPolicyItem = await db.accessReviewItem.findFirstOrThrow({
@@ -654,10 +655,10 @@ describe('audit fixes', () => {
       create: { id: 'default', accessSelfApprovalAllowed: true },
       update: { accessSelfApprovalAllowed: true },
     });
-    await decideAccessReviewItem(admin.id, ownPolicyItem.id, 'KEEP');
-    expect(
-      (await db.accessReviewItem.findUniqueOrThrow({ where: { id: ownPolicyItem.id } })).note
-    ).toContain('allowed by the organization access policy');
+    invalidateAccessControlSettings();
+    await expect(decideAccessReviewItem(admin.id, ownPolicyItem.id, 'KEEP')).rejects.toMatchObject({
+      code: 'SEPARATION_OF_DUTIES',
+    });
     await cancelAccessReview(otherAdmin.id, policyReview.id);
 
     const next = await startAccessReview(admin.id, { name: 'To cancel' });

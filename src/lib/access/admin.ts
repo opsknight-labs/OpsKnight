@@ -26,7 +26,7 @@ import { resolveUserActor } from '@/lib/authorization-actors';
 import { resolveIncidentResourceForActor } from '@/lib/access/incident-relations';
 import { resolvePageAccess, ruleAllows } from '@/lib/access/pages';
 import { capabilityInfo, describeRequirement } from '@/lib/access/catalog';
-import { getAccessControlSettings, invalidateAccessControlSettings } from '@/lib/access/settings';
+import { invalidateAccessControlSettings } from '@/lib/access/settings';
 import {
   invalidateSessionSecurityProjection,
   invalidateSessionSecurityProjections,
@@ -612,19 +612,16 @@ export async function decideAccessReviewItem(
     }
     let selfCertification: string | null = null;
     if (item.userId === reviewerId) {
-      // Four-eyes whenever possible; the evidence records exactly why self-certification happened.
-      const otherReviewer = await hasOtherReviewer(reviewerId);
-      if (!otherReviewer) {
-        selfCertification = 'Self-certified: no other reviewer available.';
-      } else if ((await getAccessControlSettings(true)).selfApprovalAllowed) {
-        selfCertification = 'Self-certified: allowed by the organization access policy.';
-      } else {
+      // Four-eyes whenever another reviewer exists, whatever the request self-approval policy says;
+      // the evidence records why self-certification happened.
+      if (await hasOtherReviewer(reviewerId)) {
         throw new AppError({
           code: 'SEPARATION_OF_DUTIES',
           userMessage:
             'You cannot certify your own access. Another reviewer must decide this item.',
         });
       }
+      selfCertification = 'Self-certified: no other reviewer available.';
     }
     const trimmed = note?.trim().slice(0, 450) || null;
     await tx.accessReviewItem.update({
@@ -658,10 +655,9 @@ export async function decideAccessReviewItem(
   });
 }
 
-/** Whether `reviewerId` may decide their own item (sole reviewer, or policy allows it). */
+/** Whether `reviewerId` may decide their own item: only when nobody else could review it. */
 export async function canSelfCertify(reviewerId: string): Promise<boolean> {
-  const settings = await getAccessControlSettings();
-  return settings.selfApprovalAllowed || !(await hasOtherReviewer(reviewerId));
+  return !(await hasOtherReviewer(reviewerId));
 }
 
 /** Cancels an open review without applying anything, so a new one can be started. */
