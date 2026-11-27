@@ -68,6 +68,7 @@ Clear filters or return through mobile navigation. To switch back to desktop, us
 
 - **View missing:** role/authorization may hide it; confirm desktop access.
 - **Data stale:** reconnect and manually refresh.
+- **Pull-to-refresh says the server is busy:** every recalculation slot was taken. The app shows `The server is busy refreshing. Try again in a few seconds.`; the server answered `503 REFRESH_BUSY` with `Retry-After: 2`. Pull again after a moment. Other refresh failures still show `Fresh data could not be loaded`.
 - **Unexpected desktop redirect:** review the saved desktop preference.
 
 ## Next steps
