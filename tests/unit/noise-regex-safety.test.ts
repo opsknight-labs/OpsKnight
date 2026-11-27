@@ -7,6 +7,9 @@ import { compileMatcher, matches } from '@/lib/intelligence/noise-controls/match
  * stalls every alert behind it. These shapes slipped past the save-time check.
  */
 const BACKTRACKING = [
+  '(a{1,2})+b',
+  '(a{1,3})+b',
+  '((a{1,2})){1,9}b',
   '((a|aa))+b',
   '((a|aa)){1,40}b',
   '(?:(a|aa))+b',
@@ -19,6 +22,9 @@ const BACKTRACKING = [
   '(x|xx){1,40}y',
 ];
 const FINE = [
+  '^a{2,4}$',
+  '(ab){2}-x',
+  '(\\d{3})-x',
   '^(?:error|fatal): [a-z]+ \\(code \\d+\\)$',
   '[(|]x[)|]+',
   '(a|b)?c',

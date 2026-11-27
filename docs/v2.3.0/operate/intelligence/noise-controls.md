@@ -57,8 +57,9 @@ and every decision is recorded and reversible. Highest urgency is never held.
 - **Released when the reason ends.** A suppressed incident pages again when its window ends, its rule is
   disabled, deleted or edited so it no longer matches, or its orchestration rule is disabled or removed (or
   its policy is switched off), as long as the alert is still firing. A repeat of a suppressed alert at
-  HIGH urgency pages at once, unless the control that suppressed it has the critical opt-in ticked. A
-  policy on the service replaces the global one for this check, as it does for new alerts.
+  HIGH urgency pages at once, unless the control that suppressed it has the critical opt-in ticked and is still
+  in force. Only a hold that noise controls placed is released this way; a suppression a person set stays until
+  a person lifts it. A policy on the service replaces the global one for these checks, as it does for new alerts.
 
 ## Controls
 

@@ -86,6 +86,7 @@ export interface IngestNoiseDecision extends PrePagingDecisionResult {
 }
 
 export { automationIntelligenceContext } from './cache';
+export { shouldReleaseOnCriticalRefire } from './critical-release';
 
 /**
  * The pipeline order for a new alert (J1.5): an in-process map lookup, no await, no query. OFF unless the

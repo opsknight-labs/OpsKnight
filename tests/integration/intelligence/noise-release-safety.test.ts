@@ -444,6 +444,63 @@ describe('a re-fire honours the opt-in of the control that suppressed the incide
   });
 });
 
+describe('a critical re-fire releases only a hold noise controls still own', () => {
+  it('leaves a manual suppression alone', async () => {
+    const service = await createTestService('Checkout');
+    await activeWindow(service.id);
+    await policy(service.id);
+    const first = incidentOf(await send(service.id, { severity: 'warning' }, 'same-key'));
+    expect(first.status).toBe('SUPPRESSED');
+    // A person took over the hold: it is no longer the noise control's pause.
+    await db.incidentSlaPause.updateMany({
+      where: { incidentId: first.id },
+      data: { reason: 'SUPPRESS' },
+    });
+
+    await send(service.id, { severity: 'critical' }, 'same-key');
+    const after = await db.incident.findUniqueOrThrow({ where: { id: first.id } });
+    expect(after.status).toBe('SUPPRESSED');
+    expect(await pagingJobs(first.id)).toHaveLength(0);
+  });
+
+  it('pages when the covering window has ended, even though it had the opt-in', async () => {
+    const service = await createTestService('Checkout');
+    const window = await activeWindow(service.id, { coversCritical: true });
+    await policy(service.id);
+    const first = incidentOf(await send(service.id, { severity: 'warning' }, 'same-key'));
+    expect(first.status).toBe('SUPPRESSED');
+    await db.noiseMaintenanceWindow.update({
+      where: { id: window.id },
+      data: { startsAt: new Date(Date.now() - 7_200_000), endsAt: new Date(Date.now() - 1_000) },
+    });
+
+    await send(service.id, { severity: 'critical' }, 'same-key');
+    const after = await db.incident.findUniqueOrThrow({ where: { id: first.id } });
+    expect(after.status).toBe('OPEN');
+    expect(await pagingJobs(first.id)).toHaveLength(1);
+  });
+
+  it('pages when the covering suppression rule has been disabled', async () => {
+    const service = await createTestService('Checkout');
+    const rule = await db.suppressionRule.create({
+      data: {
+        name: 'Quiet warnings',
+        matchers: [{ field: 'severity', op: 'equals', value: 'warning' }],
+        effect: 'SUPPRESS',
+        coversCritical: true,
+      },
+    });
+    await policy(service.id);
+    const first = incidentOf(await send(service.id, { severity: 'warning' }, 'same-key'));
+    expect(first.status).toBe('SUPPRESSED');
+    await db.suppressionRule.update({ where: { id: rule.id }, data: { enabled: false } });
+
+    await send(service.id, { severity: 'critical' }, 'same-key');
+    const after = await db.incident.findUniqueOrThrow({ where: { id: first.id } });
+    expect(after.status).toBe('OPEN');
+  });
+});
+
 describe('a service policy replaces the global one for the release sweep', () => {
   it('pages a global-rule suppression once the service has its own policy without that rule', async () => {
     const service = await createTestService('Checkout');

@@ -46,8 +46,8 @@ const labelKey = z
   .regex(/^[a-z0-9_.:/-]+$/i, 'Label keys use letters, digits and . _ : / -');
 
 /**
- * A group that is repeated without a bound (`+`, `*` or `{`) while holding alternatives or an unbounded repeat
- * of its own, at any depth: `(a+)+`, `(a|aa)+`, `((a|aa))+`, `(?:(a|aa)){1,40}`. These backtrack exponentially on
+ * A group that is repeated without a bound (`+`, `*` or `{`) while holding alternatives or a repeat of its own
+ * (including a bounded one such as `{1,2}`), at any depth: `(a+)+`, `(a|aa)+`, `((a|aa))+`, `(?:(a|aa)){1,40}`. These backtrack exponentially on
  * input that almost matches. An optional group `(a|b)?` is safe. Escapes and character classes are skipped.
  */
 function hasCatastrophicRepeat(pattern: string): boolean {
@@ -68,7 +68,7 @@ function hasCatastrophicRepeat(pattern: string): boolean {
     else if (char === '|') {
       const group = stack.at(-1);
       if (group) group.alternatives = true;
-    } else if (char === '+' || char === '*') {
+    } else if (char === '+' || char === '*' || char === '{') {
       const group = stack.at(-1);
       if (group) group.repeats = true;
     } else if (char === ')') {
@@ -80,7 +80,7 @@ function hasCatastrophicRepeat(pattern: string): boolean {
       const parent = stack.at(-1);
       if (parent) {
         parent.alternatives ||= group.alternatives;
-        parent.repeats ||= group.repeats || next === '+' || next === '*';
+        parent.repeats ||= group.repeats || repeated;
       }
     }
   }
