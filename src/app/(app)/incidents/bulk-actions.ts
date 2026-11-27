@@ -18,9 +18,10 @@ import {
   type IncidentLifecycleResult,
 } from '@/lib/incidents/lifecycle';
 import { isIncidentPriority } from '@/lib/incidents/priority';
+import { applyIncidentPriorityChange } from '@/lib/incidents/priority-command';
 import { requireResolutionNote } from '@/lib/incidents/resolution-note';
 
-const MAX_BULK_REASSIGN = 100;
+const MAX_BULK_SELECTION = 100;
 
 type BulkLifecycleStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
 
@@ -193,10 +194,10 @@ export async function bulkReassign(incidentIds: string[], assigneeId: string) {
     }
 
     const uniqueIds = [...new Set(incidentIds)];
-    if (uniqueIds.length > MAX_BULK_REASSIGN) {
+    if (uniqueIds.length > MAX_BULK_SELECTION) {
       return {
         success: false,
-        error: `Select at most ${MAX_BULK_REASSIGN} incidents to reassign at once.`,
+        error: `Select at most ${MAX_BULK_SELECTION} incidents to reassign at once.`,
       };
     }
 
@@ -245,24 +246,36 @@ export async function bulkUpdatePriority(incidentIds: string[], priority: string
   if (priority && !isIncidentPriority(priority)) {
     return { success: false, error: 'Priority must be one of P1, P2, P3, P4 or P5' };
   }
+  const nextPriority = isIncidentPriority(priority) ? priority : null;
 
   try {
+    const uniqueIds = [...new Set(incidentIds)];
+    if (uniqueIds.length > MAX_BULK_SELECTION) {
+      return {
+        success: false,
+        error: `Select at most ${MAX_BULK_SELECTION} incidents to update at once.`,
+      };
+    }
+
     const user = await getCurrentUser();
-    await prisma.$transaction(async tx => {
-      await tx.incident.updateMany({
-        where: { id: { in: incidentIds } },
-        data: { priority: priority || null },
+    // Same command as the incident page control: P1-P5 or cleared, timeline event and war-room message.
+    const updated = await prisma.$transaction(async tx => {
+      const existing = await tx.incident.findMany({
+        where: { id: { in: uniqueIds } },
+        select: { id: true },
       });
-      await tx.incidentEvent.createMany({
-        data: incidentIds.map(incidentId => ({
-          incidentId,
-          message: `Bulk priority updated to ${priority || 'Auto'}${user ? ` by ${user.name}` : ''}`,
-        })),
-      });
+      for (const { id } of existing) {
+        await applyIncidentPriorityChange(tx, {
+          incidentId: id,
+          priority: nextPriority,
+          eventMessage: `Bulk priority updated to ${nextPriority ?? 'Auto'}${user ? ` by ${user.name}` : ''}`,
+        });
+      }
+      return existing.length;
     });
 
     revalidatePath('/incidents');
-    return { success: true, count: incidentIds.length };
+    return { success: true, count: updated };
   } catch (error) {
     logger.error('Bulk priority update failed', {
       component: 'bulk-actions',

@@ -12,6 +12,7 @@ import {
 import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
 import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
+import { applyIncidentPriorityChange } from '@/lib/incidents/priority-command';
 import { assertResponderOrAbove, getCurrentAuthorizationActor, getCurrentUser } from '@/lib/rbac';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import {
@@ -52,6 +53,10 @@ vi.mock('@/lib/rbac', () => ({
 
 vi.mock('@/lib/authorization-filters', () => ({
   incidentReadWhere: vi.fn(),
+}));
+
+vi.mock('@/lib/incidents/priority-command', () => ({
+  applyIncidentPriorityChange: vi.fn(),
 }));
 
 vi.mock('@/lib/incidents/assignment', () => ({
@@ -416,32 +421,44 @@ describe('Bulk Actions', () => {
   });
 
   describe('bulkUpdatePriority', () => {
-    it('writes only P1-P5 (or clears the priority with an empty value)', async () => {
-      vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 1 });
-      vi.mocked(prisma.incidentEvent.createMany).mockResolvedValue({ count: 1 });
+    it('applies each priority through the canonical command (P1-P5, or cleared with an empty value)', async () => {
+      vi.mocked(prisma.incident.findMany).mockResolvedValue([{ id: 'incident-1' }] as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
-      await expect(bulkUpdatePriority(['incident-1'], 'P2')).resolves.toMatchObject({
+      await expect(bulkUpdatePriority(['incident-1', 'incident-1'], 'P2')).resolves.toEqual({
         success: true,
+        count: 1,
       });
-      expect(prisma.incident.updateMany).toHaveBeenLastCalledWith({
+      expect(prisma.incident.findMany).toHaveBeenLastCalledWith({
         where: { id: { in: ['incident-1'] } },
-        data: { priority: 'P2' },
+        select: { id: true },
+      });
+      expect(applyIncidentPriorityChange).toHaveBeenLastCalledWith(expect.anything(), {
+        incidentId: 'incident-1',
+        priority: 'P2',
+        eventMessage: 'Bulk priority updated to P2 by Test User',
       });
       await bulkUpdatePriority(['incident-1'], '');
-      expect(prisma.incident.updateMany).toHaveBeenLastCalledWith({
-        where: { id: { in: ['incident-1'] } },
-        data: { priority: null },
-      });
+      expect(applyIncidentPriorityChange).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({ priority: null })
+      );
+      expect(prisma.incident.updateMany).not.toHaveBeenCalled();
     });
 
     it('rejects values that escalation conditions could never match', async () => {
-      vi.mocked(prisma.incident.updateMany).mockClear();
       for (const bad of ['p1', 'P6', ' P1', 'x'.repeat(5000)]) {
         await expect(bulkUpdatePriority(['incident-1'], bad)).resolves.toMatchObject({
           success: false,
         });
       }
-      expect(prisma.incident.updateMany).not.toHaveBeenCalled();
+      expect(applyIncidentPriorityChange).not.toHaveBeenCalled();
+    });
+
+    it('refuses a selection larger than one transaction should carry', async () => {
+      const ids = Array.from({ length: 101 }, (_, i) => `inc-${i}`);
+
+      await expect(bulkUpdatePriority(ids, 'P1')).resolves.toMatchObject({ success: false });
+      expect(applyIncidentPriorityChange).not.toHaveBeenCalled();
     });
   });
 });

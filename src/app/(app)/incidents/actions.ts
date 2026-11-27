@@ -32,6 +32,7 @@ import {
 import { executeIdempotentIncidentCreation } from '@/lib/incidents/idempotent-commands';
 import { enqueueWarRoomSideEffects } from '@/lib/event-outbox';
 import { isIncidentPriority } from '@/lib/incidents/priority';
+import { applyIncidentPriorityChange } from '@/lib/incidents/priority-command';
 import { applyIncidentUrgencyChange } from '@/lib/incidents/urgency-command';
 import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
 import { loadTemplateDefaultRoles } from '@/lib/incidents/roles-command';
@@ -91,26 +92,7 @@ export async function updateIncidentPriority(id: string, rawPriority: string | n
     });
   }
 
-  await prisma.$transaction(async tx => {
-    await tx.incident.update({
-      where: { id },
-      data: {
-        priority,
-        events: {
-          create: {
-            type: 'STATUS_CHANGE',
-            message: priority ? `Priority updated to ${priority}` : 'Priority cleared (Unassigned)',
-          },
-        },
-      },
-    });
-    await enqueueWarRoomSideEffects(tx, id, [
-      {
-        effect: 'WAR_ROOM_MESSAGE',
-        message: `🎯 *Priority updated to ${priority || 'Unassigned'}*`,
-      },
-    ]);
-  });
+  await prisma.$transaction(tx => applyIncidentPriorityChange(tx, { incidentId: id, priority }));
 
   revalidatePath(`/incidents/${id}`);
   revalidatePath('/incidents');
