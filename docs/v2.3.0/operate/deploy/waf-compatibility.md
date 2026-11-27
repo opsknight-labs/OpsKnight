@@ -116,6 +116,30 @@ or (any(http.request.headers.names[*] == "next-action"))
 
 Action: **Skip** → *Specific rules* → choose the rule IDs shown in **Security → Events** for the blocked request. Make a separate exception for provider webhook paths that skips Bot Fight Mode or Super Bot Fight Mode. If you use the Cloudflare OWASP ruleset, keep it at paranoia level 1. Paranoia level 2 adds rule 931130, which blocks the absolute same-origin `callbackUrl`.
 
+### Azure Front Door and Application Gateway WAF
+
+Both Azure WAF products run a managed rule set whose rule IDs follow the OWASP CRS numbers used above (for example 931130, 920230 and the 941xxx, 942xxx and 932xxx families), so the "Typical rule" column applies directly. Application Gateway calls it the Core Rule Set (CRS 3.2 or later) and Front Door the Default Rule Set (DRS 2.0 or 2.1). Keep it in **Prevention** mode and change one rule at a time.
+
+Azure exclusions remove a request attribute from inspection, not a URL path. An exclusion names a match variable (request header name, cookie name, query-string argument name, POST argument name, or, on Front Door DRS 2.0 and later, JSON argument name), an operator (`Equals`, `Contains`, `StartsWith`, `EndsWith`, `Equals any`) and a selector. Scope each one to a single rule rather than the rule set or the whole policy. Selectors are case sensitive. For a JSON body, an exclusion keeps the argument names inspected and skips their values.
+
+| Request | Exclusion (scope: the rule that fired) |
+|---|---|
+| OIDC callback `iss` and `error_description` | Query-string argument name `Equals` `iss`, and `Equals` `error_description`, on rules 931130, 920230 and the SQLi and XSS rules shown in the log |
+| `callbackUrl` on `/login` and `/api/auth/*` | Query-string argument name `Equals` `callbackUrl`; cookie name `Equals` `next-auth.callback-url` and `__Secure-next-auth.callback-url`, on rule 931130 |
+| `Next-Router-State-Tree` header | Request header name `Equals` `Next-Router-State-Tree`, on the SQLi and XSS rules in the log |
+| SSO settings JSON (`/api/auth/control`) | JSON argument name `Equals` `configuration.issuer` and `configuration.clientSecret`, on 931130 and the SQLi rules in the log |
+
+A path cannot be named in an exclusion, so where a rule has to be relaxed for one path only (runbook Server Actions and `/api/runbook-agent/v1/`, `/api/integrations/*`, `/api/events`, branding), use a **custom rule** instead. Custom rules run before the managed rules. A rule with action **Allow** that matches the path (and, for Server Actions, a `Next-Action` header) ends evaluation for that request, so give it a narrow match condition and, where you can, restrict it to the provider's published source ranges:
+
+```text
+RequestUri  BeginsWith  /api/runbook-agent/v1/
+and RequestHeaders[User-Agent]  BeginsWith  OpsKnight-Agent/
+```
+
+Use the same pattern for the provider webhook paths. If the Bot Manager rule set is on, allow `OpsKnight-Agent/` and the provider webhooks there too.
+
+Body inspection is limited. Microsoft documents that the WAF inspects only the first part of a request body, 128 KB by default, and that on Application Gateway the inspection limit and the size limit can be set independently from CRS 3.2 on. The product accepts event bodies up to 1 MiB, so anything past the inspection limit reaches OpsKnight uninspected by the WAF; OpsKnight validates every body itself. Check the current limits in Microsoft's [Application Gateway request size limits](https://learn.microsoft.com/azure/web-application-firewall/ag/application-gateway-waf-request-size-limits) and [Front Door exclusion](https://learn.microsoft.com/azure/web-application-firewall/afds/waf-front-door-exclusion) pages before relying on a number. OpsKnight has been replayed against the OWASP CRS only; run the checks in [Verify every layer](#verify-every-layer) on your Azure policy before go-live.
+
 ### ModSecurity or Coraza with the OWASP CRS
 
 Put exclusions in `REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf` (runtime `ctl:` actions). Remove a rule for one argument or cookie, not for the whole request:
@@ -182,6 +206,7 @@ With the WAF in blocking mode, confirm that each of these works and that no rule
 - **403 when saving or testing SSO settings:** a rule matched the issuer URL or client secret in the `/api/auth/control` body. Add the SSO settings exclusion.
 - **Status pages answer 421 for every custom domain:** the middleware status-domain lookup is going through the WAF. Point `INTERNAL_API_URL` at loopback or the in-cluster Service.
 - **Saving a runbook fails but loading it works:** a remote-code-execution or body-size rule is blocking the Server Action. Exclude it for requests with the `Next-Action` header.
+- **A search containing `${jndi:` returns a bare 403 page:** the Log4Shell rule of the managed set blocks the `GET /api/search` query. It is expected for that string; the command palette reports that the search failed. Search for other text, or exclude the rule for the `q` argument on `/api/search` only if you need to search for it.
 - **The Runbook Agent goes offline after the WAF is enabled:** a bot or user-agent rule is blocking it. Allow `OpsKnight-Agent/` on `/api/runbook-agent/v1/`.
 
 ## Related guides
