@@ -44,7 +44,10 @@ const mocks = vi.hoisted(() => {
       findMany: txTeamMemberFindMany,
       groupBy: txTeamMemberGroupBy,
     },
-    incidentWatcher: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    incidentWatcher: {
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     onCallShift: {
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       count: txOnCallShiftCount,
@@ -70,13 +73,20 @@ const mocks = vi.hoisted(() => {
     incidentNote: {
       updateMany: vi.fn().mockResolvedValue({ count: 0 }),
       findMany: vi.fn().mockResolvedValue([]),
+      groupBy: vi.fn().mockResolvedValue([]),
     },
     incidentEvent: { findMany: vi.fn().mockResolvedValue([]) },
+    incidentRoleAssignment: { findMany: vi.fn().mockResolvedValue([]) },
+    warRoomParticipant: { findMany: vi.fn().mockResolvedValue([]) },
     postmortem: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     incidentTemplate: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     actionItem: { count: txActionItemCount, updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     notification: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    incident: { count: txIncidentCount, updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    incident: {
+      count: txIncidentCount,
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     userToken: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     user: {
       findUnique: txUserFindUnique,
@@ -565,6 +575,10 @@ describe('executeErasure', () => {
     expect(actions).toEqual(
       expect.arrayContaining(['privacy.erasure.started', 'privacy.erasure.completed'])
     );
+    const completed = mocks.emitAuditEvent.mock.calls.find(
+      call => call[0].action === 'privacy.erasure.completed'
+    );
+    expect(completed?.[0].metadata).toMatchObject({ incidentTextTruncated: false });
   });
 
   it('hands the erased user\'s incident templates to the erasing admin instead of orphaning them', async () => {

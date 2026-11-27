@@ -44,6 +44,15 @@ describe('erasure of incident free text', () => {
         message: 'Note added via Slack ChatOps by Alice Wonder:\nrestarted',
       },
     });
+    // An incident the subject never touched: someone else sharing the display name.
+    const otherIncident = await createTestIncident('Other incident', service.id);
+    const sameName = await db.incidentEvent.create({
+      data: {
+        incidentId: otherIncident.id,
+        type: 'COMMENT',
+        message: 'Note added via Slack ChatOps by Alice Wonder:\nrestarted',
+      },
+    });
     const unrelated = await db.incidentEvent.create({
       data: { incidentId: incident.id, type: 'COMMENT', message: 'Unrelated timeline entry' },
     });
@@ -55,7 +64,7 @@ describe('erasure of incident free text', () => {
       phoneNumber: null,
     };
     const first = await db.$transaction(tx => pseudonymiseSubjectIncidentText(tx, identity));
-    expect(first).toEqual({ notes: 1, events: 1 });
+    expect(first).toEqual({ notes: 1, events: 1, truncated: false });
 
     expect((await db.incidentNote.findUniqueOrThrow({ where: { id: own.id } })).content).toBe(
       '[erased] ([erased]) restarted the pod'
@@ -66,12 +75,15 @@ describe('erasure of incident free text', () => {
     expect((await db.incidentEvent.findUniqueOrThrow({ where: { id: named.id } })).message).toBe(
       'Note added via Slack ChatOps by [erased]:\nrestarted'
     );
+    expect((await db.incidentEvent.findUniqueOrThrow({ where: { id: sameName.id } })).message).toBe(
+      'Note added via Slack ChatOps by Alice Wonder:\nrestarted'
+    );
     expect((await db.incidentEvent.findUniqueOrThrow({ where: { id: unrelated.id } })).message).toBe(
       'Unrelated timeline entry'
     );
 
     const second = await db.$transaction(tx => pseudonymiseSubjectIncidentText(tx, identity));
-    expect(second).toEqual({ notes: 0, events: 0 });
+    expect(second).toEqual({ notes: 0, events: 0, truncated: false });
   });
 });
 

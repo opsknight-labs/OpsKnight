@@ -222,6 +222,8 @@ export async function executeErasure(
 
     let domainCounts: ErasureDomainCounts;
     let manualReviewRequired: boolean;
+    // True when the incident text scrub hit its row bounds (see MAX_ERASURE_TEXT_ROWS).
+    let incidentTextTruncated = false;
 
     if (subjectRow) {
       const plan = await buildSubjectErasurePlan(subjectId);
@@ -312,7 +314,8 @@ export async function executeErasure(
         // legal hold on another user protects are left as they are.
         await pseudonymiseSubjectAuditRows(tx, subjectIdentity);
         // The subject's own notes and the timeline lines naming them, before the notes are detached.
-        await pseudonymiseSubjectIncidentText(tx, subjectIdentity);
+        incidentTextTruncated = (await pseudonymiseSubjectIncidentText(tx, subjectIdentity))
+          .truncated;
 
         // --- ANONYMIZE: scrub the immutable audit-log PII snapshot in place.
         // actorId itself is left alone here; it is SetNull automatically when
@@ -537,7 +540,7 @@ export async function executeErasure(
       source: 'UI',
       target: { type: 'PRIVACY_ERASURE_EXECUTION', id: completed.id },
       actor: { type: 'USER', id: actor.id },
-      metadata: { requestId, domainCounts, manualReviewRequired },
+      metadata: { requestId, domainCounts, manualReviewRequired, incidentTextTruncated },
     });
 
     if (manualReviewRequired) {

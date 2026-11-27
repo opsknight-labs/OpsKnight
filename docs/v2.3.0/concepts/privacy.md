@@ -45,6 +45,16 @@ the person inside someone else's free text, values written in a different form
 (a misspelt name, a reformatted phone number), and logs outside the database
 cannot be attributed and are covered by the manual-review step.
 
+In incident text, erasure replaces the person's email, phone number and full name
+(a space and at least 5 characters; a one-word name is never matched) in the notes
+they wrote and in timeline entries on incidents they took part in: they wrote a
+note, were the assignee or acknowledged it, watched it, held an incident role, or
+were added to its war room. Email addresses match only when they are not the end
+of a longer address. The scrub is bounded so the erasure always completes: at most
+1,000 incidents (newest first) and 5,000 notes and 5,000 timeline entries per
+erasure. If a bound is hit, the completion audit entry records
+`incidentTextTruncated: true` and the rest needs manual review.
+
 Preserve request transitions, operator decisions, export generation, erasure
 results, and hold changes as audit evidence. Avoid copying subject data into
 free-form notes when a stable record reference is sufficient.

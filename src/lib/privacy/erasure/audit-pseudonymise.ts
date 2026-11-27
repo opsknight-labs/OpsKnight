@@ -16,6 +16,18 @@ export const ERASED = '[erased]';
 const BATCH_SIZE = 500;
 const MIN_NAME_LENGTH = 3;
 const MIN_PHONE_LENGTH = 5;
+// Free text (notes, timeline lines) is shared with other people, so a name only counts there when
+// it is a full name: one word such as "Admin" would rewrite other people's text.
+const MIN_FREE_TEXT_NAME_LENGTH = 5;
+
+/**
+ * Bounds that keep the incident text scrub inside the erasure transaction's time budget: the
+ * timeline scan only looks at incidents the subject touched (at most this many, newest first), and
+ * each of the note and timeline scans examines at most this many rows per run. Anything past a
+ * bound is left as it is and the run reports `truncated`.
+ */
+export const MAX_ERASURE_INCIDENTS = 1000;
+export const MAX_ERASURE_TEXT_ROWS = 5000;
 
 export interface ErasureSubjectIdentity {
   id: string;
@@ -56,6 +68,9 @@ export function subjectAuditRowsWhere(
   return { OR: [subjectAuditOwnWhere(subjectId, email), subjectAuditAboutWhere(subjectId)] };
 }
 
+export const isFreeTextName = (name: string) =>
+  name.length >= MIN_FREE_TEXT_NAME_LENGTH && /\s/.test(name);
+
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
@@ -68,14 +83,20 @@ export function buildIdentifierMatcher(input: {
   phones: readonly string[];
   names: readonly string[];
   ips: readonly string[];
+  /** Free text other people share: a name must be a full name (a space, 5+ characters). */
+  freeText?: boolean;
 }): RegExp | null {
   const parts = [
-    ...input.emails.map(value => ({ value, pattern: escapeRegExp(value) })),
+    // The leading boundary keeps "alice@x.com" from eating the tail of "malice@x.com".
+    ...input.emails.map(value => ({
+      value,
+      pattern: `(?<![\\w.+-])${escapeRegExp(value)}`,
+    })),
     ...input.phones
       .filter(value => value.length >= MIN_PHONE_LENGTH)
       .map(value => ({ value, pattern: escapeRegExp(value) })),
     ...input.names
-      .filter(value => value.length >= MIN_NAME_LENGTH)
+      .filter(value => (input.freeText ? isFreeTextName(value) : value.length >= MIN_NAME_LENGTH))
       .map(value => ({
         value,
         pattern: `(?<![\\p{L}\\p{N}_])${escapeRegExp(value)}(?![\\p{L}\\p{N}_])`,
@@ -198,17 +219,23 @@ export async function pseudonymiseSubjectAuditRows(
 
 type TextRow = { id: string; text: string };
 
-/** Pages through rows by id, rewrites the ones the matcher changes, and returns how many changed. */
+/**
+ * Pages through rows by id, rewrites the ones the matcher changes, and examines at most `limit`
+ * rows. Reports `truncated` when rows were left unexamined.
+ */
 async function scrubTextRows(
-  fetchPage: (after: string | undefined) => Promise<TextRow[]>,
+  fetchPage: (after: string | undefined, take: number) => Promise<TextRow[]>,
   write: (ids: string[], texts: string[]) => Promise<unknown>,
-  matcher: RegExp
-): Promise<number> {
+  matcher: RegExp,
+  limit: number
+): Promise<{ changed: number; truncated: boolean }> {
   let after: string | undefined;
   let changed = 0;
-  for (;;) {
-    const page: TextRow[] = await fetchPage(after);
-    if (page.length === 0) return changed;
+  let examined = 0;
+  while (examined < limit) {
+    const page: TextRow[] = await fetchPage(after, Math.min(BATCH_SIZE, limit - examined));
+    if (page.length === 0) return { changed, truncated: false };
+    examined += page.length;
     after = page[page.length - 1].id;
     const ids: string[] = [];
     const texts: string[] = [];
@@ -222,20 +249,75 @@ async function scrubTextRows(
     await write(ids, texts);
     changed += ids.length;
   }
+  return { changed, truncated: (await fetchPage(after, 1)).length > 0 };
+}
+
+/**
+ * Incidents the subject took part in: they wrote a note, were the assignee or the one who
+ * acknowledged, watched it, held an incident role, or were added to its war room. A timeline event
+ * has no author column, so these are the only incidents whose events can name them. Newest first,
+ * at most MAX_ERASURE_INCIDENTS.
+ */
+async function subjectIncidentIds(
+  tx: Prisma.TransactionClient,
+  subjectId: string
+): Promise<{ ids: string[]; truncated: boolean }> {
+  const take = MAX_ERASURE_INCIDENTS + 1;
+  const byIncident = { orderBy: { incidentId: 'desc' as const }, take };
+  const notes = await tx.incidentNote.groupBy({
+    by: ['incidentId'],
+    where: { userId: subjectId },
+    ...byIncident,
+  });
+  const incidents = await tx.incident.findMany({
+    where: { OR: [{ assigneeId: subjectId }, { acknowledgedById: subjectId }] },
+    select: { id: true },
+    orderBy: { id: 'desc' },
+    take,
+  });
+  const watching = await tx.incidentWatcher.findMany({
+    where: { userId: subjectId },
+    select: { incidentId: true },
+    ...byIncident,
+  });
+  const roles = await tx.incidentRoleAssignment.findMany({
+    where: { userId: subjectId },
+    select: { incidentId: true },
+    ...byIncident,
+  });
+  const warRooms = await tx.warRoomParticipant.findMany({
+    where: { userId: subjectId },
+    select: { warRoom: { select: { incidentId: true } } },
+    take,
+  });
+  const all = [
+    ...notes.map(row => row.incidentId),
+    ...incidents.map(row => row.id),
+    ...watching.map(row => row.incidentId),
+    ...roles.map(row => row.incidentId),
+    ...warRooms.map(row => row.warRoom.incidentId),
+  ];
+  const ids = [...new Set(all)].sort().reverse();
+  return { ids: ids.slice(0, MAX_ERASURE_INCIDENTS), truncated: ids.length > MAX_ERASURE_INCIDENTS };
 }
 
 /**
  * Replaces the subject's email, name and phone number in incident free text: the content of the
- * notes they wrote, and every timeline event that names them (a timeline event has no author
- * column, so the text is the only link, e.g. "Note added via Slack ChatOps by <name>"). Call inside
- * the erasure transaction before the notes are detached. Incidents under a legal hold are left as
- * they are. Idempotent. Text other people wrote about the subject in their own notes is not
- * attributable and stays (manual review in policy.ts).
+ * notes they wrote, and the timeline events that name them on incidents they took part in (a
+ * timeline event has no author column, so the text is the only link, e.g. "Note added via Slack
+ * ChatOps by <name>"). Call inside the erasure transaction before the notes are detached.
+ *
+ * The work is bounded so the transaction finishes on a large install (see MAX_ERASURE_INCIDENTS and
+ * MAX_ERASURE_TEXT_ROWS; `truncated` reports a bound that was hit). In notes and events a name is
+ * replaced only when it is a full name (a space, 5+ characters) and an email only when it is not the
+ * tail of a longer address. Incidents under a legal hold are left as they are. Idempotent. Text other
+ * people wrote about the subject in their own notes is not attributable and stays (manual review in
+ * policy.ts).
  */
 export async function pseudonymiseSubjectIncidentText(
   tx: Prisma.TransactionClient,
   subject: ErasureSubjectIdentity
-): Promise<{ notes: number; events: number }> {
+): Promise<{ notes: number; events: number; truncated: boolean }> {
   const email = subject.email?.toLowerCase() ?? null;
   const phone = subject.phoneNumber?.trim() ?? '';
   const name = subject.name?.trim() ?? '';
@@ -244,28 +326,34 @@ export async function pseudonymiseSubjectIncidentText(
     phones: phone ? [phone] : [],
     names: name ? [name] : [],
     ips: [],
+    freeText: true,
   });
-  if (!matcher) return { notes: 0, events: 0 };
+  if (!matcher) return { notes: 0, events: 0, truncated: false };
 
   const held = await getHeldIncidentIds(tx);
-  const outsideHold = held.length ? { incidentId: { notIn: held } } : {};
   const afterCursor = (after: string | undefined) => (after ? { id: { gt: after } } : {});
   // The database narrows to rows that contain the text at all; the matcher decides what changes.
   const needles = [
     email,
     phone.length >= MIN_PHONE_LENGTH ? phone : '',
-    name.length >= MIN_NAME_LENGTH ? name : '',
+    isFreeTextName(name) ? name : '',
   ]
     .filter((needle): needle is string => Boolean(needle))
     .map(needle => ({ message: { contains: needle, mode: 'insensitive' as const } }));
 
   const notes = await scrubTextRows(
-    async after =>
+    async (after, take) =>
       (
         await tx.incidentNote.findMany({
-          where: { AND: [{ userId: subject.id }, outsideHold, afterCursor(after)] },
+          where: {
+            AND: [
+              { userId: subject.id },
+              held.length ? { incidentId: { notIn: held } } : {},
+              afterCursor(after),
+            ],
+          },
           orderBy: { id: 'asc' },
-          take: BATCH_SIZE,
+          take,
           select: { id: true, content: true },
         })
       ).map(row => ({ id: row.id, text: row.content })),
@@ -273,18 +361,23 @@ export async function pseudonymiseSubjectIncidentText(
       UPDATE "IncidentNote" AS t SET content = u.text
       FROM unnest(${ids}::text[], ${texts}::text[]) AS u(id, text) WHERE t.id = u.id
     `,
-    matcher
+    matcher,
+    MAX_ERASURE_TEXT_ROWS
   );
+  const touched = needles.length === 0 ? null : await subjectIncidentIds(tx, subject.id);
+  const incidentIds = touched?.ids.filter(id => !held.includes(id)) ?? [];
   const events =
-    needles.length === 0
-      ? 0
+    incidentIds.length === 0
+      ? { changed: 0, truncated: false }
       : await scrubTextRows(
-          async after =>
+          async (after, take) =>
             (
               await tx.incidentEvent.findMany({
-                where: { AND: [{ OR: needles }, outsideHold, afterCursor(after)] },
+                where: {
+                  AND: [{ incidentId: { in: incidentIds } }, { OR: needles }, afterCursor(after)],
+                },
                 orderBy: { id: 'asc' },
-                take: BATCH_SIZE,
+                take,
                 select: { id: true, message: true },
               })
             ).map(row => ({ id: row.id, text: row.message })),
@@ -292,7 +385,12 @@ export async function pseudonymiseSubjectIncidentText(
             UPDATE "IncidentEvent" AS t SET message = u.text
             FROM unnest(${ids}::text[], ${texts}::text[]) AS u(id, text) WHERE t.id = u.id
           `,
-          matcher
+          matcher,
+          MAX_ERASURE_TEXT_ROWS
         );
-  return { notes, events };
+  return {
+    notes: notes.changed,
+    events: events.changed,
+    truncated: notes.truncated || events.truncated || Boolean(touched?.truncated),
+  };
 }
