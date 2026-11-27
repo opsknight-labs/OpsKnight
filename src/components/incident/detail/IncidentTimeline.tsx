@@ -1130,8 +1130,8 @@ export default function IncidentTimeline({
             <div
               key={event.id}
               id={`timeline-${event.id}`}
-              className="relative flex scroll-mt-24 gap-4 group animate-in slide-in-from-left-2 fade-in duration-500 fill-mode-backwards target:rounded-lg target:bg-amber-50/60 dark:target:bg-amber-950/20"
-              style={{ animationDelay: `${index * 50}ms` }}
+              className="relative flex scroll-mt-24 gap-4 group animate-in slide-in-from-left-2 fade-in duration-500 fill-mode-backwards motion-reduce:animate-none target:rounded-lg target:bg-amber-50/60 dark:target:bg-amber-950/20"
+              style={{ animationDelay: `${Math.min(index, 8) * 50}ms` }}
             >
               {/* Node Icon */}
               <div

@@ -62,3 +62,19 @@ describe('IncidentTimeline older-activity paging', () => {
     expect(screen.getByRole('button', { name: 'Load older activity' })).toBeInTheDocument();
   });
 });
+
+describe('IncidentTimeline row entrance animation', () => {
+  it('caps the stagger so a long timeline is never hidden behind it, and drops it for reduced motion', () => {
+    const many = Array.from({ length: 60 }, (_, i) =>
+      event(`e${i}`, new Date(Date.UTC(2026, 0, 2) - i * 60_000).toISOString())
+    );
+    const { container } = render(timeline(many));
+
+    const rows = Array.from(container.querySelectorAll<HTMLElement>('[id^="timeline-e"]'));
+    expect(rows.length).toBe(60);
+    for (const row of rows) {
+      expect(parseInt(row.style.animationDelay, 10)).toBeLessThanOrEqual(400);
+      expect(row.className).toContain('motion-reduce:animate-none');
+    }
+  });
+});
