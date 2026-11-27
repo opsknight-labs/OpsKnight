@@ -1,6 +1,9 @@
 import type { ChatProvider, WarRoomParticipantSource } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { resolveOnCallWarRoomResponders } from './oncall-responders';
+import {
+  resolveOnCallWarRoomResponders,
+  resolveServiceWarRoomResponders,
+} from './oncall-responders';
 
 type DesiredResponder = { userId: string; source: WarRoomParticipantSource };
 
@@ -146,6 +149,9 @@ export async function projectIncidentWarRoomParticipants(warRoomId: string): Pro
   }
   for (const watcher of room.incident.watchers) {
     if (!responders.has(watcher.userId)) responders.set(watcher.userId, 'WATCHER');
+  }
+  for (const userId of await resolveServiceWarRoomResponders(room.incident.serviceId)) {
+    if (!responders.has(userId)) responders.set(userId, 'TEAM');
   }
   for (const userId of await resolveOnCallWarRoomResponders(room.incident.serviceId)) {
     if (!responders.has(userId)) responders.set(userId, 'ESCALATION');

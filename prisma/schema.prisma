@@ -223,6 +223,13 @@ enum WarRoomMembershipType {
   PRIVATE
 }
 
+/// Which members of a service's owning team are added to every new war room for it.
+enum WarRoomTeamAutoAdd {
+  NONE
+  MANAGERS
+  ALL
+}
+
 enum WarRoomParticipantSource {
   ASSIGNEE
   WATCHER
@@ -773,6 +780,8 @@ model Service {
   microsoftTeamsWarRoomAutoCreate Boolean                         @default(false)
   warRoomVideoBridge              String?
   warRoomCustomBridgeUrl          String?
+  warRoomAutoAddTeam              WarRoomTeamAutoAdd              @default(NONE)
+  warRoomAutoAddUserIds           String[]                        @default([])
   slaDefinitions                  SLADefinition[]
   serviceObjectives               ServiceObjective[]
   runbookBindings                 ServiceAutomationRule[]

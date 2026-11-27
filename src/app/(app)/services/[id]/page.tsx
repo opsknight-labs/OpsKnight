@@ -102,6 +102,7 @@ import ServiceGeneralSettings from '@/components/service/ServiceGeneralSettings'
 import ServiceNotificationSettings from '@/components/service/ServiceNotificationSettings';
 import JiraServiceMappingSettings from '@/components/service/JiraServiceMappingSettings';
 import ChatOpsWarRoomSettings from '@/components/service/ChatOpsWarRoomSettings';
+import WarRoomAutoAddCard from '@/components/service/WarRoomAutoAddCard';
 import ServiceVisibilitySettings from '@/components/service/ServiceVisibilitySettings';
 import ServiceResponsePolicyHub from '@/components/service/ServiceResponsePolicyHub';
 import { MissingRunbookSuggestions } from '@/components/service/runbooks/MissingRunbookSuggestions';
@@ -420,6 +421,22 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   }
 
   const service = serviceRaw;
+  // Only people who can edit the service see (and need) the directory; the picker searches the rest.
+  const autoAddSelect = { id: true, name: true, email: true } as const;
+  const autoAddPeople = canManageService
+    ? [
+        ...(await prisma.user.findMany({
+          where: { id: { in: service.warRoomAutoAddUserIds ?? [] } },
+          select: autoAddSelect,
+        })),
+        ...(await prisma.user.findMany({
+          where: { status: 'ACTIVE' },
+          select: autoAddSelect,
+          orderBy: { name: 'asc' },
+          take: 30,
+        })),
+      ]
+    : [];
   const canDeleteService = currentUser.role === 'ADMIN';
 
   const [
@@ -1079,6 +1096,16 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                 teamsDestination?.channelName || teamsDestination?.teamName || null,
             }}
           />
+          {canManageService && (
+            <WarRoomAutoAddCard
+              serviceId={id}
+              teamName={service.team?.name ?? null}
+              initialTeam={service.warRoomAutoAddTeam}
+              initialUserIds={service.warRoomAutoAddUserIds ?? []}
+              people={autoAddPeople}
+              canManage={canManageService}
+            />
+          )}
         </ServiceNotificationSettings>
       ) : (
         <EmptyState
