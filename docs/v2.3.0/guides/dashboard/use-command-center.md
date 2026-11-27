@@ -144,7 +144,8 @@ The wallboard is read-only and has no navigation chrome. It:
   where the browser allows it; TV browsers that refuse the request keep working
   in a maximized window);
 - cycles through views every 20 seconds (`Space` or **Auto-cycle** pauses;
-  `?cycle=off` disables it);
+  `?cycle=off` disables it, and so does a view named in the URL, such as
+  `?lview=unassigned`, which then stays on that view);
 - leads with one headline: critical incidents, SLA at risk, SLA breached,
   unassigned incidents, then "all owned and within SLA". The last form appears
   only when no active incident is critical, at risk, breached, or unassigned;
