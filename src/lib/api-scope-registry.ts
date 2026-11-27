@@ -14,6 +14,8 @@ type IssuerRole = 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER';
 const ALL_ROLES: readonly IssuerRole[] = ['ADMIN', 'RESPONDER', 'AUDITOR', 'USER'];
 const OPERATORS: readonly IssuerRole[] = ['ADMIN', 'RESPONDER'];
 const ADMINS: readonly IssuerRole[] = ['ADMIN'];
+// Roles holding report.manage; the read-only AUDITOR cannot write reports, so it cannot be issued the scope.
+const REPORT_AUTHORS: readonly IssuerRole[] = ['ADMIN', 'RESPONDER', 'USER'];
 // Directory-wide reads need a capability the USER role does not have.
 const NON_USER: readonly IssuerRole[] = ['ADMIN', 'RESPONDER', 'AUDITOR'];
 
@@ -498,7 +500,7 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     'Saved dashboards manage',
     'Governance',
     'Create and manage owned saved dashboards, with team sharing restricted to memberships.',
-    { write: true, issuableBy: ALL_ROLES }
+    { write: true, issuableBy: REPORT_AUTHORS }
   ),
   [S.POSTMORTEMS_READ]: def(
     S.POSTMORTEMS_READ,
