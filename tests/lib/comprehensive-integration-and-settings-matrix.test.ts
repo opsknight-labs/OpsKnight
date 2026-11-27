@@ -255,11 +255,11 @@ describe('🚀 Comprehensive 28-Integration & Settings Matrix Verification', () 
 
       const events = transformGrafanaToEvents(batchPayload as any);
       expect(events.length).toBe(3);
-      expect(events[0].dedup_key).toBe('grafana-DatabaseHighConnections-db-primary');
+      expect(events[0].dedup_key).toMatch(/^grafana-DatabaseHighConnections-db-primary-[0-9a-f]{16}$/);
       expect(events[0].event_action).toBe('trigger');
-      expect(events[1].dedup_key).toBe('grafana-RedisMemoryHigh-cache-redis');
+      expect(events[1].dedup_key).toMatch(/^grafana-RedisMemoryHigh-cache-redis-[0-9a-f]{16}$/);
       expect(events[1].event_action).toBe('trigger');
-      expect(events[2].dedup_key).toBe('grafana-ApiLatencyHigh-api-gateway');
+      expect(events[2].dedup_key).toMatch(/^grafana-ApiLatencyHigh-api-gateway-[0-9a-f]{16}$/);
       expect(events[2].event_action).toBe('resolve');
     });
 

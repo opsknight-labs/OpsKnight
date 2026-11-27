@@ -78,6 +78,25 @@ service mapping. A `serviceId` in the body is ignored.
 A repeated delivery is answered as `change_duplicate` instead of recording a
 second change.
 
+## Alert identity and correlation keys
+
+Every alert correlates by the `dedup_key` its adapter derives, and a resolve
+closes the incident that holds the same key. Grafana and Alertmanager-style
+payloads use the alert's `fingerprint` (a hash of its whole label set). When a
+sender omits it, the key is now `alertname`, `instance` and a hash of all labels,
+so two series that share a name and instance but differ in another label (job,
+rule UID, folder) open separate incidents, and the first one resolving no longer
+closes the other. The generic webhook adds a hash of its host-style fields to the
+summary-based fallback key under the same rule. Datadog is unchanged: it still
+uses `aggregation_key`, then alert ID, then monitor ID, so send
+`$AGGREG_KEY` or a per-group identity from multi-alert monitors.
+
+The same alert keeps the same key across re-triggers and resolves. After an
+upgrade an incident that is already open for a key built the old way is no longer
+matched by the new key: its next trigger opens one new incident and the old one
+needs a manual resolve. Check open incidents from Grafana-without-fingerprint
+and generic-webhook integrations after the upgrade.
+
 ## Delivery history retention
 
 Each inbound delivery leaves one row that de-duplicates retries and feeds the
