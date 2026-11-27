@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   handleSlashCommand,
   parseRoleCommandArgs,
+  buildSlackDeclareModal,
   parseSlackDeclareSubmission,
   parseSlashCommandText,
   SLACK_INCIDENT_COMMAND_USAGE_HINT,
@@ -480,6 +481,60 @@ describe('ChatOps Slash Command Dispatcher', () => {
         ok: true,
         value: { title: 'Checkout down', serviceId: 'srv-1', urgency: 'LOW' },
       });
+    });
+
+    it('reads the optional priority, visibility and assignee, and stays valid without them', () => {
+      const withExtras = {
+        state: {
+          values: {
+            ...view({ title: 'Checkout down', service: 'srv-1' }).state.values,
+            declare_priority: { value: { selected_option: { value: 'P1' } } },
+            declare_visibility: { value: { selected_option: { value: 'PRIVATE' } } },
+            declare_assignee: { value: { selected_user: 'U123ABC' } },
+          },
+        },
+      };
+      expect(parseSlackDeclareSubmission(withExtras)).toEqual({
+        ok: true,
+        value: {
+          title: 'Checkout down',
+          serviceId: 'srv-1',
+          urgency: 'HIGH',
+          priority: 'P1',
+          visibility: 'PRIVATE',
+          assigneeSlackId: 'U123ABC',
+        },
+      });
+    });
+
+    it('rejects an out-of-range priority and a malformed assignee on their own fields', () => {
+      const bad = {
+        state: {
+          values: {
+            ...view({ title: 'Checkout down', service: 'srv-1' }).state.values,
+            declare_priority: { value: { selected_option: { value: 'P9' } } },
+            declare_assignee: { value: { selected_user: '<!channel>' } },
+          },
+        },
+      };
+      const result = parseSlackDeclareSubmission(bad);
+      expect(result.ok).toBe(false);
+      if (!result.ok)
+        expect(Object.keys(result.errors).sort()).toEqual(
+          ['declare_assignee', 'declare_priority'].sort()
+        );
+    });
+
+    it('offers priority, visibility and an assignee picker, all optional', () => {
+      const modal = buildSlackDeclareModal({ services: [{ id: 's1', name: 'Pay' }] });
+      const byBlock = new Map<string, Record<string, unknown>>(
+        modal.blocks.map(block => [block.block_id, block as Record<string, unknown>])
+      );
+      for (const id of ['declare_priority', 'declare_visibility', 'declare_assignee'])
+        expect(byBlock.get(id)).toMatchObject({ optional: true });
+      expect((byBlock.get('declare_assignee')?.element as { type: string }).type).toBe(
+        'users_select'
+      );
     });
 
     it('returns field errors keyed by block id', () => {

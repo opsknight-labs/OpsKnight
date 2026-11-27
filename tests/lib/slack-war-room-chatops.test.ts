@@ -175,6 +175,18 @@ describe('Slack war-room status card', () => {
     expect(ids('ACKNOWLEDGED')).not.toContain('escalate_incident');
   });
 
+  it('shows the incident description under the facts, escaped and capped', () => {
+    const json = (description: string | null) =>
+      JSON.stringify(
+        renderSlackWarRoomProjection(buildWarRoomProjection({ ...incident, description })).blocks
+      );
+    expect(json('Errors started after <!channel> deploy 4821')).toContain(
+      'Errors started after &lt;!channel&gt; deploy 4821'
+    );
+    expect(json('x'.repeat(2000)).length).toBeLessThan(json('x'.repeat(600)).length + 40);
+    expect(json(null)).not.toContain('deploy 4821');
+  });
+
   it('has no buttons once resolved', () => {
     const card = renderSlackWarRoomProjection(
       buildWarRoomProjection({ ...incident, status: 'RESOLVED', resolvedAt: new Date() })

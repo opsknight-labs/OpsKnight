@@ -112,6 +112,10 @@ export function renderSlackWarRoomProjection(
   ];
   // The header already carries the title; repeating it here made the card read twice.
   const summary = facts.join(' · ');
+  // Same 600-character cap as the channel card: enough context, never a wall of text.
+  const rawDescription = incident.description?.trim() ?? '';
+  const description =
+    rawDescription.length > 600 ? `${rawDescription.slice(0, 599).trimEnd()}…` : rawDescription;
   const emoji =
     incident.status === 'SNOOZED'
       ? '💤'
@@ -191,6 +195,9 @@ export function renderSlackWarRoomProjection(
         },
       },
       { type: 'section', text: { type: 'mrkdwn', text: summary } },
+      ...(description
+        ? [{ type: 'section', text: { type: 'mrkdwn', text: escapeSlack(description) } }]
+        : []),
       {
         type: 'context',
         elements: [
