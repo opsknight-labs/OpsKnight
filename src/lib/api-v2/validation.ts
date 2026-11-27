@@ -93,6 +93,8 @@ export const IncidentUpdateV2Schema = z.object({
   priority: z.enum(['P1', 'P2', 'P3', 'P4', 'P5']).optional().nullable(),
   urgency: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
   status: z.enum(['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'SNOOZED', 'SUPPRESSED']).optional(),
+  // Required (10-1000 characters) when status moves the incident to RESOLVED.
+  resolutionNote: z.string().trim().max(1000).optional(),
   assigneeId: z.string().trim().nullable().optional(),
 });
 

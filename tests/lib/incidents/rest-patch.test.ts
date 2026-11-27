@@ -369,10 +369,74 @@ describe('REST incident patch transaction', () => {
       applyRestIncidentPatch({
         incidentId: 'inc-4',
         status: 'RESOLVED',
+        resolutionNote: 'Rolled back the bad deploy',
         hasAssigneeUpdate: false,
         actor: { id: 'api-user' },
       })
     ).rejects.toMatchObject({ code: 'INCIDENT_REQUIRED_FIELDS_MISSING', status: 422 });
+  });
+
+  it('refuses to resolve without a resolution note, like the single-incident action', async () => {
+    tx.incident.findUnique.mockResolvedValueOnce({
+      id: 'inc-5',
+      status: 'ACKNOWLEDGED',
+      urgency: 'LOW',
+      assigneeId: null,
+    });
+
+    await expect(
+      applyRestIncidentPatch({
+        incidentId: 'inc-5',
+        status: 'RESOLVED',
+        resolutionNote: 'too short',
+        hasAssigneeUpdate: false,
+        actor: { id: 'api-user' },
+      })
+    ).rejects.toMatchObject({ code: 'INCIDENT_INVALID_ARGUMENT' });
+    expect(mocks.applyIncidentLifecycleTargetStatus).not.toHaveBeenCalled();
+  });
+
+  it('passes the trimmed note to the lifecycle and does not ask for one on an already resolved incident', async () => {
+    const resolvedRow = { id: 'inc-6', status: 'RESOLVED', urgency: 'LOW', assigneeId: null };
+    tx.incident.findUnique
+      .mockResolvedValueOnce({ ...resolvedRow, status: 'OPEN' })
+      .mockResolvedValueOnce(resolvedRow)
+      .mockResolvedValueOnce(resolvedRow)
+      .mockResolvedValueOnce(resolvedRow);
+    mocks.applyIncidentLifecycleTargetStatus.mockResolvedValue({
+      incidentId: 'inc-6',
+      command: 'RESOLVE',
+      source: 'REST_API',
+      previousStatus: 'OPEN',
+      status: 'RESOLVED',
+      changed: true,
+    });
+
+    await applyRestIncidentPatch({
+      incidentId: 'inc-6',
+      status: 'RESOLVED',
+      resolutionNote: '  Rolled back the bad deploy  ',
+      hasAssigneeUpdate: false,
+      actor: { id: 'api-user' },
+    });
+    expect(mocks.applyIncidentLifecycleTargetStatus).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ resolutionNote: 'Rolled back the bad deploy' })
+    );
+
+    mocks.applyIncidentLifecycleTargetStatus.mockClear();
+    await expect(
+      applyRestIncidentPatch({
+        incidentId: 'inc-6',
+        status: 'RESOLVED',
+        hasAssigneeUpdate: false,
+        actor: { id: 'api-user' },
+      })
+    ).resolves.toBeDefined();
+    expect(mocks.applyIncidentLifecycleTargetStatus).toHaveBeenCalledWith(
+      tx,
+      expect.not.objectContaining({ resolutionNote: expect.anything() })
+    );
   });
 
   it('reopens a resolved incident when PATCH status is OPEN', async () => {

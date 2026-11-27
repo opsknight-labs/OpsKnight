@@ -82,7 +82,7 @@ describe('Bulk Actions', () => {
       vi.mocked(incidentReadWhere).mockReturnValue(scoped);
       vi.mocked(prisma.incident.count).mockResolvedValue(1);
 
-      const result = await bulkResolve(['mine', 'someone-elses']);
+      const result = await bulkResolve(['mine', 'someone-elses'], 'Rolled back the bad deploy');
 
       expect(result).toEqual({
         success: false,
@@ -203,14 +203,29 @@ describe('Bulk Actions', () => {
         },
       ]);
 
-      const result = await bulkResolve(['incident-1', 'incident-2']);
+      const result = await bulkResolve(['incident-1', 'incident-2'], 'Rolled back the bad deploy');
 
       expect(result).toEqual({ success: true, count: 1 });
       expect(executeIncidentLifecycleBatch).toHaveBeenCalledWith([
-        expect.objectContaining({ incidentId: 'incident-1', command: 'RESOLVE', source: 'BULK' }),
+        expect.objectContaining({
+          incidentId: 'incident-1',
+          command: 'RESOLVE',
+          source: 'BULK',
+          resolutionNote: 'Rolled back the bad deploy',
+        }),
         expect.objectContaining({ incidentId: 'incident-2', command: 'RESOLVE', source: 'BULK' }),
       ]);
       expect(prisma.incident.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('requires the same resolution note as resolving a single incident', async () => {
+      for (const note of ['', '   ', 'too short', 'x'.repeat(1001)]) {
+        await expect(bulkResolve(['incident-1'], note)).resolves.toMatchObject({
+          success: false,
+          error: expect.stringContaining('Resolution note must be'),
+        });
+      }
+      expect(executeIncidentLifecycleBatch).not.toHaveBeenCalled();
     });
 
     it('does not bypass lifecycle required-field validation', async () => {
@@ -218,7 +233,7 @@ describe('Bulk Actions', () => {
         new Error('Complete required custom fields before resolving: Root Cause')
       );
 
-      const result = await bulkResolve(['incident-1']);
+      const result = await bulkResolve(['incident-1'], 'Rolled back the bad deploy');
 
       expect(result).toEqual({ success: false, error: 'Failed to resolve incidents' });
       expect(prisma.incident.updateMany).not.toHaveBeenCalled();
@@ -281,6 +296,13 @@ describe('Bulk Actions', () => {
   });
 
   describe('bulkUpdateStatus', () => {
+    it('does not resolve through the generic status change, which has no resolution note', async () => {
+      const result = await bulkUpdateStatus(['incident-1'], 'RESOLVED');
+
+      expect(result).toMatchObject({ success: false });
+      expect(executeIncidentLifecycleTargetBatch).not.toHaveBeenCalled();
+    });
+
     it('delegates OPEN to target-status translation so source state selects the semantic command', async () => {
       vi.mocked(executeIncidentLifecycleTargetBatch).mockResolvedValue([
         {

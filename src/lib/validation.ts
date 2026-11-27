@@ -39,6 +39,8 @@ export const IncidentCreateSchema = z.object({
 
 export const IncidentPatchSchema = z.object({
   status: z.enum(['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'SNOOZED', 'SUPPRESSED']).optional(),
+  // Required (10-1000 characters) when status moves the incident to RESOLVED.
+  resolutionNote: z.string().trim().max(1000).optional(),
   urgency: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
   assigneeId: z.string().max(100).optional().nullable(),
 });

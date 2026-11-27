@@ -4,6 +4,7 @@ import IncidentsListTable from '@/components/incident/IncidentsListTable';
 import type { IncidentListItem } from '@/types/incident-list';
 
 const mocks = vi.hoisted(() => ({
+  bulkResolve: vi.fn(),
   bulkUpdatePriority: vi.fn(),
   showToast: vi.fn(),
 }));
@@ -24,7 +25,7 @@ vi.mock('@/app/(app)/incidents/actions', () => ({
 }));
 vi.mock('@/app/(app)/incidents/bulk-actions', () => ({
   bulkAcknowledge: vi.fn(),
-  bulkResolve: vi.fn(),
+  bulkResolve: mocks.bulkResolve,
   bulkReassign: vi.fn(),
   bulkUpdatePriority: mocks.bulkUpdatePriority,
   bulkSnooze: vi.fn(),
@@ -89,6 +90,32 @@ describe('bulk select actions', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
     await waitFor(() => expect(mocks.bulkUpdatePriority).toHaveBeenCalledWith(['inc-1'], 'P1'));
+  });
+
+  it('asks for a resolution note before bulk resolve and sends it after confirmation', async () => {
+    mocks.bulkResolve.mockResolvedValue({ success: true, count: 1 });
+    render(
+      <IncidentsListTable
+        incidents={incidents}
+        users={[{ id: 'user-1', name: 'Alex Doe', email: 'alex@example.com' }]}
+        canManageIncidents
+      />
+    );
+    fireEvent.click(screen.getByRole('checkbox', { name: /select incident/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Resolve' }));
+
+    const note = screen.getByLabelText('Resolution note for the selected incidents');
+    const submit = screen.getByRole('button', { name: 'Resolve' }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    fireEvent.change(note, { target: { value: '  Rolled back the bad deploy  ' } });
+    expect(submit.disabled).toBe(false);
+    fireEvent.click(submit);
+
+    expect(mocks.bulkResolve).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('button', { name: 'Apply' }));
+    await waitFor(() =>
+      expect(mocks.bulkResolve).toHaveBeenCalledWith(['inc-1'], 'Rolled back the bad deploy')
+    );
   });
 
   it('does nothing when the confirmation is cancelled', async () => {

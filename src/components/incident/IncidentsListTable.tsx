@@ -102,7 +102,7 @@ type IncidentsListTableProps = {
 };
 
 type IncidentStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
-type BulkActionMode = 'reassign' | 'priority' | 'snooze' | 'urgency' | 'status' | null;
+type BulkActionMode = 'resolve' | 'reassign' | 'priority' | 'snooze' | 'urgency' | 'status' | null;
 type BulkActionName =
   | 'acknowledge'
   | 'resolve'
@@ -357,6 +357,7 @@ export default function IncidentsListTable({
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<BulkActionMode>(null);
+  const [bulkResolutionNote, setBulkResolutionNote] = useState('');
   // A picked select value waits here for confirmation: a closed select changes on arrow keys.
   const [pendingBulkChange, setPendingBulkChange] = useState<{
     action: BulkActionName;
@@ -748,7 +749,8 @@ export default function IncidentsListTable({
         const ids = Array.from(selectedIds);
 
         if (action === 'acknowledge') result = await bulkAcknowledge(ids);
-        else if (action === 'resolve') result = await bulkResolve(ids);
+        else if (action === 'resolve' && typeof value === 'string')
+          result = await bulkResolve(ids, value);
         else if (action === 'reassign' && value) result = await bulkReassign(ids, value as string);
         else if (action === 'priority')
           result = await bulkUpdatePriority(ids, (value ?? '') as string);
@@ -767,6 +769,7 @@ export default function IncidentsListTable({
           showToast(`${result.count} incident(s) updated successfully`, 'success');
           setSelectedIds(new Set());
           setBulkAction(null);
+          setBulkResolutionNote('');
           setLastSelectedIndex(null);
           router.refresh();
         } else {
@@ -903,6 +906,41 @@ export default function IncidentsListTable({
                 </div>
               )}
 
+              {bulkAction === 'resolve' && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={bulkResolutionNote}
+                    onChange={e => setBulkResolutionNote(e.target.value)}
+                    maxLength={1000}
+                    disabled={isPending}
+                    placeholder="Resolution note (at least 10 characters)"
+                    aria-label="Resolution note for the selected incidents"
+                    className="h-9 w-72 rounded-md bg-white text-slate-900 px-2 text-sm shadow-xs"
+                  />
+                  <Button
+                    size="sm"
+                    className="bg-white text-primary hover:bg-white/90"
+                    disabled={isPending || bulkResolutionNote.trim().length < 10}
+                    onClick={() =>
+                      requestBulkChange('resolve', bulkResolutionNote.trim(), 'Resolve with this note')
+                    }
+                  >
+                    Resolve
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setBulkAction(null);
+                      setBulkResolutionNote('');
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              )}
+
               {bulkAction === 'snooze' && (
                 <div className="flex items-center gap-2">
                   <select
@@ -977,7 +1015,6 @@ export default function IncidentsListTable({
                     </option>
                     <option value="OPEN">TRIGGERED (OPEN)</option>
                     <option value="ACKNOWLEDGED">ACKNOWLEDGED</option>
-                    <option value="RESOLVED">RESOLVED</option>
                     <option value="SNOOZED">SNOOZED</option>
                     <option value="SUPPRESSED">SUPPRESSED</option>
                   </select>
@@ -1002,7 +1039,7 @@ export default function IncidentsListTable({
                     size="sm"
                     className="bg-white text-primary hover:bg-white/90"
                     disabled={isPending}
-                    onClick={() => handleBulkAction('resolve')}
+                    onClick={() => setBulkAction('resolve')}
                   >
                     Resolve
                   </Button>

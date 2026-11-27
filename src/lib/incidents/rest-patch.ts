@@ -10,6 +10,7 @@ import {
 } from '@/lib/incidents/lifecycle';
 import { enqueueIncidentUpdateSideEffects } from '@/lib/event-outbox';
 import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
+import { requireResolutionNote } from '@/lib/incidents/resolution-note';
 import { reconcileIncidentEngagementAfterUrgencyChange } from './engagement-reconciliation';
 
 export type RestIncidentStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
@@ -22,6 +23,8 @@ export type RestIncidentPatchInput = {
   description?: string | null;
   priority?: RestIncidentPriority | null;
   status?: RestIncidentStatus;
+  /** Required when this patch resolves the incident, as for every operator resolve. */
+  resolutionNote?: string;
   urgency?: RestIncidentUrgency;
   assigneeId?: string | null;
   hasAssigneeUpdate: boolean;
@@ -42,6 +45,7 @@ export async function applyRestIncidentPatch(input: RestIncidentPatchInput) {
         description: input.description !== undefined ? input.description : undefined,
         priority: input.priority !== undefined ? input.priority : undefined,
         status: input.status ?? null,
+        resolutionNote: input.resolutionNote,
         urgency: input.urgency ?? null,
         assigneeId: input.hasAssigneeUpdate ? (input.assigneeId ?? null) : undefined,
         hasAssigneeUpdate: input.hasAssigneeUpdate,
@@ -71,11 +75,13 @@ export async function applyRestIncidentPatch(input: RestIncidentPatchInput) {
 
         let lifecycle: IncidentLifecycleResult | null = null;
         if (input.status) {
+          const resolving = input.status === 'RESOLVED' && current.status !== 'RESOLVED';
           lifecycle = await applyIncidentLifecycleTargetStatus(tx, {
             incidentId: input.incidentId,
             status: input.status,
             source: 'REST_API',
             actor: input.actor,
+            ...(resolving ? { resolutionNote: requireResolutionNote(input.resolutionNote) } : {}),
           });
         }
 

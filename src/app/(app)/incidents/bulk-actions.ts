@@ -18,6 +18,7 @@ import {
 } from '@/lib/incidents/lifecycle';
 import { enqueueIncidentUpdateSideEffects } from '@/lib/event-outbox';
 import { isIncidentPriority } from '@/lib/incidents/priority';
+import { requireResolutionNote } from '@/lib/incidents/resolution-note';
 
 type BulkLifecycleStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
 
@@ -62,6 +63,7 @@ async function runBulkLifecycleCommand(
   extra: Partial<{
     snoozedUntil: Date;
     snoozeReason: string | null;
+    resolutionNote: string;
   }> = {}
 ): Promise<string[]> {
   const results = await executeIncidentLifecycleBatch(
@@ -126,7 +128,7 @@ export async function bulkAcknowledge(incidentIds: string[]) {
   }
 }
 
-export async function bulkResolve(incidentIds: string[]) {
+export async function bulkResolve(incidentIds: string[], resolution: string) {
   if (!incidentIds || incidentIds.length === 0) {
     return { success: false, error: 'No incidents selected' };
   }
@@ -137,13 +139,22 @@ export async function bulkResolve(incidentIds: string[]) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' };
   }
 
+  // The same mandatory note the single-incident resolve requires.
+  let resolutionNote: string;
+  try {
+    resolutionNote = requireResolutionNote(resolution);
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Invalid note' };
+  }
+
   try {
     const user = await getCurrentUser();
     const changedIds = await runBulkLifecycleCommand(
       incidentIds,
       'RESOLVE',
       { id: user.id, name: user.name ?? undefined },
-      `Bulk resolved${user ? ` by ${user.name}` : ''}`
+      `Bulk resolved${user ? ` by ${user.name}` : ''}`,
+      { resolutionNote }
     );
 
     revalidatePath('/incidents');
@@ -439,6 +450,9 @@ export async function bulkUpdateUrgency(incidentIds: string[], urgency: 'HIGH' |
 export async function bulkUpdateStatus(incidentIds: string[], status: BulkLifecycleStatus) {
   if (!incidentIds || incidentIds.length === 0) {
     return { success: false, error: 'No incidents selected' };
+  }
+  if (status === 'RESOLVED') {
+    return { success: false, error: 'Use Resolve to close incidents: it asks for a resolution note.' };
   }
 
   try {
