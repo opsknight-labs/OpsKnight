@@ -6,9 +6,23 @@ product_area: services
 audience: [administrator, responder, viewer]
 verification:
   level: source
-  verified_at: 2026-11-22
+  verified_at: 2026-11-27
   evidence:
     - src/lib/business-services/commands.ts
+    - src/lib/business-services/status-events.ts
+    - src/lib/business-services/status-page-drafts.ts
+    - src/lib/business-services/budget-alerts.ts
+    - src/lib/business-services/chat-channels.ts
+    - src/lib/business-services/scorecard.ts
+    - src/lib/business-services/sla-report.ts
+    - src/lib/business-services/changes.ts
+    - src/components/business-service/BulkEditBar.tsx
+    - src/components/business-service/DetailsPanel.tsx
+    - src/components/business-service/ImpactTimeline.tsx
+    - src/components/business-service/SlaReportMenu.tsx
+    - src/components/settings/ScorecardRubricPanel.tsx
+    - src/components/settings/ServiceReviewAdminPanel.tsx
+    - src/app/(app)/settings/notifications/page.tsx
     - src/lib/business-services/health.ts
     - src/lib/business-services/impacts.ts
     - src/lib/business-services/follower-notifications.ts
@@ -39,26 +53,57 @@ services". Everyone who can see services can open it, including stakeholders.
 
 - The header counts business services, how many are **impacted now** (degraded or worse) and how
   many sit in each tier. Select a count to filter by it.
-- Filter by name, health (**Impacted**, a single status, or **Operational**), tier and owner team.
-  Filters live in the URL, so a filtered view can be shared.
-- Each row shows the health and **since when**, the tier, the owner team, how many technical
-  services it has and how many of them are impacted, open incidents and followers. Switch to cards
+- Filter by name, health (**Impacted**, a single status, or **Operational**), tier, owner team,
+  **Needs** (no owner, no tier, no services) and **Attribute** (a custom attribute value, for
+  example `region=eu`). Filters and sort live in the URL, so a filtered view can be shared.
+- Rows are sorted worst health first. Select a column header to sort by name, health,
+  criticality, owner team, error budget or open incidents instead.
+- Each row shows the health and **since when**, the criticality, the owner team, the **Error
+  budget** left (for business services with an SLO), how many technical services it has and how
+  many are impacted, and open incidents. **Hygiene** and **Followers** columns are hidden by
+  default; turn columns on or off from **Columns** and pick **Row density** beside it. Switch to cards
   with the view toggle; the choice is remembered.
+- The list refreshes on its own and shows when it was last updated.
+
+### Edit several at once
+
+Responders and Admins can tick rows to open a bar at the bottom of the screen. It changes the
+**Owner** team, **Criticality**, **Lifecycle**, **SLO** target and **Tags** of the selected
+business services, and can **Mark reviewed today**. Select **Preview** to see what would change
+for each one, then **Apply to N**. Up to 100 business services change at a time.
 
 ## Read a business service overview
 
-Select a business service to open its overview. The header shows its health and since when, a
-plain-language list of **why** it has that status (for example "Payments API has an open
-high-urgency incident"), its owner, tier and links, and **Follow**. Responders and Admins also see
-**Edit**, which opens the edit form at `/services/business/<id>/edit`.
+Select a business service to open its overview. The header shows its health and since when, its
+tier, and four figures: **Owner**, **On call now**, **Error budget** and **Open incidents**. The
+header actions are **Show on graph**, **SLA report**, a copy-link button and **Follow**.
+Responders and Admins also see **Edit**, which opens the edit form at
+`/services/business/<id>/edit`.
 
-| Tab              | What it shows                                                                                                                                                           |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Overview**     | Uptime for 30 and 90 days, incidents, MTTA and MTTR for 30 days, a 30-day impact strip, and active then recent incidents. Stakeholders see incident counts, not titles. |
-| **Members**      | Each technical service with its own status and whether it is critical or non-critical (degraded at most), plus supporting business services.                            |
-| **Dependencies** | Business services this one depends on and those that rely on it, and confirmed upstream technical services of its members.                                              |
-| **Status pages** | The status pages that show it, under which name, in which layout, and any manual override.                                                                              |
-| **Followers**    | Followers, subscribed teams, and the [status dashboards](../stakeholders/status-dashboard) it appears on.                                                               |
+When it is impacted, the overview starts with **Why this status**: a plain-language list of what
+is driving it (for example "Payments API has an open high-urgency incident"), each linked to its
+open incident when there is one. A healthy business service skips this card.
+
+The **Details** panel beside the overview lists lifecycle, tags, links, custom attributes, the
+contact channel, when it was last reviewed, and a dependency summary. A contact channel that is a
+Slack channel ID or link, or a Microsoft Teams channel link, opens that channel.
+
+| Tab              | What it shows                                                                                                                                                                                                                             |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Overview**     | Active then recent incidents, uptime for 30 and 90 days, MTTA and MTTR with the change against the 30 days before, the impact chart, and customer impact. Stakeholders see incident counts, not titles.                                   |
+| **Members**      | Each technical service with its own status, worst first, and whether it is critical or non-critical (degraded at most), plus supporting business services. Responders and Admins can **Add services** here without opening the edit form. |
+| **Dependencies** | Business services this one depends on and those that rely on it, and confirmed upstream technical services of its members.                                                                                                                |
+| **Status pages** | The status pages that show it, under which name, in which layout, and any manual override.                                                                                                                                                |
+| **Followers**    | Followers, subscribed teams, and the [status dashboards](../stakeholders/status-dashboard) it appears on.                                                                                                                                 |
+| **Changes**      | Deploys, config, feature-flag and infrastructure changes recorded on its member services in the last 7 days, newest first.                                                                                                                |
+| **Activity**     | Its audit trail, newest first, 50 at a time. Only people who can read the audit log see this tab.                                                                                                                                         |
+
+The impact chart shows one column per day, coloured by how serious the impact was. Switch between
+**7**, **30** and **90** days. Select a day, or move with the arrow keys, to list that day's
+impacts.
+
+**SLA report** downloads this month so far or last month as CSV or PDF: uptime, severity-weighted
+uptime, whether the SLO was met, downtime and the incidents that impacted it. Months are in UTC.
 
 If live health cannot be loaded, the overview says **Health is unavailable right now** and still
 shows members, dependencies, status pages and followers.
@@ -75,6 +120,11 @@ Responders and Admins can create and edit business services.
    technical service can belong to several business services. You can only add services you can
    see; members you cannot see stay when you save.
 5. Optionally pick **followers** (see below), then select **Create business service**.
+
+The form also has **Contact channel** (see [Status changes in Slack and
+Teams](#status-changes-in-slack-and-teams)) and **Publish status page updates automatically** (see
+[Status page updates](#status-page-updates)). Quorum and dependency depth are under **Advanced:
+quorum and dependency depth**.
 
 Only Admins can delete a business service. Deleting it removes it from status pages and stops
 follower updates; its technical services are not changed. Status pages that show a business
@@ -97,7 +147,57 @@ is back to normal". "Impacts" means the same as on the incident: directly, throu
 a supporting business service, or marked by a responder. An incident a responder unmarked does
 not notify followers.
 
-Followers are never paged, and private incidents never notify them.
+Followers are never paged, and private incidents never notify them. Followers also get an in-app
+notification when the business service's status changes, for example "Checkout is now partial
+outage".
+
+## Status changes in Slack and Teams
+
+When a business service's status changes, OpsKnight posts it to:
+
+- its **Contact channel**, when that is a Slack channel (an ID such as `C0123ABCD`, a `#name` or a
+  channel link) or a Microsoft Teams "Get link to channel" URL; and
+- the Slack and Teams channels set up on its member services that its owner team owns.
+
+Up to 5 channels get each post. Slack or Teams must be connected. When you save a Slack channel ID
+or Teams link, OpsKnight checks the connected workspace can reach it. Changes to one business
+service are announced at least 3 minutes apart, so a status that flips back quickly is not
+announced. Anything else in **Contact
+channel**, such as an email address, is shown as text and gets no posts.
+
+## Status page updates
+
+When a business service becomes impacted, or recovers, OpsKnight writes an update on every
+enabled status page that shows it, using the name the page shows. By default it is a **draft**:
+an admin reviews it under the page's announcements (**Drafts**) and publishes it as usual.
+When it recovers, an impact draft nobody published is removed.
+
+Turn on **Publish status page updates automatically** in the business service form to publish
+these updates straight away and notify subscribers. It is off by default; keep it for business
+services whose impact is always public, such as Tier 0. Every draft and publish is in the audit
+log.
+
+## Error budget alerts
+
+Admins can turn on **Alert on error budget changes** in **Settings → Notifications**, under
+**Monthly service reviews**, then **Save**. It is off by default. Every 15 minutes OpsKnight
+checks each business service with an SLO target. When its budget turns at risk or is exhausted,
+it tells the owner, the owner team and followers in-app, by email and in the business service's
+Slack or Teams channels. A recovery is announced only after an hour without another alert.
+
+## Ownership reminders and scorecards
+
+Both are in **Settings → Notifications** and only admins can change them.
+
+- **Ownership reminders**, next to the service review settings, notify owners at most once a week
+  per issue when a review is overdue, the owner is inactive or the owning team has no one on
+  call. Off by default.
+- **Business service scorecards** set the rules every business service is scored against,
+  grouped into levels. A level is reached when its rules and every lower level's pass. Rules can
+  check a field, a custom attribute, the SLO state or a hygiene flag, and can be limited to
+  tiers or teams and given a deadline. Edit the **Rubric (JSON)** and **Save rubric**; **Load
+  default** restores the default: Bronze (has an owner, a tier and member services), Silver (has
+  an SLO target, links and a description) and Gold (reviewed in the last 180 days).
 
 ## Who sees what
 
@@ -131,15 +231,20 @@ See [Status page layouts](../status-pages/business-service-layouts).
 | Read, update, delete               | `GET/PATCH/DELETE /api/v2/business-services/{id}`                                |
 | Incidents that impacted it         | `GET /api/v2/business-services/{id}/incidents`                                   |
 | Impact timeline, uptime, MTTA/MTTR | `GET /api/v2/business-services/{id}/impact-timeline`                             |
+| Changes on member services         | `GET /api/v2/business-services/{id}/changes`                                     |
+| Monthly SLA report                 | `GET /api/v2/business-services/{id}/sla-report`                                  |
+| Scorecard                          | `GET /api/v2/business-services/{id}/scorecard`                                   |
+| Scorecard rubric                   | `GET/PUT /api/v2/settings/business-service-scorecard`                            |
 | Mark or unmark an incident impact  | `PUT/DELETE /api/v2/incidents/{id}/business-service-impacts/{businessServiceId}` |
 
 Every business service in a response carries `health` (status, since, reasons, open incident
-count). The list filters by `q`, `tier`, `status`, `ownerTeamId` and `impactedOnly`, and sorts by
+count). The list filters by `q`, `tier`, `status`, `ownerTeamId`, `impactedOnly` and `attribute`, and sorts by
 `newest` (default) or `name`. `memberServiceIds` and `followerUserIds` replace the whole set when
 present; `criticality`, `impactMinUrgency`, `impactMaxPriority`, `nonCriticalServiceIds` and
 `dependsOnBusinessServiceIds` change only when sent. Writes need an `Idempotency-Key`.
 
 Assistants read business services with the MCP tools `business_services_list`,
-`business_service_get`, `business_service_health` and `business_service_incidents`. Marking or
-unmarking impact through MCP needs a person to approve it; configuration changes stay in the web
-app and REST API.
+`business_service_get`, `business_service_health`, `business_service_incidents` and
+`business_service_changes`. Creating or updating a business service, and marking or unmarking
+impact, go through `operation_prepare` and need a person to approve them. Deleting a business
+service stays in the web app and REST API.

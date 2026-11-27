@@ -892,6 +892,7 @@ export type BusinessService = {
   ownerUser: { id: string; name: string } | null;
   escalationPolicy: { id: string; name: string } | null;
   contactChannel: string | null;
+  autoPublishStatusUpdates: boolean;
   tags: Array<string>;
   environment: string | null;
   lifecycle: 'ACTIVE' | 'BETA' | 'DEPRECATED' | 'RETIRED';
@@ -1044,6 +1045,7 @@ export type BusinessServiceImportResult = {
 export type ServiceReviewSettings = {
   enabled: boolean;
   freezeWarningEnabled: boolean;
+  errorBudgetAlertsEnabled: boolean;
   dayOfMonth: number;
   hour: number;
   timeZone: string;
@@ -1123,6 +1125,91 @@ export type StakeholderNotification = {
   businessServices: Array<{ id: string; name: string }>;
   recipientCount: number;
   emailCount: number;
+};
+export type BusinessServiceScorecardRubric = {
+  levels: Array<{ id: string; label: string }>;
+  rules: Array<{
+    id: string;
+    label: string;
+    check:
+      | {
+          type: 'field';
+          field:
+            | 'owner'
+            | 'tier'
+            | 'members'
+            | 'slo'
+            | 'links'
+            | 'description'
+            | 'reviewed'
+            | 'escalationPolicy'
+            | 'contactChannel'
+            | 'statusPageSummary';
+          maxAgeDays?: number;
+        }
+      | { type: 'attribute'; key: string; equals?: string | number | boolean }
+      | { type: 'slo'; state: 'OK' | 'NOT_BREACHED' }
+      | { type: 'hygiene'; flag: 'REVIEW_OVERDUE' | 'OWNER_INACTIVE' | 'TEAM_NO_ONCALL' };
+    level?: string;
+    teamIds?: Array<string>;
+    tiers?: Array<'TIER_0' | 'TIER_1' | 'TIER_2' | 'TIER_3'>;
+    deadline?: string;
+  }>;
+};
+export type BusinessServiceScorecard = {
+  businessServiceId: string;
+  checks: Array<{
+    id: string;
+    label: string;
+    passed: boolean;
+    level: string | null;
+    deadline: string | null;
+    overdue: boolean;
+  }>;
+  score: number;
+  level: null | { id: string; label: string };
+  basics: { owner: boolean; tier: boolean; members: boolean };
+  needsAttention: boolean;
+};
+export type BusinessServiceChange = {
+  id: string;
+  serviceId: string;
+  serviceName: string;
+  source: string;
+  kind: 'DEPLOY' | 'CONFIG' | 'FEATURE_FLAG' | 'INFRA';
+  summary: string;
+  version: string | null;
+  url: string | null;
+  occurredAt: string;
+  riskScore: number | null;
+};
+export type BusinessServiceSlaReport = {
+  businessServiceId: string;
+  name: string;
+  month: string;
+  from: string;
+  to: string;
+  monthToDate: boolean;
+  uptimePercent: number;
+  weightedUptimePercent: number;
+  downtimeMinutes: number;
+  weightedDowntimeMinutes: number;
+  sloTarget: number | null;
+  sloMet: boolean | null;
+  incidentCount: number;
+  mttaMinutes: number | null;
+  mttrMinutes: number | null;
+  incidents: Array<{
+    id: string;
+    title: string;
+    urgency: string | null;
+    source: 'DIRECT' | 'DEPENDENCY' | 'NESTED' | 'MANUAL';
+    impactStartedAt: string;
+    impactEndedAt: string | null;
+    impactMinutes: number;
+  }>;
+  estimatedCostCents?: number | null;
+  currency?: string;
 };
 export type DependencyGraphAt = {
   at: string;
@@ -3451,6 +3538,7 @@ export interface OperationRequests {
       status?: string;
       ownerTeamId?: string;
       impactedOnly?: 'true' | 'false';
+      attribute?: string;
       sort?: 'newest' | 'name';
     };
   };
@@ -3489,6 +3577,7 @@ export interface OperationRequests {
       customerReportThreshold?: number | null;
       customerReportWindowMinutes?: number | null;
       reviewIntervalDays?: number | null;
+      autoPublishStatusUpdates?: boolean;
     };
   };
   getBusinessService: { params: { id: string } };
@@ -3528,6 +3617,7 @@ export interface OperationRequests {
       customerReportThreshold?: number | null;
       customerReportWindowMinutes?: number | null;
       reviewIntervalDays?: number | null;
+      autoPublishStatusUpdates?: boolean;
     };
   };
   deleteBusinessService: { params: { id: string }; headers: { 'Idempotency-Key': string } };
@@ -3645,6 +3735,7 @@ export interface OperationRequests {
       customerReportThreshold?: number | null;
       customerReportWindowMinutes?: number | null;
       reviewIntervalDays?: number | null;
+      autoPublishStatusUpdates?: boolean;
     };
   };
   getBusinessServiceGraph: { params: { id: string }; query?: { hops?: number } };
@@ -3743,6 +3834,7 @@ export interface OperationRequests {
     body: {
       enabled?: boolean;
       freezeWarningEnabled?: boolean;
+      errorBudgetAlertsEnabled?: boolean;
       dayOfMonth?: number;
       hour?: number;
       timeZone?: string;
@@ -3770,6 +3862,46 @@ export interface OperationRequests {
       businessServiceIds?: Array<string>;
     };
   };
+  getBusinessServiceScorecardRubric: Record<string, never>;
+  updateBusinessServiceScorecardRubric: {
+    headers?: { 'Idempotency-Key'?: string };
+    body: {
+      levels: Array<{ id: string; label: string }>;
+      rules: Array<{
+        id: string;
+        label: string;
+        check:
+          | {
+              type: 'field';
+              field:
+                | 'owner'
+                | 'tier'
+                | 'members'
+                | 'slo'
+                | 'links'
+                | 'description'
+                | 'reviewed'
+                | 'escalationPolicy'
+                | 'contactChannel'
+                | 'statusPageSummary';
+              maxAgeDays?: number;
+            }
+          | { type: 'attribute'; key: string; equals?: string | number | boolean }
+          | { type: 'slo'; state: 'OK' | 'NOT_BREACHED' }
+          | { type: 'hygiene'; flag: 'REVIEW_OVERDUE' | 'OWNER_INACTIVE' | 'TEAM_NO_ONCALL' };
+        level?: string;
+        teamIds?: Array<string>;
+        tiers?: Array<'TIER_0' | 'TIER_1' | 'TIER_2' | 'TIER_3'>;
+        deadline?: string;
+      }>;
+    };
+  };
+  getBusinessServiceScorecard: { params: { id: string } };
+  listBusinessServiceChanges: {
+    params: { id: string };
+    query?: { from?: string; to?: string; limit?: number };
+  };
+  getBusinessServiceSlaReport: { params: { id: string }; query?: { month?: string } };
   listStatusPageServices: { params: { id: string }; query?: { limit?: number; cursor?: string } };
   setStatusPageServices: {
     params: { id: string };
@@ -5632,6 +5764,32 @@ export interface OperationResponses {
   } & Record<string, unknown>;
   notifyIncidentStakeholders: {
     data: StakeholderNotification;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  getBusinessServiceScorecardRubric: {
+    data: BusinessServiceScorecardRubric;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  updateBusinessServiceScorecardRubric: {
+    data: BusinessServiceScorecardRubric;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  getBusinessServiceScorecard: {
+    data: BusinessServiceScorecard;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  listBusinessServiceChanges: {
+    data: Array<BusinessServiceChange>;
+    pagination?: Pagination;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  getBusinessServiceSlaReport: {
+    data: BusinessServiceSlaReport;
     requestId: string;
     timestamp: string;
   } & Record<string, unknown>;
@@ -7858,6 +8016,46 @@ export const OPERATIONS = {
     idempotency: 'supported',
     requiredHeaders: [],
     bodyRequired: true,
+  },
+  getBusinessServiceScorecardRubric: {
+    method: 'GET',
+    path: '/settings/business-service-scorecard',
+    kind: 'item',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  updateBusinessServiceScorecardRubric: {
+    method: 'PUT',
+    path: '/settings/business-service-scorecard',
+    kind: 'item',
+    idempotency: 'supported',
+    requiredHeaders: [],
+    bodyRequired: true,
+  },
+  getBusinessServiceScorecard: {
+    method: 'GET',
+    path: '/business-services/{id}/scorecard',
+    kind: 'item',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  listBusinessServiceChanges: {
+    method: 'GET',
+    path: '/business-services/{id}/changes',
+    kind: 'list',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  getBusinessServiceSlaReport: {
+    method: 'GET',
+    path: '/business-services/{id}/sla-report',
+    kind: 'item',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
   },
   listStatusPageServices: {
     method: 'GET',

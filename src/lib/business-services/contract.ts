@@ -78,12 +78,22 @@ export type BusinessServiceListFilter = {
   impactedOnly?: boolean;
   /** Scorecard gap: attention (any basic missing), no-owner, no-tier or no-members. */
   needs?: CatalogNeed;
+  /** Custom attribute equals a value ("true"/"false" and numbers also match their typed form). */
+  attribute?: { key: string; value: string };
 };
+
+/**
+ * Derived sorts run in memory over the matching set, against the health snapshot: `health` is worst
+ * first by default, then tier and name; `budget` is least error budget left first (no SLO last).
+ */
+export type BusinessServiceDerivedSort = 'health' | 'tier' | 'owner' | 'incidents' | 'budget';
 
 export type BusinessServiceListParams = {
   filter?: BusinessServiceListFilter;
-  /** name (default) or newest first. */
-  sort?: 'name' | 'newest';
+  /** name (default) or newest first, or a derived sort. */
+  sort?: 'name' | 'newest' | BusinessServiceDerivedSort;
+  /** Direction of a derived sort; each has its own natural default (health: desc, others: asc). */
+  direction?: 'asc' | 'desc';
   /** Opaque keyset cursor from the previous page. */
   cursor?: string | null;
   limit?: number;

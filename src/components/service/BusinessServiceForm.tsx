@@ -1,20 +1,15 @@
 /* eslint-disable security/detect-object-injection -- keys are our own field ids and Zod issue paths, never free-form input */
 'use client';
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  useTransition,
-  type ReactNode,
-} from 'react';
+import { createContext, useContext, useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Check, Loader2, Search, Trash2 } from 'lucide-react';
+import { Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
+import { Switch } from '@/components/ui/shadcn/switch';
+import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import {
   Select,
   SelectContent,
@@ -25,6 +20,7 @@ import {
 import { notify } from '@/lib/toast';
 import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 import { cn } from '@/lib/utils';
+import { toneClasses } from '@/components/patterns/status-tone';
 import { linksFromLines } from '@/lib/business-services/links';
 import { attributesFromLines } from '@/lib/business-services/attributes';
 import { moneyToCents } from '@/lib/business-services/impact-cost';
@@ -32,11 +28,12 @@ import { ImpactPreviewNote, TeamBulkAdd } from './BusinessServiceFormExtras';
 import {
   createBusinessServiceAction,
   deleteBusinessServiceAction,
-  searchBusinessServiceOptionsAction,
   updateBusinessServiceAction,
 } from '@/app/(app)/services/business/actions';
 
-type Option = { id: string; name: string; hint?: string | null };
+import { MultiPicker, type Option } from './MultiPicker';
+import { LinkRowsField, TagChipsField, UnsavedChangesGuard } from './BusinessServiceFormFields';
+import { LIFECYCLE_LABEL } from '@/components/business-service/HealthBadge';
 
 export type BusinessServiceFormValue = {
   id?: string;
@@ -44,7 +41,7 @@ export type BusinessServiceFormValue = {
   description: string;
   /** Shown on status pages instead of the description. */
   statusPageSummary: string;
-  /** One "Label | https://url" per line. */
+  /** One "Label | https://url" per line; edited as rows. */
   linksText: string;
   tier: string;
   ownerTeamId: string;
@@ -86,6 +83,8 @@ export type BusinessServiceFormValue = {
   customerReportThreshold?: string;
   customerReportWindowMinutes?: string;
   reviewIntervalDays?: string;
+  /** Publish status page updates for this business service without waiting for approval. */
+  autoPublishStatusUpdates?: boolean;
 };
 
 const NO_TEAM = '__none__';
@@ -137,142 +136,18 @@ const EMPTY: BusinessServiceFormValue = {
   customerReportThreshold: '',
   customerReportWindowMinutes: '',
   reviewIntervalDays: '',
+  autoPublishStatusUpdates: false,
 };
 const LIFECYCLES = ['ACTIVE', 'BETA', 'DEPRECATED', 'RETIRED'] as const;
+const ADVANCED_IDS = ['bs-quorum-partial', 'bs-quorum-major', 'bs-hops'];
+const SECTIONS = [
+  ['#bs-sec-basics', 'Basics'],
+  ['#bs-sec-ownership', 'Ownership and SLO'],
+  ['#bs-sec-customers', 'Customer impact'],
+  ['#bs-sec-impact', 'What counts as impact'],
+  ['#bs-sec-people', 'Followers'],
+] as const;
 const pct = (text: string) => (text.trim() === '' ? null : Number(text));
-
-/** Pick many from a searchable list; selected rows stay on top so the choice is visible. */
-function MultiPicker({
-  label,
-  description,
-  options: initialOptions,
-  kind,
-  value,
-  onChange,
-  emptyText,
-  rowAddon,
-}: {
-  label: string;
-  description: string;
-  options: Option[];
-  /** Searches the server as the user types; the initial list is only the first page. Omit to filter `options` locally. */
-  kind?: 'services' | 'users';
-  value: string[];
-  onChange: (next: string[]) => void;
-  emptyText: string;
-  /** Extra control beside a selected row (outside its label, so controls never nest). */
-  rowAddon?: (option: Option) => ReactNode;
-}) {
-  const [query, setQuery] = useState('');
-  const [options, setOptions] = useState(initialOptions);
-  const selected = new Set(value);
-  useEffect(() => {
-    const needle = query.trim();
-    if (!needle || !kind) return;
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      searchBusinessServiceOptionsAction(kind, needle)
-        .then(found => {
-          if (cancelled) return;
-          setOptions(current => {
-            const known = new Set(current.map(option => option.id));
-            return [...current, ...found.filter(option => !known.has(option.id))];
-          });
-        })
-        .catch(() => undefined);
-    }, 250);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [kind, query]);
-  const visible = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return options
-      .filter(
-        option =>
-          !needle ||
-          option.name.toLowerCase().includes(needle) ||
-          !!option.hint?.toLowerCase().includes(needle)
-      )
-      .sort((a, b) => Number(selected.has(b.id)) - Number(selected.has(a.id)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-sort on selection is intentional
-  }, [options, query, value]);
-  const id = label.toLowerCase().replace(/\s+/g, '-');
-  return (
-    <fieldset className="space-y-2">
-      <legend className="text-sm font-semibold text-foreground">
-        {label}{' '}
-        <span className="font-normal text-muted-foreground tabular-nums">({value.length})</span>
-      </legend>
-      <p className="text-xs text-muted-foreground">{description}</p>
-      <div className="relative">
-        <Search
-          className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
-          aria-hidden
-        />
-        <Input
-          id={`${id}-search`}
-          value={query}
-          onChange={event => setQuery(event.target.value)}
-          placeholder={`Search ${label.toLowerCase()}`}
-          aria-label={`Search ${label.toLowerCase()}`}
-          className="h-9 pl-8 text-sm"
-        />
-      </div>
-      <ul
-        className="max-h-64 overflow-y-auto rounded-lg border border-border divide-y divide-border"
-        aria-label={label}
-      >
-        {visible.length === 0 ? (
-          <li className="px-3 py-6 text-center text-xs text-muted-foreground">{emptyText}</li>
-        ) : (
-          visible.map(option => {
-            const checked = selected.has(option.id);
-            return (
-              <li key={option.id} className={cn('flex items-center', checked && 'bg-muted/30')}>
-                <label
-                  className={cn(
-                    'flex min-h-10 min-w-0 flex-1 cursor-pointer items-center gap-3 px-3 py-2 text-sm transition-colors hover:bg-muted/50'
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    className="peer sr-only"
-                    checked={checked}
-                    onChange={() =>
-                      onChange(
-                        checked ? value.filter(item => item !== option.id) : [...value, option.id]
-                      )
-                    }
-                  />
-                  <span
-                    aria-hidden
-                    className={cn(
-                      'flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-ring',
-                      checked
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-input bg-background'
-                    )}
-                  >
-                    {checked && <Check className="h-3 w-3" strokeWidth={3} />}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate font-medium">{option.name}</span>
-                  {option.hint && (
-                    <span className="shrink-0 truncate text-xs text-muted-foreground">
-                      {option.hint}
-                    </span>
-                  )}
-                </label>
-                {checked && rowAddon && <span className="shrink-0 pr-2">{rowAddon(option)}</span>}
-              </li>
-            );
-          })
-        )}
-      </ul>
-    </fieldset>
-  );
-}
 
 type FormErrors = { errors: Record<string, string>; clear: (id: string) => void };
 const FormErrorsContext = createContext<FormErrors>({ errors: {}, clear: () => undefined });
@@ -331,10 +206,7 @@ export function mapServerErrors(
 function FieldError({ id }: { id: string }) {
   const message = useContext(FormErrorsContext).errors[id];
   return message ? (
-    <p
-      id={`${id}-error`}
-      className="text-xs font-medium text-status-critical-deep dark:text-rose-300"
-    >
+    <p id={`${id}-error`} className={cn('text-xs font-medium', toneClasses('critical').text)}>
       {message}
     </p>
   ) : null;
@@ -447,6 +319,14 @@ export default function BusinessServiceForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serviceOptions, setServiceOptions] = useState(services);
   const [isPending, startTransition] = useTransition();
+  const [saved, setSaved] = useState(false);
+  const [baseline] = useState(() => JSON.stringify(initial ?? EMPTY));
+  const dirty = !saved && JSON.stringify(value) !== baseline;
+  const [advancedOpen, setAdvancedOpen] = useState(
+    () =>
+      Boolean(initial?.quorumPartialPct || initial?.quorumMajorPct) ||
+      (initial?.dependencyHopDepth ?? '3') !== '3'
+  );
   const set = <K extends keyof BusinessServiceFormValue>(
     key: K,
     next: BusinessServiceFormValue[K]
@@ -460,6 +340,8 @@ export default function BusinessServiceForm({
     });
   const fail = (found: Record<string, string>, message?: string) => {
     setErrors(found);
+    // A field inside the closed Advanced disclosure must be visible before it can take focus.
+    if (ADVANCED_IDS.some(id => id in found)) setAdvancedOpen(true);
     setError(message ?? null);
     // After the summary renders, move focus to the first invalid field in page order.
     requestAnimationFrame(() => {
@@ -486,8 +368,7 @@ export default function BusinessServiceForm({
     if (!value.name.trim()) found['bs-name'] = 'Give the business service a name.';
     const links = linksFromLines(value.linksText);
     if (!links) {
-      found['bs-links'] =
-        'Links need a label and an https URL, one per line ("Runbook | https://..."), up to 10.';
+      found['bs-links'] = 'Each link needs a label and an https URL, up to 10.';
     }
     const attributes = attributesFromLines(value.attributesText);
     if (!attributes) {
@@ -541,6 +422,7 @@ export default function BusinessServiceForm({
       ownerUserId: value.ownerUserId || null,
       escalationPolicyId: value.escalationPolicyId || null,
       contactChannel: value.contactChannel.trim() || null,
+      autoPublishStatusUpdates: value.autoPublishStatusUpdates ?? false,
       environment: value.environment.trim() || null,
       lifecycle: value.lifecycle,
       tags: value.tagsText
@@ -580,6 +462,7 @@ export default function BusinessServiceForm({
         return;
       }
       notify.success(value.id ? 'Business service saved' : 'Business service created');
+      setSaved(true);
       router.push(`/services/business/${result.id}`);
       router.refresh();
     });
@@ -590,6 +473,7 @@ export default function BusinessServiceForm({
     const result = await deleteBusinessServiceAction(value.id);
     if (!result.ok) return { error: result.error };
     notify.success('Business service deleted');
+    setSaved(true);
     router.push('/services/business');
     router.refresh();
   };
@@ -603,42 +487,25 @@ export default function BusinessServiceForm({
         >
           Skip to save
         </a>
-        <nav aria-label="Form sections" className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-          <a
-            href="#bs-sec-basics"
-            className="font-medium text-muted-foreground hover:text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            Basics
-          </a>
-          <a
-            href="#bs-sec-ownership"
-            className="font-medium text-muted-foreground hover:text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            Ownership and SLO
-          </a>
-          <a
-            href="#bs-sec-customers"
-            className="font-medium text-muted-foreground hover:text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            Customer impact
-          </a>
-          <a
-            href="#bs-sec-impact"
-            className="font-medium text-muted-foreground hover:text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            What counts as impact
-          </a>
-          <a
-            href="#bs-sec-people"
-            className="font-medium text-muted-foreground hover:text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            Followers
-          </a>
+        <UnsavedChangesGuard dirty={dirty && !isPending} />
+        <nav
+          aria-label="Form sections"
+          className="sticky top-0 z-20 -mx-1 flex flex-wrap gap-x-4 gap-y-1 border-b bg-background/95 px-1 py-2 text-sm backdrop-blur supports-[backdrop-filter]:bg-background/80"
+        >
+          {SECTIONS.map(([href, label]) => (
+            <a
+              key={href}
+              href={href}
+              className="font-medium text-muted-foreground hover:text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {label}
+            </a>
+          ))}
         </nav>
         {(error || Object.keys(errors).length > 0) && (
           <div
             role="alert"
-            className="rounded-lg border border-status-critical-border/30 bg-status-critical-soft px-3 py-2 text-sm text-status-critical-deep dark:bg-status-critical/15 dark:text-rose-300"
+            className={cn('rounded-lg border px-3 py-2 text-sm', toneClasses('critical').soft)}
           >
             <p className="font-medium">{error}</p>
             {Object.keys(errors).length > 0 && (
@@ -656,9 +523,18 @@ export default function BusinessServiceForm({
         )}
         <section
           id="bs-sec-basics"
-          aria-label="Basics"
+          aria-labelledby="bs-basics-heading"
           className="grid scroll-mt-20 gap-6 rounded-xl border border-border bg-card p-5 text-card-foreground sm:p-6 lg:grid-cols-2"
         >
+          <div className="lg:col-span-2">
+            <h2 id="bs-basics-heading" className="text-sm font-semibold">
+              Basics
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              What it is, how critical it is, who owns it and which technical services it is made
+              of.
+            </p>
+          </div>
           <div className="space-y-4">
             <div className="space-y-1.5">
               <label htmlFor="bs-name" className="text-sm font-semibold">
@@ -712,21 +588,18 @@ export default function BusinessServiceForm({
               <label htmlFor="bs-links" className="text-sm font-semibold">
                 Links <span className="font-normal text-muted-foreground">(optional)</span>
               </label>
-              <Textarea
+              <LinkRowsField
                 id="bs-links"
-                value={value.linksText}
-                onChange={event => {
+                text={value.linksText}
+                onChange={next => {
                   clear('bs-links');
-                  set('linksText', event.target.value);
+                  set('linksText', next);
                 }}
-                placeholder="Runbook | https://wiki.example.com/checkout"
-                rows={3}
-                {...errorProps(errors, 'bs-links')}
+                invalid={Boolean(errors['bs-links'])}
+                describedBy={errors['bs-links'] ? 'bs-links-error' : undefined}
               />
               <FieldError id="bs-links" />
-              <p className="text-xs text-muted-foreground">
-                One per line as Label | https URL. Runbooks, dashboards, docs.
-              </p>
+              <p className="text-xs text-muted-foreground">Runbooks, dashboards, docs.</p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
@@ -791,27 +664,31 @@ export default function BusinessServiceForm({
               rowAddon={option => {
                 const critical = !value.nonCriticalServiceIds.includes(option.id);
                 return (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    aria-pressed={critical}
-                    aria-label={`Critical: ${option.name}`}
-                    className={cn(
-                      'h-7 px-2 text-xs',
-                      !critical && 'text-muted-foreground line-through'
-                    )}
-                    onClick={() =>
-                      set(
-                        'nonCriticalServiceIds',
-                        critical
-                          ? [...value.nonCriticalServiceIds, option.id]
-                          : value.nonCriticalServiceIds.filter(serviceId => serviceId !== option.id)
-                      )
-                    }
-                  >
-                    Critical
-                  </Button>
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      aria-hidden
+                      className={cn(
+                        'w-[4.75rem] text-right text-xs',
+                        critical ? 'font-medium text-foreground' : 'text-muted-foreground'
+                      )}
+                    >
+                      {critical ? 'Critical' : 'Non-critical'}
+                    </span>
+                    <Switch
+                      checked={critical}
+                      aria-label={`${option.name} is critical (can take this business service down)`}
+                      onCheckedChange={next =>
+                        set(
+                          'nonCriticalServiceIds',
+                          next
+                            ? value.nonCriticalServiceIds.filter(
+                                serviceId => serviceId !== option.id
+                              )
+                            : [...value.nonCriticalServiceIds, option.id]
+                        )
+                      }
+                    />
+                  </span>
                 );
               }}
             />
@@ -893,19 +770,26 @@ export default function BusinessServiceForm({
               <PickField
                 id="bs-lifecycle"
                 label="Lifecycle"
-                none="Active"
+                none={LIFECYCLE_LABEL.ACTIVE}
                 value={value.lifecycle === 'ACTIVE' ? '' : value.lifecycle}
-                options={LIFECYCLES.filter(l => l !== 'ACTIVE').map(l => ({ id: l, name: l }))}
+                options={LIFECYCLES.filter(l => l !== 'ACTIVE').map(l => ({
+                  id: l,
+                  name: LIFECYCLE_LABEL[l],
+                }))}
                 onChange={next => set('lifecycle', (next || 'ACTIVE') as typeof value.lifecycle)}
               />
             </div>
-            <TextField
-              id="bs-tags"
-              label="Tags (comma separated)"
-              value={value.tagsText}
-              placeholder="payments, pci"
-              onChange={next => set('tagsText', next)}
-            />
+            <div className="space-y-1.5">
+              <label htmlFor="bs-tags" className="text-sm font-semibold">
+                Tags
+              </label>
+              <TagChipsField
+                id="bs-tags"
+                text={value.tagsText}
+                onChange={next => set('tagsText', next)}
+              />
+              <p className="text-xs text-muted-foreground">Press Enter or a comma to add a tag.</p>
+            </div>
             <div className="space-y-1.5">
               <label htmlFor="bs-attributes" className="text-sm font-semibold">
                 Custom attributes
@@ -924,14 +808,14 @@ export default function BusinessServiceForm({
               <FieldError id="bs-attributes" />
               <p className="text-xs text-muted-foreground">One key = value per line, up to 20.</p>
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+            <div className="flex items-center gap-2 text-sm">
+              <Checkbox
+                id="bs-reviewed"
                 checked={value.markReviewed}
-                onChange={event => set('markReviewed', event.target.checked)}
+                onCheckedChange={checked => set('markReviewed', checked === true)}
               />
-              Mark as reviewed today
-            </label>
+              <label htmlFor="bs-reviewed">Mark as reviewed today</label>
+            </div>
           </div>
         </section>
 
@@ -970,7 +854,7 @@ export default function BusinessServiceForm({
             </div>
             <TextField
               id="bs-customers"
-              label="Customers exposed"
+              label="Total customers"
               value={value.customersTotal ?? ''}
               placeholder="250000"
               inputMode="numeric"
@@ -1078,36 +962,65 @@ export default function BusinessServiceForm({
                 </Select>
               </div>
             </div>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <TextField
-                id="bs-quorum-partial"
-                label="Partial at (% down)"
-                value={value.quorumPartialPct}
-                placeholder="50"
-                inputMode="numeric"
-                onChange={next => set('quorumPartialPct', next)}
-              />
-              <TextField
-                id="bs-quorum-major"
-                label="Major at (% down)"
-                value={value.quorumMajorPct}
-                placeholder="100"
-                inputMode="numeric"
-                onChange={next => set('quorumMajorPct', next)}
-              />
-              <TextField
-                id="bs-hops"
-                label="Dependency hops (1-5)"
-                value={value.dependencyHopDepth}
-                inputMode="numeric"
-                onChange={next => set('dependencyHopDepth', next)}
+            <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
+              <div className="space-y-0.5">
+                <label htmlFor="bs-auto-publish" className="text-sm font-semibold">
+                  Publish status page updates automatically
+                </label>
+                <p id="bs-auto-publish-hint" className="text-xs text-muted-foreground">
+                  When this business service becomes impacted or recovers, OpsKnight drafts an
+                  update on every status page that shows it. Turn this on to publish those updates
+                  without waiting for approval. Best kept for Tier 0 services.
+                </p>
+              </div>
+              <Switch
+                id="bs-auto-publish"
+                aria-describedby="bs-auto-publish-hint"
+                checked={value.autoPublishStatusUpdates ?? false}
+                onCheckedChange={next => set('autoPublishStatusUpdates', next)}
               />
             </div>
-            <p className="text-xs text-muted-foreground">
-              Quorum (optional): status follows the share of critical services impacted instead of
-              the worst one. Hops: how far down its services&apos; dependencies an incident still
-              counts.
-            </p>
+            <details
+              open={advancedOpen}
+              onToggle={event => setAdvancedOpen(event.currentTarget.open)}
+              className="rounded-lg border px-3 py-2"
+            >
+              <summary className="cursor-pointer select-none text-sm font-semibold">
+                Advanced: quorum and dependency depth
+              </summary>
+              <div className="mt-3 space-y-3">
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <TextField
+                    id="bs-quorum-partial"
+                    label="Partial at (% down)"
+                    value={value.quorumPartialPct}
+                    placeholder="50"
+                    inputMode="numeric"
+                    onChange={next => set('quorumPartialPct', next)}
+                  />
+                  <TextField
+                    id="bs-quorum-major"
+                    label="Major at (% down)"
+                    value={value.quorumMajorPct}
+                    placeholder="100"
+                    inputMode="numeric"
+                    onChange={next => set('quorumMajorPct', next)}
+                  />
+                  <TextField
+                    id="bs-hops"
+                    label="Dependency hops (1-5)"
+                    value={value.dependencyHopDepth}
+                    inputMode="numeric"
+                    onChange={next => set('dependencyHopDepth', next)}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Quorum (optional): status follows the share of critical services impacted instead
+                  of the worst one. Hops: how far down its services&apos; dependencies an incident
+                  still counts.
+                </p>
+              </div>
+            </details>
             <ImpactPreviewNote
               draft={{
                 criticality: value.criticality || null,
@@ -1153,47 +1066,63 @@ export default function BusinessServiceForm({
           </div>
         </section>
 
+        {canDelete && value.id && (
+          <section
+            aria-labelledby="bs-danger-heading"
+            className={cn('rounded-xl border p-5 sm:p-6', toneClasses('critical').soft)}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h2 id="bs-danger-heading" className="text-sm font-semibold">
+                  Danger zone
+                </h2>
+                <p className="text-xs">
+                  Deleting removes it from status pages and stops updates to its followers. Its
+                  technical services are not changed.
+                </p>
+              </div>
+              <DeleteConfirmDialog
+                title={`Delete ${value.name}?`}
+                description="Status pages stop showing it and its followers stop getting updates. Its technical services are not changed."
+                requireMatchText={value.name}
+                confirmText="Delete business service"
+                onConfirm={remove}
+                disabled={isPending}
+                trigger={
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    disabled={isPending}
+                    className="gap-1.5"
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden />
+                    Delete business service
+                  </Button>
+                }
+              />
+            </div>
+          </section>
+        )}
+
         <div
           id="bs-actions"
           tabIndex={-1}
-          className="flex flex-col-reverse gap-3 focus:outline-hidden sm:flex-row sm:items-center sm:justify-between"
+          className="sticky bottom-0 z-20 -mx-1 flex flex-wrap items-center justify-end gap-2 border-t bg-background/95 px-1 py-3 backdrop-blur focus:outline-hidden supports-[backdrop-filter]:bg-background/80"
         >
-          {canDelete && value.id ? (
-            <DeleteConfirmDialog
-              title={`Delete ${value.name}?`}
-              description="Status pages stop showing it and its followers stop getting updates. Its technical services are not changed."
-              requireMatchText={value.name}
-              confirmText="Delete business service"
-              onConfirm={remove}
-              disabled={isPending}
-              trigger={
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={isPending}
-                  className="gap-1.5 text-status-critical-deep hover:bg-status-critical-soft dark:text-rose-300"
-                >
-                  <Trash2 className="h-4 w-4" aria-hidden />
-                  Delete
-                </Button>
-              }
-            />
-          ) : (
-            <span />
+          {dirty && (
+            <p className="mr-auto text-xs text-muted-foreground" role="status">
+              Unsaved changes
+            </p>
           )}
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => router.push('/services/business')}
-            >
+          <Button asChild variant="outline">
+            <Link href={value.id ? `/services/business/${value.id}` : '/services/business'}>
               Cancel
-            </Button>
-            <Button type="submit" disabled={isPending} className="gap-1.5">
-              {isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-              {value.id ? 'Save changes' : 'Create business service'}
-            </Button>
-          </div>
+            </Link>
+          </Button>
+          <Button type="submit" disabled={isPending} className="gap-1.5">
+            {isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+            {value.id ? 'Save changes' : 'Create business service'}
+          </Button>
         </div>
       </form>
     </FormErrorsContext.Provider>

@@ -44,7 +44,14 @@ export function concealHiddenGroupMembers(
     ...snapshot,
     services,
     businessServices: groups.map(group =>
-      group.showMembers === false ? { ...group, memberServiceIds: [] } : group
+      group.showMembers === false
+        ? {
+            ...group,
+            // The row still says "N services" after its member list is emptied.
+            memberCount: group.memberCount ?? group.memberServiceIds.length,
+            memberServiceIds: [],
+          }
+        : group
     ),
     regions: snapshot.regions ? aggregatePublicRegions(services) : snapshot.regions,
     incidents: snapshot.incidents.map(incident => {

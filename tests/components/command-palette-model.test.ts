@@ -74,6 +74,11 @@ describe('groupResults', () => {
       ['Runbooks', ['1']],
     ]);
   });
+
+  it('lists business services right after services', () => {
+    const groups = groupResults([result('businessService', 'b'), result('service', 's')]);
+    expect(groups.map(g => g.label)).toEqual(['Services', 'Business services']);
+  });
 });
 
 describe('recent items', () => {

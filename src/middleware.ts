@@ -179,7 +179,9 @@ const STATUS_API_EXACT_POST = new Set([
 ]);
 
 const STATUS_SLUG_API_REGEX =
-  /^\/api\/status\/[a-z0-9_-]+(\/(history|rss|uptime-export|subscribe|subscribe\/webhook|badge))?$/;
+  /^\/api\/status\/[a-z0-9_-]+(\/(history|rss|uptime-export|subscribe|subscribe\/(?:webhook|chat|sms|sms\/verify)|badge))?$/;
+/** Subscribe endpoints are POST only. */
+const STATUS_SUBSCRIBE_PATH = /\/subscribe(\/(?:webhook|chat|sms|sms\/verify))?$/;
 const STATUS_GROUP_API_REGEX = /^\/api\/status\/[a-z0-9_-]+\/groups\/[a-zA-Z0-9_-]+$/;
 
 const RESERVED_STATUS_API_SLUGS = new Set([
@@ -216,8 +218,7 @@ export function isAllowedStatusApi(
       if (firstSegment && RESERVED_STATUS_API_SLUGS.has(firstSegment)) return false;
     }
     if (STATUS_GROUP_API_REGEX.test(pathname)) return true;
-    if (STATUS_SLUG_API_REGEX.test(pathname) && !/\/subscribe(\/webhook)?$/.test(pathname))
-      return true;
+    if (STATUS_SLUG_API_REGEX.test(pathname) && !STATUS_SUBSCRIBE_PATH.test(pathname)) return true;
     return false;
   }
 
@@ -227,8 +228,7 @@ export function isAllowedStatusApi(
       const firstSegment = pathname.slice('/api/status/'.length).split('/')[0];
       if (firstSegment && RESERVED_STATUS_API_SLUGS.has(firstSegment)) return false;
     }
-    if (STATUS_SLUG_API_REGEX.test(pathname) && /\/subscribe(\/webhook)?$/.test(pathname))
-      return true;
+    if (STATUS_SLUG_API_REGEX.test(pathname) && STATUS_SUBSCRIBE_PATH.test(pathname)) return true;
     return false;
   }
 

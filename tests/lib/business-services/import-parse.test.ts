@@ -53,6 +53,23 @@ describe('parseBusinessServiceImport', () => {
     ]);
   });
 
+  it('reads custom attributes from attr.<key> columns and a YAML mapping, and flags bad ones', () => {
+    const csv = parseBusinessServiceImport(
+      'name,attr.cost_center,attr.pci\nCheckout,ops-42,true\nSearch,,\n',
+      'csv'
+    );
+    expect(csv.rows[0].attributes).toEqual({ cost_center: 'ops-42', pci: true });
+    expect(csv.rows[1].attributes).toBeUndefined();
+    const yaml = parseBusinessServiceImport(
+      '- name: Checkout\n  attributes:\n    tier_owner: ann\n    budget: 3\n- name: Bad\n  attributes: [1]\n',
+      'yaml'
+    );
+    expect(yaml.rows[0].attributes).toEqual({ tier_owner: 'ann', budget: 3 });
+    expect(yaml.issues).toEqual([
+      expect.objectContaining({ name: 'Bad', message: expect.stringMatching(/Attributes/) }),
+    ]);
+  });
+
   it('reads YAML lists, where an empty list clears members', () => {
     const { rows } = parseBusinessServiceImport(
       '- name: Checkout\n  members: []\n  ownerTeam: null\n',
@@ -85,7 +102,21 @@ describe('parseBusinessServiceImport', () => {
 
 describe('hasCycle', () => {
   it('finds loops and accepts trees', () => {
-    expect(hasCycle(new Map([['a', new Set(['b'])], ['b', new Set(['c'])]]))).toBeNull();
-    expect(hasCycle(new Map([['a', new Set(['b'])], ['b', new Set(['a'])]]))).not.toBeNull();
+    expect(
+      hasCycle(
+        new Map([
+          ['a', new Set(['b'])],
+          ['b', new Set(['c'])],
+        ])
+      )
+    ).toBeNull();
+    expect(
+      hasCycle(
+        new Map([
+          ['a', new Set(['b'])],
+          ['b', new Set(['a'])],
+        ])
+      )
+    ).not.toBeNull();
   });
 });

@@ -1,12 +1,15 @@
 'use client';
+/* eslint-disable security/detect-object-injection -- lookups are keyed by typed enum values (tier, step), never request input */
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, Loader2, Plus, Search } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Textarea } from '@/components/ui/shadcn/textarea';
+import { Checkbox } from '@/components/ui/shadcn/checkbox';
+import { CRITICALITY_HINT, CRITICALITY_LABEL } from '@/components/business-service/HealthBadge';
 import {
   Select,
   SelectContent,
@@ -30,14 +33,21 @@ export type SetupWizardProps = {
   statusPages: Option[];
 };
 
-const STEPS = ['Name', 'Services', 'Ownership', 'Status pages', 'Subscribers'] as const;
+const STEPS = ['Name', 'Services', 'Ownership', 'Status pages', 'Subscribers', 'Review'] as const;
+const STEP_HINT: Record<(typeof STEPS)[number], string> = {
+  Name: 'What customers rely on, in their words.',
+  Services: 'The technical services behind it; their incidents set its health.',
+  Ownership: 'Who owns it and which incidents count as impact.',
+  'Status pages': 'Where customers see its health.',
+  Subscribers: 'Who hears about it when it is affected.',
+  Review: 'Check everything before creating it.',
+};
 const DEFAULT = '__default__';
-const TIER_OPTIONS = [
-  { value: 'TIER_0', label: 'Tier 0 — business critical' },
-  { value: 'TIER_1', label: 'Tier 1 — important' },
-  { value: 'TIER_2', label: 'Tier 2 — standard' },
-  { value: 'TIER_3', label: 'Tier 3 — low' },
-];
+const TIERS = ['TIER_0', 'TIER_1', 'TIER_2', 'TIER_3'] as const;
+const TIER_OPTIONS = TIERS.map(tier => ({
+  value: tier,
+  label: `${CRITICALITY_LABEL[tier]} · ${CRITICALITY_HINT[tier]}`,
+}));
 
 /** Searchable checklist; chosen rows stay on top so the selection is visible. */
 function CheckList({
@@ -132,14 +142,25 @@ export default function SetupWizard({ services, teams, statusPages }: SetupWizar
   const [teamIds, setTeamIds] = useState<string[]>([]);
   const [subscribeAll, setSubscribeAll] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  // Separate flags: finding suggestions must not look like (or block) creating the service.
+  const [suggesting, startSuggesting] = useTransition();
+  const [creating, startCreating] = useTransition();
   const serviceName = new Map(services.map(service => [service.id, service.name]));
+  const optionName = (options: Option[], id: string) =>
+    options.find(option => option.id === id)?.name ?? id;
+  const heading = useRef<HTMLHeadingElement>(null);
+  const moved = useRef(false);
+  useEffect(() => {
+    // Move focus to the new step's heading after a step change, not on first render.
+    if (moved.current) heading.current?.focus();
+    moved.current = true;
+  }, [step]);
 
   const canContinue = step !== 0 || name.trim().length > 0;
   const last = step === STEPS.length - 1;
 
   const refreshSuggestions = (next: string[]) =>
-    startTransition(async () => {
+    startSuggesting(async () => {
       const found = await suggestMembersAction(next);
       setSuggestions(found.filter(item => !next.includes(item.id)));
     });
@@ -150,7 +171,7 @@ export default function SetupWizard({ services, teams, statusPages }: SetupWizar
   };
 
   const submit = () =>
-    startTransition(async () => {
+    startCreating(async () => {
       setError(null);
       const picked = (value: string) => (value === DEFAULT ? null : value);
       const result = await createFromSetupAction({
@@ -200,7 +221,21 @@ export default function SetupWizard({ services, teams, statusPages }: SetupWizar
         ))}
       </ol>
 
-      <section className="rounded-xl border border-border bg-card p-4 md:p-6">
+      <section
+        aria-labelledby="bs-setup-step"
+        className="space-y-4 rounded-xl border border-border bg-card p-4 md:p-6"
+      >
+        <div>
+          <h2
+            id="bs-setup-step"
+            ref={heading}
+            tabIndex={-1}
+            className="text-base font-semibold focus:outline-hidden"
+          >
+            Step {step + 1} of {STEPS.length}: {STEPS[step]}
+          </h2>
+          <p className="text-xs text-muted-foreground">{STEP_HINT[STEPS[step]]}</p>
+        </div>
         {step === 0 && (
           <div className="space-y-4">
             <div className="space-y-1.5">
@@ -245,15 +280,15 @@ export default function SetupWizard({ services, teams, statusPages }: SetupWizar
               type="button"
               size="sm"
               variant="outline"
-              disabled={!members.length || pending}
+              disabled={!members.length || suggesting}
               onClick={() => refreshSuggestions(members)}
             >
               Suggest related services
             </Button>
-            {(pending || suggestions.length > 0) && (
+            {(suggesting || suggestions.length > 0) && (
               <div className="space-y-2 rounded-lg border border-dashed border-border p-3">
                 <p className="text-sm font-medium">Suggested from dependencies</p>
-                {pending ? (
+                {suggesting ? (
                   <Loader2 className="h-4 w-4 animate-spin" aria-label="Loading suggestions" />
                 ) : (
                   <ul className="flex flex-wrap gap-2">
@@ -352,30 +387,83 @@ export default function SetupWizard({ services, teams, statusPages }: SetupWizar
               onChange={setTeamIds}
               emptyText="No teams match."
             />
-            <label className="flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
+            <div className="flex items-start gap-2 text-sm">
+              <Checkbox
+                id="bs-setup-subscribe-all"
                 checked={subscribeAll}
-                onChange={event => setSubscribeAll(event.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded border-border"
+                onCheckedChange={checked => setSubscribeAll(checked === true)}
+                className="mt-0.5"
               />
-              <span>
+              <label htmlFor="bs-setup-subscribe-all">
                 Subscribe all users
                 <span className="block text-xs text-muted-foreground">
                   Everyone active today follows it and gets stakeholder updates (never pages).
                   People can unfollow.
                 </span>
-              </span>
-            </label>
-            <dl className="grid gap-1 rounded-lg bg-muted/40 p-3 text-sm md:grid-cols-[10rem_1fr]">
-              <dt className="text-muted-foreground">Name</dt>
-              <dd>{name}</dd>
-              <dt className="text-muted-foreground">Services</dt>
-              <dd>{members.map(id => serviceName.get(id) ?? id).join(', ') || 'None yet'}</dd>
-              <dt className="text-muted-foreground">Status pages</dt>
-              <dd>{pageIds.length}</dd>
-            </dl>
+              </label>
+            </div>
           </div>
+        )}
+
+        {step === 5 && (
+          <dl
+            aria-label="Review"
+            className="grid gap-x-4 gap-y-2 rounded-lg bg-muted/40 p-3 text-sm md:grid-cols-[10rem_1fr_auto]"
+          >
+            {(
+              [
+                ['Name', name.trim() + (description.trim() ? ` — ${description.trim()}` : ''), 0],
+                [
+                  'Services',
+                  members.map(id => serviceName.get(id) ?? id).join(', ') || 'None yet',
+                  1,
+                ],
+                [
+                  'Owner and tier',
+                  [
+                    ownerTeamId === DEFAULT ? 'No owner' : optionName(teams, ownerTeamId),
+                    criticality === DEFAULT
+                      ? 'Criticality not set'
+                      : (TIER_OPTIONS.find(option => option.value === criticality)?.label ??
+                        criticality),
+                  ].join(' · '),
+                  2,
+                ],
+                [
+                  'Status pages',
+                  pageIds.map(id => optionName(statusPages, id)).join(', ') || 'None',
+                  3,
+                ],
+                [
+                  'Subscribers',
+                  [
+                    teamIds.map(id => optionName(teams, id)).join(', '),
+                    subscribeAll ? 'All users' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || 'None',
+                  4,
+                ],
+              ] as const
+            ).map(([label, text, target]) => (
+              <div key={label} className="contents">
+                <dt className="text-muted-foreground">{label}</dt>
+                <dd className="min-w-0 break-words">{text}</dd>
+                <dd>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs"
+                    aria-label={`Edit ${label.toLowerCase()}`}
+                    onClick={() => setStep(target)}
+                  >
+                    Edit
+                  </Button>
+                </dd>
+              </div>
+            ))}
+          </dl>
         )}
       </section>
 
@@ -389,14 +477,14 @@ export default function SetupWizard({ services, teams, statusPages }: SetupWizar
         <Button
           type="button"
           variant="outline"
-          disabled={step === 0 || pending}
+          disabled={step === 0 || creating}
           onClick={() => setStep(current => current - 1)}
         >
           Back
         </Button>
         {last ? (
-          <Button type="button" onClick={submit} disabled={pending || !name.trim()}>
-            {pending ? 'Creating…' : 'Create business service'}
+          <Button type="button" onClick={submit} disabled={creating || !name.trim()}>
+            {creating ? 'Creating…' : 'Create business service'}
           </Button>
         ) : (
           <Button type="button" onClick={goNext} disabled={!canContinue}>

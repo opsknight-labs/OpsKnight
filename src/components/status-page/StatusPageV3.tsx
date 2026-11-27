@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { StatusLocaleProvider } from '@/lib/status-pages/i18n/context';
-import { formatLocalizedDateTime, normalizeLocale } from '@/lib/status-pages/i18n';
+import {
+  createTranslator,
+  formatLocalizedDateTime,
+  normalizeLocale,
+} from '@/lib/status-pages/i18n';
 import type { PublicStatusPageSnapshot } from '@/lib/status-pages/public-contract';
 import { STATUS_PAGE_PUBLIC_CSS, STATUS_PAGE_SURFACE_CLASS } from '@/lib/status-pages/public-css';
 import { isDarkHex } from '@/lib/status-page-theme';
@@ -99,14 +103,20 @@ export default function StatusPageV3({
 
   const showHeader = (presentation?.showHeader ?? branding.showHeader) !== false;
   const showFooter = (presentation?.showFooter ?? branding.showFooter) !== false;
-  const showServices = visible('services', capabilities?.services) && snapshot.services.length > 0;
+  // Business rows count: groups that hide every member still have rows with no service rows.
+  const groupRows =
+    page.serviceLayout && page.serviceLayout !== 'FLAT' ? (snapshot.businessServices ?? []) : [];
+  const showServices =
+    visible('services', capabilities?.services) &&
+    (snapshot.services.length > 0 || groupRows.length > 0);
   const showRegions =
     visible('regions', capabilities?.regions) &&
     page.showRegionHeatmap === true &&
     snapshot.regions.length > 0;
-  const showMetrics = visible('metrics') && snapshot.services.some(service => service.uptime);
+  const rows = [...snapshot.services, ...groupRows];
+  const showMetrics = visible('metrics') && rows.some(row => row.uptime);
   const showUptimeHistory =
-    page.visibility?.uptimeHistory !== false && snapshot.services.some(service => service.history);
+    page.visibility?.uptimeHistory !== false && rows.some(row => row.history);
   const showSlaMetrics = (presentation?.showSlaMetrics ?? branding.showSlaMetrics) !== false;
   const showUptime = visible('uptime', capabilities?.uptime) && (showMetrics || showUptimeHistory);
   const showIncidents =
@@ -152,6 +162,8 @@ export default function StatusPageV3({
   const hasSlugRoutes = Boolean(page.slug && !page.isDefault);
   const webhookSlug =
     hasSlugRoutes && page.subscription?.channels?.includes('WEBHOOK') ? page.slug : null;
+  const subscribeSlug = hasSlugRoutes ? page.slug : null;
+  const subscribeChannels = page.subscription?.channels ?? null;
   const apiPath =
     page.slug && !page.isDefault ? `/api/status/${encodeURIComponent(page.slug)}` : '/api/status';
 
@@ -169,6 +181,10 @@ export default function StatusPageV3({
   const rssHref = showRss ? `${apiPath}/rss` : null;
 
   const locale = normalizeLocale(presentation?.locale);
+  const t = createTranslator(locale);
+  const incidentHref = hasSlugRoutes
+    ? (id: string) => `${statusPagePath}/incidents/${encodeURIComponent(id)}`
+    : undefined;
   return (
     <StatusLocaleProvider locale={locale}>
       <div
@@ -203,10 +219,10 @@ export default function StatusPageV3({
 
         {stale && (
           <p role="note" className="status-muted status-stale-note">
-            Showing the last verified status update.
+            {t('page.staleNote')}
           </p>
         )}
-        <span className="sr-only">Times shown in your local time</span>
+        <span className="sr-only">{t('page.localTime')}</span>
 
         <div className="status-v3">
           <StatusHeroV3
@@ -230,11 +246,7 @@ export default function StatusPageV3({
               incidents={snapshot.incidents}
               timeZone={timeZone}
               historyDays={snapshot.retention?.requestedHistoryDays ?? snapshot.historyDays}
-              permalinkHref={
-                hasSlugRoutes
-                  ? id => `${statusPagePath}/incidents/${encodeURIComponent(id)}`
-                  : undefined
-              }
+              permalinkHref={incidentHref}
               historyHref={hasSlugRoutes ? `${statusPagePath}/history` : undefined}
               postmortemHref={
                 postmortemsEnabled
@@ -249,6 +261,10 @@ export default function StatusPageV3({
               services={snapshot.services}
               layout={page.serviceLayout ?? 'FLAT'}
               businessServices={snapshot.businessServices}
+              expandByDefault={page.expandGroupsByDefault === true}
+              incidents={showIncidents ? snapshot.incidents : undefined}
+              incidentHref={incidentHref}
+              incidentsHref={showIncidents ? '#incidents' : undefined}
               timeZone={timeZone}
               groupByRegion={page.showServicesByRegion === true}
               showUptime={showUptime}
@@ -272,23 +288,21 @@ export default function StatusPageV3({
         {showSubscribe && (
           <section className="status-subscribe-block" aria-labelledby="subscribe-heading">
             <div className="status-section__head">
-              <h2 id="subscribe-heading">Subscribe to updates</h2>
-              <span className="status-section__count">
-                Get notified when service status changes
-              </span>
+              <h2 id="subscribe-heading">{t('subscribe.title')}</h2>
+              <span className="status-section__count">{t('subscribe.subtitle')}</span>
             </div>
             {subscribeEnabled ? (
               <StatusPageSubscribe
                 statusPageId={page.id}
                 webhookSlug={webhookSlug}
+                subscribeSlug={subscribeSlug}
+                channels={subscribeChannels}
                 services={serviceOptions}
                 rssHref={rssHref}
                 apiHref={showApi ? apiPath : null}
               />
             ) : (
-              <p className="status-muted">
-                Subscriptions are accepted on the published status page.
-              </p>
+              <p className="status-muted">{t('subscribe.previewOnly')}</p>
             )}
           </section>
         )}
@@ -298,6 +312,8 @@ export default function StatusPageV3({
             open={subscribeOpen}
             statusPageId={page.id}
             webhookSlug={webhookSlug}
+            subscribeSlug={subscribeSlug}
+            channels={subscribeChannels}
             services={serviceOptions}
             rssHref={rssHref}
             apiHref={showApi ? apiPath : null}
@@ -312,7 +328,7 @@ export default function StatusPageV3({
         {showSubscribe && subscribeEnabled && (
           <div className="status-subscribe-sticky">
             <button type="button" onClick={() => setSubscribeOpen(true)}>
-              Subscribe to updates
+              {t('subscribe.title')}
             </button>
           </div>
         )}
@@ -323,20 +339,20 @@ export default function StatusPageV3({
             organizationName={page.organizationName}
             links={{
               resources: [
-                ...(showApi ? [{ href: apiPath, label: 'JSON API' }] : []),
-                ...(showRss ? [{ href: `${apiPath}/rss`, label: 'RSS Feed' }] : []),
+                ...(showApi ? [{ href: apiPath, label: t('footer.jsonApi') }] : []),
+                ...(showRss ? [{ href: `${apiPath}/rss`, label: t('footer.rss') }] : []),
                 ...(showCsv
-                  ? [{ href: `${apiPath}/uptime-export?format=csv`, label: 'Uptime CSV' }]
+                  ? [{ href: `${apiPath}/uptime-export?format=csv`, label: t('footer.uptimeCsv') }]
                   : []),
                 ...(showPdf
-                  ? [{ href: `${apiPath}/uptime-export?format=pdf`, label: 'Uptime PDF' }]
+                  ? [{ href: `${apiPath}/uptime-export?format=pdf`, label: t('footer.uptimePdf') }]
                   : []),
               ],
               support: [
                 ...(page.contactEmail
-                  ? [{ href: `mailto:${page.contactEmail}`, label: 'Contact' }]
+                  ? [{ href: `mailto:${page.contactEmail}`, label: t('footer.contact') }]
                   : []),
-                ...(page.contactUrl ? [{ href: page.contactUrl, label: 'Support' }] : []),
+                ...(page.contactUrl ? [{ href: page.contactUrl, label: t('footer.support') }] : []),
               ],
             }}
           />

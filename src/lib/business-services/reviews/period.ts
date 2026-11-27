@@ -47,3 +47,27 @@ export function isRunDue(
   const elapsed = now.getTime() - scheduled.getTime();
   return elapsed >= 0 && elapsed < DUE_WINDOW_HOURS * 3_600_000;
 }
+
+/** The next scheduled run after `now`: this month's day and hour if still ahead, else next month's. */
+export function nextReviewRun(
+  now: Date,
+  schedule: { dayOfMonth: number; hour: number; timeZone: string }
+): Date | null {
+  const { year, month } = getDatePartsInTimeZone(now, schedule.timeZone);
+  for (const offset of [0, 1]) {
+    const target = month + offset;
+    const scheduled = resolveLocalDateTimeInTimeZone(
+      {
+        year: target > 12 ? year + 1 : year,
+        month: target > 12 ? 1 : target,
+        day: schedule.dayOfMonth,
+        hour: schedule.hour,
+        minute: 0,
+      },
+      schedule.timeZone,
+      'compatible'
+    );
+    if (scheduled && scheduled.getTime() > now.getTime()) return scheduled;
+  }
+  return null;
+}

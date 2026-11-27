@@ -1,4 +1,5 @@
 import 'server-only';
+import { pageSubscriberChannels } from './subscriber-channel-policy';
 import { concealForPage } from './member-concealment';
 import { IncidentEventType, Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
@@ -724,13 +725,14 @@ export async function buildStatusPageSnapshot(
       },
       subscription: {
         enabled: page.showSubscribe,
-        channels: ['EMAIL', 'WEBHOOK'],
+        channels: pageSubscriberChannels(page),
         verificationRequired: true,
         serviceSelectionSupported: true,
       },
       showSubscribe: page.showSubscribe,
       showServicesByRegion: page.showServicesByRegion,
       ...(groupedLayout ? { serviceLayout: page.serviceLayout } : {}),
+      ...(groupedLayout && page.expandGroupsByDefault ? { expandGroupsByDefault: true } : {}),
       showRegionHeatmap: page.showRegionHeatmap,
       showPostIncidentReview: page.showPostIncidentReview,
       showChangelog: page.showChangelog,

@@ -52,7 +52,12 @@ describe('business-service setup wizard', () => {
     next(); // subscribers
     fireEvent.click(screen.getByRole('checkbox', { name: /Finance/ }));
     fireEvent.click(screen.getByRole('checkbox', { name: /Subscribe all users/ }));
-    expect(screen.getByText('checkout-api, orders-db')).toBeInTheDocument();
+    next(); // review
+    expect(screen.getByRole('heading', { name: 'Step 6 of 6: Review' })).toHaveFocus();
+    const review = screen.getByLabelText('Review');
+    expect(review).toHaveTextContent('checkout-api, orders-db');
+    expect(review).toHaveTextContent('Public status');
+    expect(review).toHaveTextContent('Finance · All users');
     fireEvent.click(screen.getByRole('button', { name: 'Create business service' }));
 
     await waitFor(() => expect(push).toHaveBeenCalledWith('/services/business/bs-1'));
@@ -78,6 +83,12 @@ describe('business-service setup wizard', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect(screen.getByText(/No status pages you can manage/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    // The review step can jump back to any step.
+    fireEvent.click(screen.getByRole('button', { name: 'Edit services' }));
+    expect(screen.getByRole('heading', { name: 'Step 2 of 6: Services' })).toBeInTheDocument();
+    for (let index = 0; index < 4; index += 1)
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     fireEvent.click(screen.getByRole('button', { name: 'Create business service' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Name taken.');
     expect(push).not.toHaveBeenCalled();

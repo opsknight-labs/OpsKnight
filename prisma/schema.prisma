@@ -2692,6 +2692,8 @@ model StatusPage {
   showIncidents               Boolean                    @default(true)
   showMetrics                 Boolean                    @default(true)
   showSubscribe               Boolean                    @default(true)
+  /// Subscriber channels visitors may choose: EMAIL, WEBHOOK, SLACK, MICROSOFT_TEAMS, SMS.
+  subscriberChannels          String[]                   @default(["EMAIL", "WEBHOOK"])
   branding                    Json?
   footerText                  String?
   contactEmail                String?
@@ -2748,6 +2750,8 @@ model StatusPage {
   assets                      StatusPageAsset[]
   routeOperations             StatusPageRouteOperation[]
   serviceLayout               StatusPageServiceLayout    @default(FLAT)
+  /// Business-service groups start expanded on the public page (affected ones always open).
+  expandGroupsByDefault       Boolean                    @default(false)
   businessServices            StatusPageBusinessService[]
 
   @@index([enabled])
@@ -2868,8 +2872,13 @@ model StatusPageApiToken {
 model StatusPageSubscription {
   id                         String                          @id @default(cuid())
   statusPageId               String
+  /// For non-email channels a stable `<channel>:<key>` so the page/email unique still dedupes.
   email                      String
   phone                      String?
+  /// EMAIL, SMS, SLACK or MICROSOFT_TEAMS.
+  channel                    String                          @default("EMAIL")
+  /// Encrypted incoming-webhook URL for SLACK and MICROSOFT_TEAMS subscribers.
+  targetEncrypted            String?
   token                      String                          @unique
   subscribedAt               DateTime                        @default(now())
   unsubscribedAt             DateTime?
@@ -2894,6 +2903,7 @@ model StatusPageSubscription {
   @@index([statusPageId, verified])
   @@index([token])
   @@index([statusPageId, subscribedAt, id])
+  @@index([statusPageId, channel, state], map: "StatusPageSubscription_channel_idx")
 }
 
 model StatusPageSubscriptionService {
@@ -2980,6 +2990,11 @@ model BusinessService {
   /// Last health status announced to followers and status-page webhooks; null until first reconcile.
   lastNotifiedStatus   String?
   lastNotifiedStatusAt DateTime?
+  /// Publish status-page updates on impact and recovery without approval (meant for TIER_0); off = a draft to approve.
+  autoPublishStatusUpdates Boolean                           @default(false)
+  /// Last error-budget burn state alerted (OK, AT_RISK, BREACHED); null until the first sweep records a baseline.
+  lastBudgetState      String?
+  lastBudgetStateAt    DateTime?
   /// Opt-in to the monthly service review digest (also needs the org-level switch).
   includeInReview    Boolean                                 @default(false)
   /// Customers exposed to this service; null = unknown.
@@ -2993,6 +3008,10 @@ model BusinessService {
   customerReportWindowMinutes Int?
   /// Review cadence in days; null = org default (180).
   reviewIntervalDays   Int?
+  /// Set by a scheduled catalog sync ("backstage:<sourceId>:<name>"); null = created by hand.
+  externalKey          String?                                 @unique(map: "uq_business_service_external_key")
+  /// When the sync last missed its catalog entity. The business service is kept, never deleted.
+  externalRemovedAt    DateTime?
   createdAt          DateTime                                @default(now())
   updatedAt          DateTime                                @updatedAt
   ownerTeam          Team?                                   @relation(fields: [ownerTeamId], references: [id], onDelete: SetNull)
@@ -6268,6 +6287,10 @@ model TopologySource {
   url             String
   enabled         Boolean   @default(true)
   intervalMinutes Int       @default(60)
+  /// Also sync Backstage Systems as business services, members = components with spec.system.
+  syncBusinessServices Boolean @default(false)
+  /// With syncBusinessServices: each Domain becomes a business service supported by its Systems.
+  syncDomains     Boolean   @default(false)
   lastSyncedAt    DateTime?
   lastStatus      String?
   lastSummary     Json?

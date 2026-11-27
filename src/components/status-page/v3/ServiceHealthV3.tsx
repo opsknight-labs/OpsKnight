@@ -3,16 +3,17 @@
 import { memo, useMemo, useState, type ReactNode } from 'react';
 import type {
   PublicBusinessService,
+  PublicIncident,
   PublicServiceLayout,
   PublicServiceStatus,
   PublicStatusService,
 } from '@/lib/status-pages/public-contract';
 import { serviceRegionBucket, serviceSearchKey } from '@/lib/status-pages/presentation';
-import { STATUS_LABEL_KEYS, type I18nKey } from '@/lib/status-pages/i18n';
+import { STATUS_LABEL_KEYS, type I18nKey, type Translator } from '@/lib/status-pages/i18n';
 import { useT } from '@/lib/status-pages/i18n/context';
 import { statusPresentation } from '@/lib/status-pages/status-presentation';
 import StatusBadge from '@/components/incident/StatusBadge';
-import ServiceHistoryV3 from './ServiceHistoryV3';
+import ServiceHistoryV3, { HistoryIncidentsContext } from './ServiceHistoryV3';
 import { BusinessServiceRowV3 } from './BusinessServiceHealthV3';
 
 type FilterKey =
@@ -92,17 +93,19 @@ function serviceMatches(service: { status: PublicServiceStatus }, filter: Filter
   return service.status === filter;
 }
 
-function slaGradeLabel(grade: string | undefined): string | undefined {
-  switch (grade) {
-    case 'EXCELLENT':
-      return 'Excellent';
-    case 'GOOD':
-      return 'Good';
-    case 'BELOW_TARGET':
-      return 'Below SLA';
-    default:
-      return grade;
-  }
+const GRADE_KEYS = new Map<string | undefined, I18nKey>([
+  ['EXCELLENT', 'grade.excellent'],
+  ['GOOD', 'grade.good'],
+  ['BELOW_TARGET', 'grade.belowTarget'],
+]);
+
+function slaGradeLabel(grade: string | undefined, t: Translator): string | undefined {
+  const key = GRADE_KEYS.get(grade);
+  return key ? t(key) : grade;
+}
+
+function serviceCount(count: number, t: Translator) {
+  return t(count === 1 ? 'business.serviceOne' : 'business.serviceCount', { count });
 }
 
 const ServiceRow = memo(function ServiceRow({
@@ -160,9 +163,13 @@ const ServiceRow = memo(function ServiceRow({
           <span className="status-v3-service__name">{service.name}</span>
           {hasDetails && (
             <div className="status-v3-service__meta">
-              {slaTier ? <span className="status-v3-chip">Service tier: {slaTier}</span> : null}
+              {slaTier ? (
+                <span className="status-v3-chip">{t('services.tier', { tier: slaTier })}</span>
+              ) : null}
               {teamName ? (
-                <span className="status-v3-chip status-v3-chip--muted">Owned by {teamName}</span>
+                <span className="status-v3-chip status-v3-chip--muted">
+                  {t('services.ownedBy', { team: teamName })}
+                </span>
               ) : null}
               {service.regions?.map(region => (
                 <span key={region} className="status-v3-chip status-v3-chip--muted">
@@ -174,7 +181,7 @@ const ServiceRow = memo(function ServiceRow({
         </div>
         <div className="status-v3-service__badges">
           {effectiveShowMetrics && slaGrade && (
-            <StatusBadge status={slaGrade} label={slaGradeLabel(slaGrade)} size="xs" showDot />
+            <StatusBadge status={slaGrade} label={slaGradeLabel(slaGrade, t)} size="xs" showDot />
           )}
           <StatusBadge
             status={service.status}
@@ -251,9 +258,20 @@ export default function ServiceHealthV3({
   filterThreshold = FILTER_THRESHOLD,
   layout = 'FLAT',
   businessServices = [],
+  expandByDefault = false,
+  incidents,
+  incidentHref,
+  incidentsHref,
 }: {
   services: PublicStatusService[];
   timeZone: string;
+  /** Business-service groups start open; affected ones open regardless. */
+  expandByDefault?: boolean;
+  /** Published incidents, listed by title in a bar's day inspector. */
+  incidents?: PublicIncident[];
+  incidentHref?: (incidentId: string) => string;
+  /** Target of a group row's active-incident chip (the incidents section). */
+  incidentsHref?: string;
   /** BUSINESS and BUSINESS_EXPANDABLE group rows under business services. */
   layout?: PublicServiceLayout;
   businessServices?: PublicBusinessService[];
@@ -273,11 +291,16 @@ export default function ServiceHealthV3({
   const [filter, setFilter] = useState<FilterKey>('all');
   const [sortMode, setSortMode] = useState<SortMode>('configured');
   const [groupRegions, setGroupRegions] = useState(groupByRegion);
-  // Search, status chips and sort only earn their space on long lists.
-  const showControls = services.length > filterThreshold;
   const [controlsOpen, setControlsOpen] = useState(false);
   const businessMode = layout !== 'FLAT' && businessServices.length > 0;
   const expandable = layout === 'BUSINESS_EXPANDABLE';
+  // Search, status chips and sort only earn their space on long lists. Grouped pages count the
+  // rows a visitor scans: business services plus the services outside every group.
+  const groupedIds = new Set(businessServices.flatMap(item => item.memberServiceIds));
+  const rowCount = businessMode
+    ? businessServices.length + services.filter(service => !groupedIds.has(service.id)).length
+    : services.length;
+  const showControls = rowCount > filterThreshold;
   // Affected business services start open so visitors see which part is down, and one that
   // becomes affected on a live refresh opens again even if the visitor closed it earlier.
   const affectedKey = [
@@ -295,9 +318,18 @@ export default function ServiceHealthV3({
         })
     ),
   ].join(',');
-  const [openIds, setOpenIds] = useState<Set<string>>(
-    () => new Set(affectedKey ? affectedKey.split(',') : [])
-  );
+  const initialOpen = () =>
+    new Set([
+      ...(expandByDefault ? businessServices.map(item => item.id) : []),
+      ...(affectedKey ? affectedKey.split(',') : []),
+    ]);
+  const [openIds, setOpenIds] = useState<Set<string>>(initialOpen);
+  // The live preview flips the setting in place; start over from the new default.
+  const [expandSetting, setExpandSetting] = useState(expandByDefault);
+  if (expandSetting !== expandByDefault) {
+    setExpandSetting(expandByDefault);
+    setOpenIds(initialOpen());
+  }
   const [seenAffectedKey, setSeenAffectedKey] = useState(affectedKey);
   if (seenAffectedKey !== affectedKey) {
     const before = new Set(seenAffectedKey ? seenAffectedKey.split(',') : []);
@@ -359,7 +391,13 @@ export default function ServiceHealthV3({
     return { rows: sorted, others, total: businessServices.length };
   }, [businessMode, businessServices, filter, filtered, query, serviceById, sortMode]);
 
-  if (services.length === 0) return null;
+  const historyIncidents = useMemo(
+    () => ({ incidents: incidents ?? [], href: incidentHref }),
+    [incidents, incidentHref]
+  );
+
+  // Groups whose members are all hidden still have rows even with no service rows.
+  if (services.length === 0 && !businessMode) return null;
 
   // Nest child business services under their parent (depth bounded, cycle-safe at render time).
   const renderBusinessRows = (
@@ -410,6 +448,7 @@ export default function ServiceHealthV3({
     showUptimeHistory: showUptimeHistory ?? true,
     showSlaMetrics,
     onSubscribeGroup,
+    incidentsHref,
   };
 
   const groups = grouped
@@ -442,99 +481,36 @@ export default function ServiceHealthV3({
     : null;
 
   return (
-    <section className="status-v3-services" aria-labelledby="status-v3-services-heading">
-      <div className="status-v3-services__top-row">
-        <div className="status-v3-services__title-group">
-          <h2
-            id="status-v3-services-heading"
-            className="status-section-title status-v3-services__title"
-          >
-            Services
-          </h2>
-        </div>
-
-        <div className="status-v3-services__right-group">
-          {showControls && (
-            <button
-              type="button"
-              className={`status-v3-filter-chip${controlsOpen ? ' status-v3-filter-chip--active' : ''}`}
-              aria-expanded={controlsOpen}
-              aria-controls="status-v3-services-controls"
-              onClick={() => setControlsOpen(open => !open)}
+    <HistoryIncidentsContext.Provider value={historyIncidents}>
+      <section className="status-v3-services" aria-labelledby="status-v3-services-heading">
+        <div className="status-v3-services__top-row">
+          <div className="status-v3-services__title-group">
+            <h2
+              id="status-v3-services-heading"
+              className="status-section-title status-v3-services__title"
             >
-              Filter
-            </button>
-          )}
-          {showControls && controlsOpen && (
-            <div id="status-v3-services-controls" className="status-v3-services__controls">
-              <div className="status-v3-search">
-                <span className="sr-only">Search services</span>
-                <svg
-                  className="status-v3-search__icon"
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <circle cx="11" cy="11" r="8" />
-                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                </svg>
-                <input
-                  type="search"
-                  placeholder="Search services"
-                  aria-label={`Search ${services.length} services`}
-                  value={query}
-                  onChange={event => setQuery(event.target.value)}
-                />
-              </div>
+              {t('services.title')}
+            </h2>
+          </div>
 
-              <div
-                className="status-v3-filters"
-                role="group"
-                aria-label="Filter services by status"
+          <div className="status-v3-services__right-group">
+            {showControls && (
+              <button
+                type="button"
+                className={`status-v3-filter-chip${controlsOpen ? ' status-v3-filter-chip--active' : ''}`}
+                aria-expanded={controlsOpen}
+                aria-controls="status-v3-services-controls"
+                onClick={() => setControlsOpen(open => !open)}
               >
-                {STATUS_FILTERS.map(item => {
-                  const isSelected =
-                    filter === item.key ||
-                    (item.key === 'OUTAGE' &&
-                      (filter === 'MAJOR_OUTAGE' || filter === 'PARTIAL_OUTAGE'));
-                  return (
-                    <button
-                      key={item.key}
-                      type="button"
-                      className={`status-v3-filter-chip${isSelected ? ' status-v3-filter-chip--active' : ''}`}
-                      aria-pressed={isSelected}
-                      onClick={() => setFilter(prev => (prev === item.key ? 'all' : item.key))}
-                    >
-                      {item.dotClass && (
-                        <span
-                          className={`status-v3-legend-indicator ${item.dotClass}`}
-                          aria-hidden="true"
-                        />
-                      )}
-                      <span>{t(item.label)}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <span className="status-v3-services__legend-divider" aria-hidden="true" />
-
-              {canGroup && (
-                <button
-                  type="button"
-                  className={`status-v3-services__group-btn${groupRegions ? ' status-v3-services__group-btn--active' : ''}`}
-                  aria-label="Group by region"
-                  aria-pressed={groupRegions}
-                  onClick={() => setGroupRegions(open => !open)}
-                >
+                {t('services.filter')}
+              </button>
+            )}
+            {showControls && controlsOpen && (
+              <div id="status-v3-services-controls" className="status-v3-services__controls">
+                <div className="status-v3-search">
+                  <span className="sr-only">{t('services.search')}</span>
                   <svg
-                    className="status-v3-services__group-icon"
+                    className="status-v3-search__icon"
                     width="12"
                     height="12"
                     viewBox="0 0 24 24"
@@ -545,195 +521,62 @@ export default function ServiceHealthV3({
                     strokeLinejoin="round"
                     aria-hidden="true"
                   >
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
-                    <path d="M2 12h20" />
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
                   </svg>
-                  <span>{groupRegions ? 'Grouped by region' : 'Group by region'}</span>
-                </button>
-              )}
-
-              <div className="status-v3-services__sort-wrap">
-                <svg
-                  className="status-v3-services__sort-icon"
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="m3 16 4 4 4-4" />
-                  <path d="M7 20V4" />
-                  <path d="m21 8-4-4-4 4" />
-                  <path d="M17 4v16" />
-                </svg>
-                <label htmlFor="status-v3-sort-select" className="sr-only">
-                  Sort services
-                </label>
-                <select
-                  id="status-v3-sort-select"
-                  className="status-v3-services__sort-select"
-                  aria-label="Sort services"
-                  value={sortMode}
-                  onChange={event => setSortMode(event.target.value as SortMode)}
-                >
-                  <option value="configured">Configured order</option>
-                  <option value="issues">Issues first</option>
-                  <option value="alphabetical">Alphabetical</option>
-                </select>
-                <svg
-                  className="status-v3-services__sort-chevron"
-                  width="10"
-                  height="10"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </div>
-            </div>
-          )}
-          <span className="status-v3-services__legend-divider" aria-hidden="true" />
-
-          <div className="status-v3-services__legend-window">
-            <span className="status-v3-services__legend-count">
-              {business
-                ? business.rows.length === business.total
-                  ? t('services.businessCount', { count: business.total })
-                  : `${business.rows.length} of ${business.total}`
-                : filtered.length === services.length
-                  ? `${services.length} services`
-                  : `${filtered.length} of ${services.length}`}
-            </span>
-            <span className="status-v3-services__legend-dot" aria-hidden="true">
-              ·
-            </span>
-            <svg
-              className="status-v3-legend-clock"
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
-            </svg>
-            <span>{t('services.last90')}</span>
-          </div>
-        </div>
-      </div>
-
-      {business ? (
-        business.rows.length === 0 && business.others.length === 0 ? (
-          <div className="status-v3-services__empty" role="status">
-            <p className="status-v3-services__empty-title">{t('services.noMatch')}</p>
-            <button
-              type="button"
-              className="status-v3-services__empty-reset"
-              onClick={() => {
-                setFilter('all');
-                setQuery('');
-              }}
-            >
-              {t('services.clearFilters')}
-            </button>
-          </div>
-        ) : (
-          <>
-            {business.rows.length > 0 && (
-              <div className="status-v3-services__list" role="list" aria-label="Business services">
-                {renderBusinessRows(null, 1, new Set())}
-              </div>
-            )}
-            {business.others.length > 0 && (
-              <div className="status-v3-group status-v3-business-others">
-                <div className="status-v3-group__head">
-                  <div className="status-v3-group__title-wrap">
-                    <h3 className="status-v3-group__title">{t('services.others')}</h3>
-                    <span className="status-v3-group__subtitle">
-                      {business.others.length} service{business.others.length === 1 ? '' : 's'}
-                    </span>
-                  </div>
+                  <input
+                    type="search"
+                    placeholder={t('services.search')}
+                    aria-label={t('services.searchCount', { count: services.length })}
+                    value={query}
+                    onChange={event => setQuery(event.target.value)}
+                  />
                 </div>
-                <ServiceList
-                  services={business.others}
-                  timeZone={timeZone}
-                  showUptime={showUptime}
-                  showMetrics={showMetrics}
-                  showUptimeHistory={showUptimeHistory}
-                  showSlaMetrics={showSlaMetrics}
-                  showServiceMeta={showServiceMeta}
-                />
-              </div>
-            )}
-          </>
-        )
-      ) : filtered.length === 0 ? (
-        <div className="status-v3-services__empty" role="status">
-          <div className="status-v3-services__empty-icon-wrap" aria-hidden="true">
-            <svg
-              className="status-v3-services__empty-icon"
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-          </div>
-          <p className="status-v3-services__empty-title">No services match your filters.</p>
-          <p className="status-v3-services__empty-hint">
-            {query.trim()
-              ? `No services matching "${query}" were found.`
-              : 'There are currently no services with this status.'}
-          </p>
-          {(filter !== 'all' || query.trim() !== '') && (
-            <button
-              type="button"
-              className="status-v3-services__empty-reset"
-              onClick={() => {
-                setFilter('all');
-                setQuery('');
-              }}
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
-      ) : groups ? (
-        groups.map(group => {
-          const impacted = group.services.filter(
-            service => service.status !== 'OPERATIONAL'
-          ).length;
-          const healthy = impacted === 0;
-          return (
-            <div key={group.region} className="status-v3-group">
-              <div className="status-v3-group__head">
-                <div className="status-v3-group__title-wrap">
-                  <h3 className="status-v3-group__title">
+
+                <div
+                  className="status-v3-filters"
+                  role="group"
+                  aria-label={t('services.filterByStatus')}
+                >
+                  {STATUS_FILTERS.map(item => {
+                    const isSelected =
+                      filter === item.key ||
+                      (item.key === 'OUTAGE' &&
+                        (filter === 'MAJOR_OUTAGE' || filter === 'PARTIAL_OUTAGE'));
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        className={`status-v3-filter-chip${isSelected ? ' status-v3-filter-chip--active' : ''}`}
+                        aria-pressed={isSelected}
+                        onClick={() => setFilter(prev => (prev === item.key ? 'all' : item.key))}
+                      >
+                        {item.dotClass && (
+                          <span
+                            className={`status-v3-legend-indicator ${item.dotClass}`}
+                            aria-hidden="true"
+                          />
+                        )}
+                        <span>{t(item.label)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <span className="status-v3-services__legend-divider" aria-hidden="true" />
+
+                {canGroup && (
+                  <button
+                    type="button"
+                    className={`status-v3-services__group-btn${groupRegions ? ' status-v3-services__group-btn--active' : ''}`}
+                    aria-label={t('services.groupByRegion')}
+                    aria-pressed={groupRegions}
+                    onClick={() => setGroupRegions(open => !open)}
+                  >
                     <svg
-                      className="status-v3-group__icon"
-                      width="13"
-                      height="13"
+                      className="status-v3-services__group-icon"
+                      width="12"
+                      height="12"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
@@ -746,52 +589,261 @@ export default function ServiceHealthV3({
                       <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
                       <path d="M2 12h20" />
                     </svg>
-                    {group.region}
-                  </h3>
-                  <span className="status-v3-group__subtitle">
-                    {group.services.length} service{group.services.length === 1 ? '' : 's'}
-                  </span>
-                </div>
-                <div
-                  className="status-v3-group__tally"
-                  aria-label={`${healthy ? 'All' : impacted} of ${group.services.length} services ${healthy ? 'operational' : 'affected'}`}
-                >
-                  {healthy ? (
-                    <span className="status-v3-group__tally-pill status-v3-group__tally-pill--healthy">
-                      <span className="status-v3-group__dot" aria-hidden="true" />
-                      All operational
+                    <span>
+                      {groupRegions ? t('services.groupedByRegion') : t('services.groupByRegion')}
                     </span>
-                  ) : (
-                    <span className="status-v3-group__tally-pill status-v3-group__tally-pill--impacted">
-                      <span className="status-v3-group__dot" aria-hidden="true" />
-                      {impacted} affected
-                    </span>
-                  )}
+                  </button>
+                )}
+
+                <div className="status-v3-services__sort-wrap">
+                  <svg
+                    className="status-v3-services__sort-icon"
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m3 16 4 4 4-4" />
+                    <path d="M7 20V4" />
+                    <path d="m21 8-4-4-4 4" />
+                    <path d="M17 4v16" />
+                  </svg>
+                  <label htmlFor="status-v3-sort-select" className="sr-only">
+                    {t('services.sort')}
+                  </label>
+                  <select
+                    id="status-v3-sort-select"
+                    className="status-v3-services__sort-select"
+                    aria-label={t('services.sort')}
+                    value={sortMode}
+                    onChange={event => setSortMode(event.target.value as SortMode)}
+                  >
+                    <option value="configured">{t('services.sortConfigured')}</option>
+                    <option value="issues">{t('services.sortIssues')}</option>
+                    <option value="alphabetical">{t('services.sortAlphabetical')}</option>
+                  </select>
+                  <svg
+                    className="status-v3-services__sort-chevron"
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
                 </div>
               </div>
-              <ServiceList
-                services={group.services}
-                timeZone={timeZone}
-                showUptime={showUptime}
-                showMetrics={showMetrics}
-                showUptimeHistory={showUptimeHistory}
-                showSlaMetrics={showSlaMetrics}
-                showServiceMeta={showServiceMeta}
-              />
+            )}
+            <span className="status-v3-services__legend-divider" aria-hidden="true" />
+
+            <div className="status-v3-services__legend-window">
+              <span className="status-v3-services__legend-count">
+                {business
+                  ? business.rows.length === business.total
+                    ? t('services.businessCount', { count: business.total })
+                    : t('services.countOf', { shown: business.rows.length, total: business.total })
+                  : filtered.length === services.length
+                    ? serviceCount(services.length, t)
+                    : t('services.countOf', { shown: filtered.length, total: services.length })}
+              </span>
+              <span className="status-v3-services__legend-dot" aria-hidden="true">
+                ·
+              </span>
+              <svg
+                className="status-v3-legend-clock"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              <span>{t('services.last90')}</span>
             </div>
-          );
-        })
-      ) : (
-        <ServiceList
-          services={filtered}
-          timeZone={timeZone}
-          showUptime={showUptime}
-          showMetrics={showMetrics}
-          showUptimeHistory={showUptimeHistory}
-          showSlaMetrics={showSlaMetrics}
-          showServiceMeta={showServiceMeta}
-        />
-      )}
-    </section>
+          </div>
+        </div>
+
+        {business ? (
+          business.rows.length === 0 && business.others.length === 0 ? (
+            <div className="status-v3-services__empty" role="status">
+              <p className="status-v3-services__empty-title">{t('services.noMatch')}</p>
+              <button
+                type="button"
+                className="status-v3-services__empty-reset"
+                onClick={() => {
+                  setFilter('all');
+                  setQuery('');
+                }}
+              >
+                {t('services.clearFilters')}
+              </button>
+            </div>
+          ) : (
+            <>
+              {business.rows.length > 0 && (
+                <div
+                  className="status-v3-services__list"
+                  role="list"
+                  aria-label={t('business.list')}
+                >
+                  {renderBusinessRows(null, 1, new Set())}
+                </div>
+              )}
+              {business.others.length > 0 && (
+                <div className="status-v3-group status-v3-business-others">
+                  <div className="status-v3-group__head">
+                    <div className="status-v3-group__title-wrap">
+                      <h3 className="status-v3-group__title">{t('services.others')}</h3>
+                      <span className="status-v3-group__subtitle">
+                        {serviceCount(business.others.length, t)}
+                      </span>
+                    </div>
+                  </div>
+                  <ServiceList
+                    services={business.others}
+                    timeZone={timeZone}
+                    showUptime={showUptime}
+                    showMetrics={showMetrics}
+                    showUptimeHistory={showUptimeHistory}
+                    showSlaMetrics={showSlaMetrics}
+                    showServiceMeta={showServiceMeta}
+                  />
+                </div>
+              )}
+            </>
+          )
+        ) : filtered.length === 0 ? (
+          <div className="status-v3-services__empty" role="status">
+            <div className="status-v3-services__empty-icon-wrap" aria-hidden="true">
+              <svg
+                className="status-v3-services__empty-icon"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+            </div>
+            <p className="status-v3-services__empty-title">{t('services.noMatch')}</p>
+            <p className="status-v3-services__empty-hint">
+              {query.trim() ? t('services.noMatchQuery', { query }) : t('services.noMatchStatus')}
+            </p>
+            {(filter !== 'all' || query.trim() !== '') && (
+              <button
+                type="button"
+                className="status-v3-services__empty-reset"
+                onClick={() => {
+                  setFilter('all');
+                  setQuery('');
+                }}
+              >
+                {t('services.clearFilters')}
+              </button>
+            )}
+          </div>
+        ) : groups ? (
+          groups.map(group => {
+            const impacted = group.services.filter(
+              service => service.status !== 'OPERATIONAL'
+            ).length;
+            const healthy = impacted === 0;
+            return (
+              <div key={group.region} className="status-v3-group">
+                <div className="status-v3-group__head">
+                  <div className="status-v3-group__title-wrap">
+                    <h3 className="status-v3-group__title">
+                      <svg
+                        className="status-v3-group__icon"
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+                        <path d="M2 12h20" />
+                      </svg>
+                      {group.region}
+                    </h3>
+                    <span className="status-v3-group__subtitle">
+                      {serviceCount(group.services.length, t)}
+                    </span>
+                  </div>
+                  <div
+                    className="status-v3-group__tally"
+                    aria-label={
+                      healthy
+                        ? t('services.regionHealthy', { total: group.services.length })
+                        : t('business.affectedCount', {
+                            impacted,
+                            total: group.services.length,
+                          })
+                    }
+                  >
+                    {healthy ? (
+                      <span className="status-v3-group__tally-pill status-v3-group__tally-pill--healthy">
+                        <span className="status-v3-group__dot" aria-hidden="true" />
+                        {t('services.allOperational')}
+                      </span>
+                    ) : (
+                      <span className="status-v3-group__tally-pill status-v3-group__tally-pill--impacted">
+                        <span className="status-v3-group__dot" aria-hidden="true" />
+                        {t('services.affected', { count: impacted })}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <ServiceList
+                  services={group.services}
+                  timeZone={timeZone}
+                  showUptime={showUptime}
+                  showMetrics={showMetrics}
+                  showUptimeHistory={showUptimeHistory}
+                  showSlaMetrics={showSlaMetrics}
+                  showServiceMeta={showServiceMeta}
+                />
+              </div>
+            );
+          })
+        ) : (
+          <ServiceList
+            services={filtered}
+            timeZone={timeZone}
+            showUptime={showUptime}
+            showMetrics={showMetrics}
+            showUptimeHistory={showUptimeHistory}
+            showSlaMetrics={showSlaMetrics}
+            showServiceMeta={showServiceMeta}
+          />
+        )}
+      </section>
+    </HistoryIncidentsContext.Provider>
   );
 }

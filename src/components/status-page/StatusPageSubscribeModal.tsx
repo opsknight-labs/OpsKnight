@@ -7,6 +7,8 @@ interface StatusPageSubscribeModalProps {
   open: boolean;
   statusPageId: string;
   webhookSlug?: string | null;
+  subscribeSlug?: string | null;
+  channels?: readonly string[] | null;
   services: Array<{ id: string; name: string; kind?: 'service' | 'business' }>;
   rssHref?: string | null;
   apiHref?: string | null;
@@ -18,6 +20,8 @@ export default function StatusPageSubscribeModal({
   open,
   statusPageId,
   webhookSlug,
+  subscribeSlug,
+  channels,
   services,
   rssHref,
   apiHref,
@@ -161,6 +165,8 @@ export default function StatusPageSubscribeModal({
           <StatusPageSubscribe
             statusPageId={statusPageId}
             webhookSlug={webhookSlug}
+            subscribeSlug={subscribeSlug}
+            channels={channels}
             services={services}
             initialSelectedId={initialSelectedId}
             variant="modal"

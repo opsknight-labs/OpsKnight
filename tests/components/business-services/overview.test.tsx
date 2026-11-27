@@ -12,6 +12,8 @@ import {
   StatusPagesPanel,
 } from '@/components/business-service/OverviewPanels';
 import { describeReason, memberStatuses, reasonIds } from '@/components/business-service/reasons';
+import ActivityPanel from '@/components/business-service/ActivityPanel';
+import DetailsPanel from '@/components/business-service/DetailsPanel';
 
 vi.mock('@/app/(app)/services/business/actions', () => ({
   unmarkImpactAction: vi.fn().mockResolvedValue({ ok: true, id: 'x' }),
@@ -138,6 +140,103 @@ describe('business-service overview', () => {
     expect(screen.getByText('Status unavailable')).toBeInTheDocument();
   });
 
+  it('lists members worst first, critical before non-critical, with the add control', () => {
+    const member = (
+      id: string,
+      status: 'OPERATIONAL' | 'DEGRADED' | 'MAJOR_OUTAGE',
+      critical = true
+    ) => ({
+      id,
+      name: id,
+      critical,
+      teamName: null,
+      canOpen: false,
+      status,
+    });
+    render(
+      <MembersPanel
+        members={[
+          member('ok', 'OPERATIONAL'),
+          member('slow', 'DEGRADED', false),
+          member('down', 'MAJOR_OUTAGE'),
+          member('slow-critical', 'DEGRADED'),
+        ]}
+        supporting={[]}
+        addAction={<button type="button">Add services</button>}
+      />
+    );
+    const rows = screen.getAllByRole('row').slice(1);
+    expect(rows.map(row => within(row).getAllByRole('cell')[0].textContent)).toEqual([
+      'down',
+      'slow-critical',
+      'slow',
+      'ok',
+    ]);
+    expect(screen.getByRole('button', { name: 'Add services' })).toBeInTheDocument();
+  });
+
+  it('shows KPI deltas against the previous 30 days', async () => {
+    const [last30, last90] = await Promise.all([
+      engine.getBusinessServiceStats('checkout', window, actor),
+      engine.getBusinessServiceStats('checkout', window, actor),
+    ]);
+    render(
+      <OverviewKpis
+        last30={last30}
+        last90={last90}
+        previous={{ ...last30, incidentCount: 1, uptimePercent: 99.5 }}
+        daily={[0, 30, 0]}
+      />
+    );
+    const kpis = screen.getByRole('list', { name: 'Key metrics' });
+    expect(kpis).toHaveTextContent('+0.29 pts vs previous period, better');
+    expect(kpis).toHaveTextContent('+200% vs previous period, worse');
+  });
+
+  it('pages the activity list with a Load more link', () => {
+    render(
+      <ActivityPanel
+        entries={[
+          {
+            id: 'a',
+            action: 'business_service.updated',
+            actorName: 'Ann',
+            createdAt: now,
+            details: null,
+          },
+        ]}
+        names={new Map()}
+        moreHref="/services/business/b1?tab=activity&activity=100"
+      />
+    );
+    expect(screen.getByRole('link', { name: 'Load more' })).toHaveAttribute(
+      'href',
+      '/services/business/b1?tab=activity&activity=100'
+    );
+  });
+
+  it('shows custom attributes, tags and links in the details panel', () => {
+    render(
+      <DetailsPanel
+        lifecycle="DEPRECATED"
+        environment="prod"
+        tags={['pci']}
+        links={[{ label: 'Runbook', url: 'https://example.com/rb' }]}
+        attributes={{ cost_center: 'cc-104', pci: true }}
+        contactChannel="#checkout"
+        lastReviewedAt={null}
+      />
+    );
+    expect(screen.getByText('Deprecated')).toBeInTheDocument();
+    expect(screen.getByText('cost_center')).toBeInTheDocument();
+    expect(screen.getByText('cc-104')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Runbook/ })).toHaveAttribute(
+      'href',
+      'https://example.com/rb'
+    );
+    expect(screen.getByRole('list', { name: 'Tags' })).toHaveTextContent('pci');
+  });
+
   it('renders uptime 30/90 d, incidents, MTTA and MTTR from the engine stats', async () => {
     const last90Window = { from: new Date(now.getTime() - 90 * DAY), to: now };
     const [last30, last90] = await Promise.all([
@@ -159,7 +258,9 @@ describe('business-service overview', () => {
     const { rerender } = render(
       <ImpactTimeline entries={entries} window={window} showIncidents={false} />
     );
-    expect(screen.getByRole('group', { name: /^1 impact in the last 30 days/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole('group', { name: /^1 impact in the last 30 days/ })
+    ).toBeInTheDocument();
     expect(screen.queryByText(/Card auth failing/)).toBeNull();
     expect(screen.getByRole('list', { name: 'Recent impacts' })).toHaveTextContent(
       'Incident · Direct'

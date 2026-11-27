@@ -24,7 +24,7 @@ export default async function BusinessServiceTemplatesPage() {
     }),
   ]);
   return (
-    <div className="mx-auto w-full max-w-[1200px] space-y-6 px-4 py-6 md:px-6 md:py-8">
+    <div className="space-y-4 sm:space-y-6">
       <PageHeader
         eyebrow="Service catalog"
         title="Business service templates"

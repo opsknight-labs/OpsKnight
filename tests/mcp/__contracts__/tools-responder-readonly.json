@@ -24,6 +24,18 @@
     "descriptionSha256": "39acdb8bdd74359b41cf5f256b8b0f1773096edcb6ab3de27dc71de6446af993"
   },
   {
+    "name": "business_service_changes",
+    "title": "Changes behind a business service",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "9cd28839ceeb3e33058124f501894c117d738435119ec448882c2873e8bddef4",
+    "descriptionSha256": "1648b216ce9397edafbdafba925b543768a79be1158a5a0c38692f308ba78a37"
+  },
+  {
     "name": "business_service_get",
     "title": "Get a business service",
     "annotations": {
@@ -80,7 +92,7 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "9b2609a3894f2aa68a7e70b68792260293cfdc6252696d6415d9ffe0fc3fe881",
+    "inputSchemaSha256": "6000ba03e7a8440201de67b69f914c73bc85d8de38d477f4740e39c7e5d02732",
     "descriptionSha256": "a6ad85381f6d1058d1924e89c37ce3c88e231803042eeedf046305acb8ca7a7a"
   },
   {
@@ -484,7 +496,7 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "3eb5e02cf7833072c3c88653b872650ff2645778696736d38b03edfb07c13424",
+    "inputSchemaSha256": "1facbee642cbc8aa290cd351f99b973a91665eb2508912de65108bc0ab1d3e0d",
     "descriptionSha256": "aa34ce123b0a98b24380074156124d9778145e8b44cd0caf44130618b5673b85"
   },
   {

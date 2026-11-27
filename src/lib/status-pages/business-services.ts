@@ -40,10 +40,7 @@ export function expandAffectedServiceIds(
   const business = strings(businessServiceIds);
   if (!direct.length && !business.length) return null;
   return [
-    ...new Set([
-      ...direct,
-      ...business.flatMap(id => membersByBusinessService.get(id) ?? []),
-    ]),
+    ...new Set([...direct, ...business.flatMap(id => membersByBusinessService.get(id) ?? [])]),
   ];
 }
 
@@ -167,7 +164,8 @@ export function buildPublicBusinessServices(
       return service ? [service] : [];
     });
     if (!members.length) return [];
-    const status = group.statusOverride ?? getWorstPublicStatus(members.map(member => member.status));
+    const status =
+      group.statusOverride ?? getWorstPublicStatus(members.map(member => member.status));
     // An override has no trustworthy start time, so it shows no "since" line.
     const statusSince = group.statusOverride ? undefined : statusSinceFor(status, members);
     const uptimeMembers = members.flatMap(member => (member.uptime ? [member.uptime] : []));
@@ -181,6 +179,7 @@ export function buildPublicBusinessServices(
         ...(statusSince ? { statusSince } : {}),
         ...(group.showMembers === false ? { showMembers: false } : {}),
         memberServiceIds: members.map(member => member.id),
+        memberCount: members.length,
         activeIncidentCount: members.reduce((sum, member) => sum + member.activeIncidentCount, 0),
         impactedServiceCount: members.filter(
           member => member.status !== 'OPERATIONAL' && member.status !== 'UNKNOWN'

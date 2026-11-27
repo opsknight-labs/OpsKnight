@@ -3,12 +3,14 @@ import Link from 'next/link';
 import type { BusinessServiceTier, IncidentStatus, IncidentUrgency } from '@prisma/client';
 import { ArrowUpRight, Boxes, LayoutPanelTop, Network, Users } from 'lucide-react';
 import { KPI_CARD, KPI_GRID, KpiBody } from '@/components/analytics/KpiCard';
+import DeltaBadge from '@/components/analytics/DeltaBadge';
+import { describeDelta } from '@/components/analytics/format';
 import { EmptyState, RelativeTime, SeverityBadge, StatusBadge } from '@/components/patterns';
 import type { BsStatus, BusinessServiceStats } from '@/lib/business-services/contract';
 import type { ErrorBudget } from '@/lib/business-services/slo';
 import { cn } from '@/lib/utils';
 import DependencyMiniGraph from './DependencyMiniGraph';
-import HealthBadge, { CRITICALITY_LABEL } from './HealthBadge';
+import HealthBadge, { BS_STATUS_META, CRITICALITY_LABEL } from './HealthBadge';
 
 const head = 'h-9 px-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap';
 const cell = 'px-3 py-2.5 align-middle text-sm font-normal';
@@ -44,37 +46,81 @@ const BURN_BAR = {
   BREACHED: 'bg-status-critical',
 } as const;
 
-/** Share of the error budget spent, as a meter; the burn state is also written out beside it. */
-function BudgetGauge({ budget }: { budget: ErrorBudget }) {
-  const spent = Math.min(Math.max(100 - budget.remainingPercent, 0), 100);
+/** Share of the error budget left, as a meter, matching the "% left" value above it. */
+export function BudgetGauge({ budget }: { budget: ErrorBudget }) {
+  const left = Math.min(Math.max(budget.remainingPercent, 0), 100);
   return (
     <div
       role="meter"
-      aria-label="Error budget spent"
+      aria-label="Error budget left"
       aria-valuemin={0}
       aria-valuemax={100}
-      aria-valuenow={Math.round(spent)}
-      aria-valuetext={`${Math.round(spent)}% spent, ${BURN_LABEL[budget.burnState]}`}
+      aria-valuenow={Math.round(left)}
+      aria-valuetext={`${Math.round(left)}% left, ${BURN_LABEL[budget.burnState]}`}
       className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"
     >
       <div
         className={cn('h-full rounded-full', BURN_BAR[budget.burnState])}
-        style={{ width: `${spent}%` }}
+        style={{ width: `${left}%` }}
       />
     </div>
   );
 }
 
-/** Uptime 30/90 days, incidents, MTTA and MTTR over the last 30 days. */
+/** Uptime change in points; finer than `describeDelta`, which rounds sub-half-point moves to flat. */
+function uptimeDelta(current: number, previous: number): ReturnType<typeof describeDelta> {
+  const change = current - previous;
+  if (Math.abs(change) < 0.005) return { label: 'No change', tone: 'neutral', direction: 'flat' };
+  const direction = change > 0 ? 'up' : 'down';
+  return {
+    label: `${direction === 'up' ? '+' : '−'}${Math.abs(change).toFixed(2)} pts`,
+    tone: direction === 'up' ? 'good' : 'bad',
+    direction,
+  };
+}
+
+/** Decorative trend of daily impact minutes; the numbers beside it carry the meaning. */
+function Sparkline({ values }: { values: readonly number[] }) {
+  if (values.length < 2) return null;
+  const max = Math.max(1, ...values);
+  const step = 64 / (values.length - 1);
+  const points = values
+    .map((value, index) => `${index * step},${15 - (value / max) * 14}`)
+    .join(' ');
+  return (
+    <svg viewBox="0 0 64 16" className="h-4 w-16 shrink-0 text-status-elevated" aria-hidden>
+      <polyline
+        points={points}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/**
+ * Error budget, uptime 30/90 days, incidents, MTTA and MTTR over the last 30 days, each with its
+ * change against the 30 days before when `previous` is given, and a daily impact sparkline.
+ */
 export function OverviewKpis({
   last30,
   last90,
+  previous,
+  daily,
   slo,
 }: {
   last30: BusinessServiceStats;
   last90: BusinessServiceStats;
+  /** The 30 days before `last30`, for the deltas. */
+  previous?: BusinessServiceStats | null;
+  /** Impact minutes per day over the last 30 days, oldest first. */
+  daily?: readonly number[];
   slo?: (ErrorBudget & { target: number; windowDays: number }) | null;
 }) {
+  const vs = (delta: ReturnType<typeof describeDelta>) =>
+    previous ? <DeltaBadge delta={delta} compact /> : null;
   return (
     <ul className={KPI_GRID} aria-label="Key metrics">
       {slo && (
@@ -96,7 +142,13 @@ export function OverviewKpis({
         <KpiBody
           label="Uptime, 30 days"
           value={percent(last30.uptimePercent)}
-          meta={<span className="tabular-nums">90 days: {percent(last90.uptimePercent)}</span>}
+          meta={
+            <>
+              {vs(previous ? uptimeDelta(last30.uptimePercent, previous.uptimePercent) : null)}
+              <span className="tabular-nums">90 days: {percent(last90.uptimePercent)}</span>
+              {daily && daily.some(minutes => minutes > 0) && <Sparkline values={daily} />}
+            </>
+          }
         />
       </li>
       <li className={KPI_CARD}>
@@ -104,9 +156,16 @@ export function OverviewKpis({
           label="Incidents, 30 days"
           value={last30.incidentCount.toLocaleString()}
           meta={
-            <span className="tabular-nums">
-              {Math.round(last30.impactMinutes).toLocaleString()} min of impact
-            </span>
+            <>
+              {vs(
+                previous
+                  ? describeDelta(last30.incidentCount, previous.incidentCount, 'count', 'down')
+                  : null
+              )}
+              <span className="tabular-nums">
+                {Math.round(last30.impactMinutes).toLocaleString()} min of impact
+              </span>
+            </>
           }
         />
       </li>
@@ -116,7 +175,18 @@ export function OverviewKpis({
           value={duration(last30.mttaMinutes)}
           empty={last30.mttaMinutes === null}
           meta={
-            last30.mttaMinutes === null ? 'No incidents to measure' : 'Mean time to acknowledge'
+            last30.mttaMinutes === null ? (
+              'No incidents to measure'
+            ) : (
+              <>
+                {vs(
+                  previous
+                    ? describeDelta(last30.mttaMinutes, previous.mttaMinutes, 'duration', 'down')
+                    : null
+                )}
+                <span>Mean time to acknowledge</span>
+              </>
+            )
           }
         />
       </li>
@@ -125,7 +195,20 @@ export function OverviewKpis({
           label="MTTR"
           value={duration(last30.mttrMinutes)}
           empty={last30.mttrMinutes === null}
-          meta={last30.mttrMinutes === null ? 'No incidents to measure' : 'Mean time to resolve'}
+          meta={
+            last30.mttrMinutes === null ? (
+              'No incidents to measure'
+            ) : (
+              <>
+                {vs(
+                  previous
+                    ? describeDelta(last30.mttrMinutes, previous.mttrMinutes, 'duration', 'down')
+                    : null
+                )}
+                <span>Mean time to resolve</span>
+              </>
+            )
+          }
         />
       </li>
     </ul>
@@ -247,17 +330,31 @@ function RelatedList({
 
 const Pending = () => <span className="text-xs text-muted-foreground">Status unavailable</span>;
 
+/** Worst status first, then critical before non-critical, then name; unknown (null) last. */
+const byWorstMember = (a: OverviewMember, b: OverviewMember) =>
+  (b.status ? BS_STATUS_META[b.status].rank : -1) -
+    (a.status ? BS_STATUS_META[a.status].rank : -1) ||
+  Number(b.critical) - Number(a.critical) ||
+  a.name.localeCompare(b.name);
+
 export function MembersPanel({
-  members,
+  members: unsorted,
   supporting,
+  addAction,
 }: {
   members: readonly OverviewMember[];
   supporting: readonly OverviewRelated[];
+  /** "Add services" control for managers. */
+  addAction?: ReactNode;
 }) {
+  const members = [...unsorted].sort(byWorstMember);
   return (
     <div className="space-y-6">
       <section aria-labelledby="bs-members" className="space-y-2">
-        <Subheading id="bs-members">Technical services</Subheading>
+        <div className="flex items-center justify-between gap-2">
+          <Subheading id="bs-members">Technical services</Subheading>
+          {addAction}
+        </div>
         {members.length === 0 ? (
           <EmptyState
             variant="simple"

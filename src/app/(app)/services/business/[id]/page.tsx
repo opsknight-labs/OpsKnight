@@ -1,13 +1,20 @@
-import { Suspense, cache } from 'react';
+import { Suspense, cache, type ReactNode } from 'react';
 import { FreezeBanner } from '@/components/business-service/FreezeBanner';
 import AutoRefresh from '@/components/business-service/AutoRefresh';
 import WhyStatusCard, { type WhyReason } from '@/components/business-service/WhyStatusCard';
 import DependencyHealthSummary from '@/components/business-service/DependencyHealthSummary';
 import ActivityPanel from '@/components/business-service/ActivityPanel';
+import ChangesSection from '@/components/business-service/ChangesPanel';
+import SlaReportMenu from '@/components/business-service/SlaReportMenu';
+import AddMembersDialog from '@/components/business-service/AddMembersDialog';
+import CopyLinkButton from '@/components/business-service/CopyLinkButton';
+import DetailsPanel from '@/components/business-service/DetailsPanel';
+import { dailyImpactMinutes } from '@/components/business-service/impact-days';
+import { InlineNotice } from '@/components/ui/InlineNotice';
 import { auditReferenceIds } from '@/lib/business-services/audit-diff';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Boxes, ExternalLink, Network, Pencil } from 'lucide-react';
+import { Boxes, Network, Pencil } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { requirePageAccess } from '@/lib/access/server';
 import { CAPABILITIES } from '@/lib/authorization';
@@ -28,7 +35,8 @@ import {
 } from '@/lib/business-services/contract';
 import { orUnavailable } from '@/lib/business-services/dashboards';
 import { FIRST_STEP_SELECT, onCallFor } from '@/lib/business-services/on-call';
-import { computeErrorBudget } from '@/lib/business-services/slo';
+import { getErrorBudgets } from '@/lib/business-services/stats';
+import { contactChannelHref } from '@/lib/business-services/chat-channels';
 import { SectionCard, SectionSkeleton } from '@/components/analytics/SectionCard';
 import { KpiGridSkeleton } from '@/components/analytics/KpiCard';
 import { PageHeader } from '@/components/patterns';
@@ -39,6 +47,7 @@ import BusinessServiceFollowButton from '@/components/service/BusinessServiceFol
 import HealthBadge, {
   CRITICALITY_HINT,
   CRITICALITY_LABEL,
+  LIFECYCLE_LABEL,
 } from '@/components/business-service/HealthBadge';
 import HealthUnavailable from '@/components/business-service/HealthUnavailable';
 import ImpactTimeline from '@/components/business-service/ImpactTimeline';
@@ -62,6 +71,7 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 const DAY = 86_400_000;
+const BUDGET_STATE = { OK: 'on track', AT_RISK: 'at risk', BREACHED: 'spent' } as const;
 // Tab panels sit on a card, like the overview's sections, so muted text keeps AA contrast.
 const TAB_CARD = 'rounded-lg border bg-card p-4 text-card-foreground shadow-xs sm:p-5';
 const windowOf = (days: number, to = new Date()) => ({
@@ -86,15 +96,27 @@ function safeLinks(value: unknown): { label: string; url: string }[] {
   });
 }
 
-/** One 30-day stats read per render, shared by the KPI and incident-count sections. */
+/** One 30-day stats read per render, shared by the KPI, customer-impact and incident-count sections. */
 const stats30 = cache((id: string, actor: AuthorizationActor) =>
   getBusinessServiceStats(id, windowOf(30), actor)
 );
 
-const sloStats = (id: string, actor: AuthorizationActor, days: number) =>
-  days === 30 ? stats30(id, actor) : getBusinessServiceStats(id, windowOf(days), actor);
+/** The 30 days before the last 30, for the KPI deltas. */
+const previous30 = (id: string, actor: AuthorizationActor) =>
+  getBusinessServiceStats(id, windowOf(30, new Date(Date.now() - 30 * DAY)), actor);
 
-/** Uptime and response KPIs (30 and 90 days). */
+/** The error budget over the service's own SLO window; shared by the header stat and the KPIs. */
+const budgetOf = cache(async (id: string) => (await getErrorBudgets([id])).get(id) ?? null);
+
+/** One timeline read per window per render, shared by the sparkline and the impact chart. */
+const timelineOf = cache(async (id: string, actor: AuthorizationActor, days: number) => {
+  const window = windowOf(days);
+  return { window, entries: await getImpactTimeline(id, window, actor) };
+});
+
+const IMPACT_WINDOWS = [7, 30, 90] as const;
+
+/** Uptime and response KPIs (30 and 90 days) with deltas against the 30 days before. */
 async function KpiSection({
   id,
   actor,
@@ -108,28 +130,25 @@ async function KpiSection({
     Promise.all([
       stats30(id, actor),
       getBusinessServiceStats(id, windowOf(90), actor),
-      // The error budget is measured over the service's own SLO window.
-      slo ? sloStats(id, actor, slo.windowDays) : null,
+      previous30(id, actor),
+      slo ? budgetOf(id) : null,
+      timelineOf(id, actor, 30),
     ]),
     'business_services.overview.stats_unavailable'
   );
   if (!stats) {
     return <HealthUnavailable />;
   }
-  const budget =
-    slo && stats[2]
-      ? {
-          target: slo.target,
-          windowDays: slo.windowDays,
-          ...computeErrorBudget({
-            targetPercent: slo.target,
-            windowDays: slo.windowDays,
-            downtimeMinutes: stats[2].weightedDowntimeMinutes ?? stats[2].impactMinutes,
-            windowMinutes: stats[2].weightedWindowMinutes,
-          }),
-        }
-      : null;
-  return <OverviewKpis last30={stats[0]} last90={stats[1]} slo={budget} />;
+  const [last30, last90, previous, budget, timeline] = stats;
+  return (
+    <OverviewKpis
+      last30={last30}
+      last90={last90}
+      previous={previous}
+      daily={dailyImpactMinutes(timeline.entries, timeline.window)}
+      slo={slo && budget ? { target: slo.target, windowDays: slo.windowDays, ...budget } : null}
+    />
+  );
 }
 
 /** Cost of downtime, customers exposed and customer reports; for readers who may see incidents. */
@@ -174,6 +193,7 @@ async function CustomerImpactSection({
             thresholdWindowMinutes: item.customerReportWindowMinutes,
             reports: data[1],
             canAdd,
+            viewerId: actor.id,
           }}
         />
       ) : (
@@ -186,35 +206,44 @@ async function CustomerImpactSection({
 async function TimelineSection({
   id,
   actor,
+  days,
   showIncidents,
   cost,
   canUnmark,
 }: {
   id: string;
   actor: AuthorizationActor;
+  days: number;
   showIncidents: boolean;
   cost?: { revenuePerHourCents: number | null; currency: string };
   canUnmark: boolean;
 }) {
-  const window = windowOf(30);
-  const entries = await orUnavailable(
-    getImpactTimeline(id, window, actor),
+  const timeline = await orUnavailable(
+    timelineOf(id, actor, days),
     'business_services.overview.timeline_unavailable'
   );
   return (
     <SectionCard
       id="bs-impact"
-      title="Impact, last 30 days"
+      title={`Impact, last ${days} days`}
       description="When this business service was impacted, and how serious it was."
     >
-      {entries ? (
+      {timeline ? (
         <ImpactTimeline
-          entries={entries}
-          window={window}
+          entries={timeline.entries}
+          window={timeline.window}
           showIncidents={showIncidents}
           cost={cost}
           businessServiceId={id}
           canUnmark={canUnmark}
+          ranges={IMPACT_WINDOWS.map(option => ({
+            days: option,
+            href:
+              option === 30
+                ? `/services/business/${id}#bs-impact`
+                : `/services/business/${id}?impact=${option}#bs-impact`,
+            current: option === days,
+          }))}
         />
       ) : (
         <HealthUnavailable />
@@ -349,7 +378,7 @@ async function StatusPagesSection({ id, canManage }: { id: string; canManage: bo
 }
 
 /** Followers tab: loaded only when the tab is open. */
-async function FollowersSection({ id }: { id: string }) {
+async function FollowersSection({ id, followAction }: { id: string; followAction: ReactNode }) {
   const [followers, teams, dashboards] = await Promise.all([
     prisma.businessServiceFollower.findMany({
       where: { businessServiceId: id },
@@ -375,17 +404,21 @@ async function FollowersSection({ id }: { id: string }) {
         }))}
         teams={teams.map(({ team }) => team)}
         dashboards={dashboards.map(({ dashboard }) => dashboard)}
+        followAction={followAction}
       />
     </div>
   );
 }
 
 /** Activity tab: the BUSINESS_SERVICE audit trail of this service, newest first, with before and after. */
-async function ActivitySection({ id }: { id: string }) {
+const ACTIVITY_PAGE = 50;
+const ACTIVITY_MAX = 500;
+
+async function ActivitySection({ id, limit }: { id: string; limit: number }) {
   const rows = await prisma.auditLog.findMany({
     where: { entityType: 'BUSINESS_SERVICE', entityId: id },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-    take: 50,
+    take: limit,
     select: { id: true, action: true, actorName: true, createdAt: true, details: true },
   });
   const ids = [...new Set(rows.flatMap(row => auditReferenceIds(row.details)))];
@@ -404,7 +437,15 @@ async function ActivitySection({ id }: { id: string }) {
   ]);
   return (
     <div className={TAB_CARD}>
-      <ActivityPanel entries={rows} names={names} />
+      <ActivityPanel
+        entries={rows}
+        names={names}
+        moreHref={
+          rows.length === limit && limit < ACTIVITY_MAX
+            ? `/services/business/${id}?tab=activity&activity=${limit + ACTIVITY_PAGE}`
+            : undefined
+        }
+      />
     </div>
   );
 }
@@ -419,7 +460,7 @@ export default async function BusinessServiceOverviewPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ tab?: string }>;
+  searchParams?: Promise<{ tab?: string; impact?: string; activity?: string }>;
 }) {
   await requirePageAccess('/services/business/[id]');
   const [{ id }, query, actor] = await Promise.all([
@@ -453,6 +494,7 @@ export default async function BusinessServiceOverviewPage({
       environment: true,
       lifecycle: true,
       lastReviewedAt: true,
+      customAttributes: true,
       members: {
         orderBy: { createdAt: 'asc' },
         select: {
@@ -483,9 +525,15 @@ export default async function BusinessServiceOverviewPage({
     'dependencies',
     'status-pages',
     'followers',
+    'changes',
     ...(canReadAudit ? ['activity'] : []),
   ];
   const tab = query?.tab && tabIds.includes(query.tab) ? query.tab : 'overview';
+  const impactDays = IMPACT_WINDOWS.find(days => String(days) === query?.impact) ?? (30 as number);
+  const activityLimit = Math.min(
+    Math.max(Math.trunc(Number(query?.activity) || ACTIVITY_PAGE), ACTIVITY_PAGE),
+    ACTIVITY_MAX
+  );
 
   const canManage = actorHasCapability(actor, CAPABILITIES.OPERATIONS_MANAGE);
   const canReadIncidents = authorize({
@@ -510,7 +558,9 @@ export default async function BusinessServiceOverviewPage({
   // Names for the "why" sentences: members and children are known; resolve the rest, in scope.
   const knownServices = new Map(item.members.map(m => [m.service.id, m.service.name]));
   const knownBusiness = new Map(children.map(child => [child.id, child.name]));
-  const wanted = own ? reasonIds(own.reasons) : { services: [], businessServices: [] };
+  // Reason names and their incidents only feed the overview's "why" card: other tabs skip them.
+  const wanted =
+    own && tab === 'overview' ? reasonIds(own.reasons) : { services: [], businessServices: [] };
   const missingServices = wanted.services.filter(sid => !knownServices.has(sid));
   const missingBusiness = wanted.businessServices.filter(bid => !knownBusiness.has(bid));
   const [extraServices, extraBusiness, dependencies, onCall] = await Promise.all([
@@ -546,15 +596,16 @@ export default async function BusinessServiceOverviewPage({
   for (const row of extraServices) knownServices.set(row.id, row.name);
   for (const row of extraBusiness) knownBusiness.set(row.id, row.name);
   // Open incidents behind DIRECT and DEPENDENCY reasons, so each reason can link to one (readers of incidents only).
-  const reasonServiceIds = own
-    ? [
-        ...new Set(
-          own.reasons.flatMap(reason =>
-            reason.kind === 'DIRECT' || reason.kind === 'DEPENDENCY' ? [reason.serviceId] : []
-          )
-        ),
-      ]
-    : [];
+  const reasonServiceIds =
+    own && tab === 'overview'
+      ? [
+          ...new Set(
+            own.reasons.flatMap(reason =>
+              reason.kind === 'DIRECT' || reason.kind === 'DEPENDENCY' ? [reason.serviceId] : []
+            )
+          ),
+        ]
+      : [];
   const openByService = new Map<string, string>();
   if (canReadIncidents && reasonServiceIds.length) {
     const open = await prisma.incident.findMany({
@@ -618,6 +669,10 @@ export default async function BusinessServiceOverviewPage({
       where: { businessServiceId: item.id, userId: actor.id },
     })) > 0;
   const links = safeLinks(item.links);
+  const budget = item.sloTarget === null ? null : await budgetOf(item.id).catch(() => undefined);
+  const impacted = own !== null && own.status !== 'OPERATIONAL';
+  // eslint-disable-next-line react-hooks/purity -- a server render stamps when its data was read
+  const renderedAt = Date.now();
 
   const followButton = (
     <BusinessServiceFollowButton
@@ -633,44 +688,80 @@ export default async function BusinessServiceOverviewPage({
       <Suspense fallback={null}>
         <FreezeBanner id={item.id} />
       </Suspense>
-      {own && <WhyStatusCard status={own.status} reasons={whyReasons} />}
-      <Suspense fallback={<KpiGridSkeleton count={4} />}>
-        <KpiSection
-          id={item.id}
-          actor={actor}
-          slo={
-            item.sloTarget === null
-              ? null
-              : { target: item.sloTarget, windowDays: item.sloWindowDays }
-          }
-        />
-      </Suspense>
-      <DependencyHealthSummary
-        supporting={related(children)}
-        technicalCount={technical.length}
-        tabHref={`/services/business/${item.id}?tab=dependencies`}
-      />
-      <Suspense fallback={<SectionSkeleton title="Impact, last 30 days" height="h-24" />}>
-        <TimelineSection
-          id={item.id}
-          actor={actor}
-          showIncidents={canReadIncidents}
-          cost={canReadIncidents ? item : undefined}
-          canUnmark={canManage}
-        />
-      </Suspense>
-      {canReadIncidents && (
-        <Suspense fallback={<SectionSkeleton title="Customer impact" height="h-24" />}>
-          <CustomerImpactSection item={item} actor={actor} canAdd={canManage} />
-        </Suspense>
+      {!item.criticality && (
+        <InlineNotice tone="warning" title="Criticality is not set">
+          Every open incident on a member counts as impact until a tier is set. Set one to filter
+          out low-urgency noise.
+          {canManage && (
+            <>
+              {' '}
+              <Link
+                href={`/services/business/${item.id}/edit#bs-criticality`}
+                className="font-medium underline underline-offset-2"
+              >
+                Set criticality
+              </Link>
+            </>
+          )}
+        </InlineNotice>
       )}
-      <Suspense fallback={<SectionSkeleton title="Incidents" height="h-40" />}>
-        {canReadIncidents ? (
-          <IncidentsSection id={item.id} memberIds={memberIds} actor={actor} />
-        ) : (
-          <IncidentCountSection id={item.id} actor={actor} open={own?.openIncidentCount ?? 0} />
-        )}
-      </Suspense>
+      {/* Healthy services skip the "why" card; an impacted one leads with it and its incidents. */}
+      {impacted && own && <WhyStatusCard status={own.status} reasons={whyReasons} />}
+      <div className="grid items-start gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <div className="min-w-0 space-y-4 sm:space-y-6">
+          <Suspense fallback={<SectionSkeleton title="Incidents" height="h-40" />}>
+            {canReadIncidents ? (
+              <IncidentsSection id={item.id} memberIds={memberIds} actor={actor} />
+            ) : (
+              <IncidentCountSection id={item.id} actor={actor} open={own?.openIncidentCount ?? 0} />
+            )}
+          </Suspense>
+          <Suspense fallback={<KpiGridSkeleton count={item.sloTarget === null ? 4 : 5} />}>
+            <KpiSection
+              id={item.id}
+              actor={actor}
+              slo={
+                item.sloTarget === null
+                  ? null
+                  : { target: item.sloTarget, windowDays: item.sloWindowDays }
+              }
+            />
+          </Suspense>
+          <Suspense
+            fallback={<SectionSkeleton title={`Impact, last ${impactDays} days`} height="h-24" />}
+          >
+            <TimelineSection
+              id={item.id}
+              actor={actor}
+              days={impactDays}
+              showIncidents={canReadIncidents}
+              cost={canReadIncidents ? item : undefined}
+              canUnmark={canManage}
+            />
+          </Suspense>
+          {canReadIncidents && (
+            <Suspense fallback={<SectionSkeleton title="Customer impact" height="h-24" />}>
+              <CustomerImpactSection item={item} actor={actor} canAdd={canManage} />
+            </Suspense>
+          )}
+        </div>
+        <DetailsPanel
+          lifecycle={item.lifecycle}
+          environment={item.environment}
+          tags={item.tags}
+          links={links}
+          attributes={item.customAttributes}
+          contactChannel={item.contactChannel}
+          contactHref={contactChannelHref(item.contactChannel)}
+          lastReviewedAt={item.lastReviewedAt}
+        >
+          <DependencyHealthSummary
+            supporting={related(children)}
+            technicalCount={technical.length}
+            tabHref={`/services/business/${item.id}?tab=dependencies`}
+          />
+        </DetailsPanel>
+      </div>
     </div>
   );
 
@@ -693,52 +784,16 @@ export default async function BusinessServiceOverviewPage({
               <span className={pageHeaderBadgeClass}>Health unavailable</span>
             )}
             {item.criticality && (
-              <span className={pageHeaderBadgeClass}>{CRITICALITY_LABEL[item.criticality]}</span>
+              <span className={pageHeaderBadgeClass} title={CRITICALITY_HINT[item.criticality]}>
+                {CRITICALITY_LABEL[item.criticality]} · {CRITICALITY_HINT[item.criticality]}
+              </span>
             )}
             {item.lifecycle !== 'ACTIVE' && (
-              <span className={pageHeaderBadgeClass}>{item.lifecycle}</span>
+              <span className={pageHeaderBadgeClass}>{LIFECYCLE_LABEL[item.lifecycle]}</span>
             )}
           </>
         }
-        description={
-          <div className="space-y-2">
-            {item.description && <p>{item.description}</p>}
-            {!item.criticality && (
-              <p className="text-xs text-status-elevated">
-                Criticality is not set, so every open incident on a member counts as impact. Set a
-                tier to filter out low-urgency noise.
-              </p>
-            )}
-            {(item.tags.length > 0 || item.environment) && (
-              <ul aria-label="Tags" className="flex flex-wrap gap-1.5 text-xs">
-                {item.environment && <li className={pageHeaderBadgeClass}>{item.environment}</li>}
-                {item.tags.map(tag => (
-                  <li key={tag} className={pageHeaderBadgeClass}>
-                    {tag}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {links.length > 0 && (
-              <ul aria-label="Links" className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                {links.map(entry => (
-                  <li key={entry.url}>
-                    <a
-                      href={entry.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      {entry.label}
-                      <ExternalLink className="h-3 w-3" aria-hidden />
-                      <span className="sr-only">(opens in a new tab)</span>
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        }
+        description={item.description ?? undefined}
         stats={[
           {
             label: 'Owner',
@@ -759,20 +814,25 @@ export default async function BusinessServiceOverviewPage({
                 : 'No escalation policy',
           },
           {
-            label: 'Criticality',
-            value: item.criticality ? CRITICALITY_LABEL[item.criticality] : 'Not set',
-            subtext: item.criticality ? CRITICALITY_HINT[item.criticality] : undefined,
-          },
-          {
-            label: 'Services',
-            value: memberIds.length.toLocaleString(),
-            subtext: own?.impactedMemberCount ? `${own.impactedMemberCount} impacted` : undefined,
+            label: 'Error budget',
+            value:
+              item.sloTarget === null
+                ? 'No SLO'
+                : budget
+                  ? `${Math.max(budget.remainingPercent, 0).toFixed(0)}% left`
+                  : '—',
+            subtext:
+              item.sloTarget === null
+                ? undefined
+                : `${item.sloTarget}% over ${item.sloWindowDays} days${budget ? ` · ${BUDGET_STATE[budget.burnState]}` : ''}`,
           },
           {
             label: 'Open incidents',
             value: own ? own.openIncidentCount.toLocaleString() : '—',
+            subtext: own?.impactedMemberCount
+              ? `${own.impactedMemberCount} of ${memberIds.length} services impacted`
+              : undefined,
           },
-          { label: 'Followers', value: item._count.followers.toLocaleString() },
         ]}
         secondaryActions={
           <>
@@ -787,6 +847,14 @@ export default async function BusinessServiceOverviewPage({
                 Show on graph
               </Link>
             </Button>
+            <SlaReportMenu
+              businessServiceId={item.id}
+              className={cn('gap-1.5', pageHeaderActionClass)}
+            />
+            <CopyLinkButton
+              path={`/services/business/${item.id}`}
+              className={pageHeaderActionClass}
+            />
             {followButton}
           </>
         }
@@ -806,7 +874,9 @@ export default async function BusinessServiceOverviewPage({
         <HealthUnavailable message="Live status could not be loaded. Members, dependencies, status pages and followers below are current; refresh in a moment to try again." />
       )}
 
-      <AutoRefresh seconds={60} />
+      <div className="flex justify-end">
+        <AutoRefresh seconds={60} renderedAt={renderedAt} />
+      </div>
       <DetailTabs
         label="Business service sections"
         defaultTab={tab}
@@ -820,7 +890,15 @@ export default async function BusinessServiceOverviewPage({
             content:
               tab === 'members' ? (
                 <div className={TAB_CARD}>
-                  <MembersPanel members={members} supporting={related(children)} />
+                  <MembersPanel
+                    members={members}
+                    supporting={related(children)}
+                    addAction={
+                      canManage ? (
+                        <AddMembersDialog businessServiceId={item.id} existingIds={memberIds} />
+                      ) : undefined
+                    }
+                  />
                 </div>
               ) : null,
           },
@@ -862,7 +940,26 @@ export default async function BusinessServiceOverviewPage({
             content:
               tab === 'followers' ? (
                 <Suspense fallback={<SectionSkeleton title="Followers" height="h-24" />}>
-                  <FollowersSection id={item.id} />
+                  <FollowersSection
+                    id={item.id}
+                    followAction={
+                      <BusinessServiceFollowButton
+                        id={item.id}
+                        name={item.name}
+                        following={following}
+                      />
+                    }
+                  />
+                </Suspense>
+              ) : null,
+          },
+          {
+            id: 'changes',
+            label: 'Changes',
+            content:
+              tab === 'changes' ? (
+                <Suspense fallback={<SectionSkeleton title="Changes" height="h-24" />}>
+                  <ChangesSection businessServiceId={item.id} actor={actor} />
                 </Suspense>
               ) : null,
           },
@@ -874,7 +971,7 @@ export default async function BusinessServiceOverviewPage({
                   content:
                     tab === 'activity' ? (
                       <Suspense fallback={<SectionSkeleton title="Activity" height="h-24" />}>
-                        <ActivitySection id={item.id} />
+                        <ActivitySection id={item.id} limit={activityLimit} />
                       </Suspense>
                     ) : null,
                 },

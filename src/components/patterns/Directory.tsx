@@ -117,13 +117,16 @@ export type DirectoryColumnVisibility = {
  */
 export function useDirectoryColumns(
   storageKey: string,
-  items: readonly ColumnOption[]
+  items: readonly ColumnOption[],
+  /** Optional columns that start hidden until the viewer turns them on. */
+  defaultHidden: readonly string[] = []
 ): DirectoryColumnVisibility {
   const key = `opsknight:directory-columns:${storageKey}`;
+  const fallback = defaultHidden.join(',');
   const stored = useSyncExternalStore(
     subscribeView,
-    () => readStored(key) ?? '',
-    () => ''
+    () => readStored(key) ?? fallback,
+    () => fallback
   );
   const hidden = useMemo(() => new Set(stored.split(',').filter(Boolean)), [stored]);
   const onToggle = (id: string, visible: boolean) => {

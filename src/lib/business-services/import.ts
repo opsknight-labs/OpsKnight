@@ -4,9 +4,9 @@ import { parse as parseYaml } from 'yaml';
 import type { BusinessServiceTier, Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
-import { emitAuditEvent, type AuditEventSource } from '@/lib/audit';
+import { emitAuditEvent, type AuditEventActor, type AuditEventSource } from '@/lib/audit';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
-import { parseCatalog } from '@/lib/intelligence/dependencies/import';
+import { parseCatalog, type CatalogEntity } from '@/lib/intelligence/dependencies/import';
 import {
   assertCanManageBusinessServices,
   businessServiceReadWhere,
@@ -14,6 +14,7 @@ import {
   updateBusinessService,
 } from './commands';
 import { invalidateBusinessServiceHealth } from './health';
+import { CustomAttributesSchema } from './attributes';
 
 export const MAX_IMPORT_ROWS = 1000;
 export const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
@@ -32,6 +33,8 @@ export type ImportRow = {
   members?: string[];
   /** Business services (names) this one depends on; replaces that set when present. */
   dependsOn?: string[];
+  /** Custom attributes to set; merged over the stored ones (CSV `attr.<key>` columns, YAML `attributes`). */
+  attributes?: Record<string, string | number | boolean>;
 };
 
 export type ImportIssue = { line: number; name?: string; message: string };
@@ -121,7 +124,38 @@ function rowFrom(
   if (members) row.members = members;
   const dependsOn = list('dependsOn' in record ? record.dependsOn : record.depends_on);
   if (dependsOn) row.dependsOn = dependsOn;
+  const attributes = attributesFrom(record);
+  if (attributes === null)
+    issues.push({ line, name, message: 'Attributes must be scalar values with valid keys.' });
+  else if (attributes) row.attributes = attributes;
   return row;
+}
+
+/** A CSV cell reads like the edit form: true/false and numbers become typed values. */
+const typed = (value: string): string | number | boolean =>
+  value === 'true'
+    ? true
+    : value === 'false'
+      ? false
+      : !isNaN(Number(value))
+        ? Number(value)
+        : value;
+
+/** YAML `attributes` mapping or CSV `attr.<key>` columns; null when present but invalid. */
+function attributesFrom(record: Record<string, unknown>) {
+  const entries: [string, unknown][] = Object.entries(record).flatMap(([column, value]) =>
+    column.startsWith('attr.')
+      ? [[column.slice(5), typeof value === 'string' ? typed(value.trim()) : value]]
+      : []
+  );
+  const mapping = record.attributes;
+  if (mapping !== undefined && mapping !== null) {
+    if (typeof mapping !== 'object' || Array.isArray(mapping)) return null;
+    entries.push(...Object.entries(mapping));
+  }
+  if (!entries.length) return undefined;
+  const parsed = CustomAttributesSchema.safeParse(Object.fromEntries(entries));
+  return parsed.success ? parsed.data : null;
 }
 
 function csvRows(input: string, issues: ImportIssue[]): ImportRow[] {
@@ -162,12 +196,15 @@ function yamlRows(input: string, issues: ImportIssue[]): ImportRow[] {
 /**
  * Backstage catalog: each System is a business service; Components whose spec.system names it
  * are its members (by the opsknight.com/service-id annotation, else by name); a System's
- * dependsOn on other Systems becomes its supporting business services.
+ * dependsOn on other Systems becomes its supporting business services. With `domains`, each
+ * spec.domain of a System also becomes a business service supported by its Systems.
  */
-function backstageRows(input: string): ImportRow[] {
-  const entities = parseCatalog(input);
+export function backstageRowsFromEntities(
+  entities: readonly CatalogEntity[],
+  options: { domains?: boolean } = {}
+): ImportRow[] {
   const systems = entities.filter(entity => entity.kind === 'system');
-  return systems.map((system, index) => {
+  const rows: ImportRow[] = systems.map((system, index) => {
     const key = system.name.toLowerCase();
     const members = entities
       .filter(
@@ -181,7 +218,22 @@ function backstageRows(input: string): ImportRow[] {
       .map(ref => ref.replace(/^system:/i, '').replace(/^[^/]+\//, ''));
     return { line: index + 1, name: system.name, members, dependsOn };
   });
+  if (!options.domains) return rows;
+  const domains = new Map<string, string[]>();
+  for (const system of systems)
+    if (system.domain)
+      domains.set(system.domain, [...(domains.get(system.domain) ?? []), system.name]);
+  return [
+    ...rows,
+    ...[...domains].map(([name, dependsOn], index) => ({
+      line: rows.length + index + 1,
+      name,
+      dependsOn,
+    })),
+  ];
 }
+
+const backstageRows = (input: string) => backstageRowsFromEntities(parseCatalog(input));
 
 /** Parses a file into rows plus row-level issues; throws for unreadable or oversized input. */
 export function parseBusinessServiceImport(input: string, format: ImportFormat) {
@@ -221,6 +273,8 @@ type Resolved = {
   existingId: string | null;
   ownerTeamId?: string | null;
   memberServiceIds?: string[];
+  /** Stored attributes with the file's merged over them. */
+  customAttributes?: Record<string, string | number | boolean>;
 };
 
 const lower = (value: string) => value.trim().toLowerCase();
@@ -270,6 +324,7 @@ async function resolveImport(rows: ImportRow[], parseIssues: ImportIssue[]) {
         description: true,
         criticality: true,
         ownerTeamId: true,
+        customAttributes: true,
         members: { select: { serviceId: true, service: { select: { name: true } } } },
       },
     }),
@@ -338,6 +393,20 @@ async function resolveImport(rows: ImportRow[], parseIssues: ImportIssue[]) {
         issues.push({ line: row.line, name: row.name, message: 'At most 200 members.' });
       entry.memberServiceIds = [...new Set(ids)];
     }
+    if (row.attributes) {
+      const stored = existing.find(item => item.id === entry.existingId)?.customAttributes;
+      const merged = CustomAttributesSchema.safeParse({
+        ...(stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {}),
+        ...row.attributes,
+      });
+      if (merged.success) entry.customAttributes = merged.data;
+      else
+        issues.push({
+          line: row.line,
+          name: row.name,
+          message: merged.error.issues[0]?.message ?? 'Invalid attributes.',
+        });
+    }
     return entry;
   });
 
@@ -380,7 +449,7 @@ async function resolveImport(rows: ImportRow[], parseIssues: ImportIssue[]) {
     });
 
   const changes: ImportChange[] = resolved.map(
-    ({ row, existingId, ownerTeamId, memberServiceIds }) => {
+    ({ row, existingId, ownerTeamId, memberServiceIds, customAttributes }) => {
       const current = existingId ? existing.find(item => item.id === existingId)! : null;
       const currentMembers = new Set(current?.members.map(member => member.serviceId) ?? []);
       const nameOf = new Map([
@@ -403,6 +472,11 @@ async function resolveImport(rows: ImportRow[], parseIssues: ImportIssue[]) {
       if (ownerTeamId !== undefined && ownerTeamId !== (current?.ownerTeamId ?? null))
         fields.push('ownerTeam');
       if (membersAdded.length || membersRemoved.length) fields.push('members');
+      if (
+        customAttributes &&
+        JSON.stringify(customAttributes) !== JSON.stringify(current?.customAttributes ?? {})
+      )
+        fields.push('customAttributes');
       if (row.dependsOn) {
         const before = supports
           .filter(edge => edge.parentId === existingId)
@@ -437,7 +511,12 @@ async function resolveImport(rows: ImportRow[], parseIssues: ImportIssue[]) {
   };
 }
 
-type Context = { actor: AuthorizationActor; source?: AuditEventSource };
+type Context = {
+  actor: AuthorizationActor;
+  source?: AuditEventSource;
+  /** Audit as this actor instead of the user, e.g. a scheduled sync. */
+  auditActor?: AuditEventActor;
+};
 
 /**
  * Imports business services from CSV, YAML or a Backstage catalog. With `dryRun` it only returns
@@ -450,6 +529,20 @@ export async function importBusinessServices(
 ): Promise<ImportPlan & { applied: boolean }> {
   assertCanManageBusinessServices(context.actor);
   const { rows, issues } = parseBusinessServiceImport(input.content, input.format);
+  return applyImportRows(rows, issues, input, context, client);
+}
+
+/** The validated, all-or-nothing apply behind importBusinessServices, for already parsed rows. */
+export async function applyImportRows(
+  rows: ImportRow[],
+  issues: ImportIssue[],
+  input: { format: ImportFormat; dryRun: boolean },
+  context: Context,
+  client?: Prisma.TransactionClient
+): Promise<ImportPlan & { applied: boolean }> {
+  assertCanManageBusinessServices(context.actor);
+  if (rows.length > MAX_IMPORT_ROWS)
+    throw invalid(`An import holds at most ${MAX_IMPORT_ROWS} business services.`);
   const { resolved, plan } = await resolveImport(rows, issues);
   if (input.dryRun || plan.issues.length) return { ...plan, applied: false };
 
@@ -465,6 +558,7 @@ export async function importBusinessServices(
         ...(entry.ownerTeamId !== undefined ? { ownerTeamId: entry.ownerTeamId } : {}),
         ...(entry.memberServiceIds ? { memberServiceIds: entry.memberServiceIds } : {}),
         ...(row.criticality !== undefined ? { criticality: row.criticality } : {}),
+        ...(entry.customAttributes ? { customAttributes: entry.customAttributes } : {}),
       };
       const saved =
         entry.existingId === null
@@ -524,7 +618,7 @@ export async function importBusinessServices(
         action: 'business_service.imported',
         source: context.source ?? 'UI',
         target: { type: 'BUSINESS_SERVICE', id: null },
-        actor: { type: 'USER', id: context.actor.id },
+        actor: context.auditActor ?? { type: 'USER', id: context.actor.id },
         metadata: {
           format: input.format,
           ...plan.summary,

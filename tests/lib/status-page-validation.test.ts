@@ -380,6 +380,15 @@ describe('Status Page Validation Schemas', () => {
         const result = StatusPageSettingsSchema.safeParse(data);
         expect(result.success).toBe(true);
       });
+
+      it('accepts a boolean expandGroupsByDefault only', () => {
+        expect(StatusPageSettingsSchema.safeParse({ expandGroupsByDefault: true }).success).toBe(
+          true
+        );
+        expect(StatusPageSettingsSchema.safeParse({ expandGroupsByDefault: 'yes' }).success).toBe(
+          false
+        );
+      });
     });
 
     describe('Status API settings', () => {

@@ -112,6 +112,17 @@ export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
   'PATCH /business-service-templates/{id}': { sloTarget: 99.95 },
   'POST /business-service-templates/{id}/instantiate': { name: 'Orders API' },
   'PUT /settings/service-reviews': { enabled: false, dayOfMonth: 1, hour: 9 },
+  'PUT /settings/business-service-scorecard': {
+    levels: [{ id: 'bronze', label: 'Bronze' }],
+    rules: [
+      {
+        id: 'owner',
+        label: 'Has an owner',
+        check: { type: 'field', field: 'owner' },
+        level: 'bronze',
+      },
+    ],
+  },
   'POST /business-services/import': {
     format: 'csv',
     content:

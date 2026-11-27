@@ -22,6 +22,8 @@ export type GraphItem = {
   memberCount: number | null;
   /** Flagged by the single-points-of-failure panel; drawn with a badge. */
   spof?: boolean;
+  /** Hidden by the filters but shown because an impact or path runs through it. */
+  filteredOut?: boolean;
 };
 
 export type GraphLink = {
@@ -45,6 +47,8 @@ export type GraphLink = {
   traffic?: { requestRate: number; errorRate: number; windowStart: string } | null;
   /** Set while the Changes panel highlights what moved since a past date. */
   diff?: 'added' | 'removed';
+  /** How many links a collapsed business service folded into this one. */
+  merged?: number;
 };
 
 export type GraphModel = { items: GraphItem[]; links: GraphLink[] };
@@ -155,6 +159,115 @@ export function filterGraph(model: GraphModel, filter: GraphFilter): GraphModel 
         keys.has(link.target) &&
         (!filter.origin || link.kind !== 'dependency' || link.origin === filter.origin)
     ),
+  };
+}
+
+/**
+ * Folds each listed business service's member services into it: links to and from a member move
+ * to the business service (deduplicated, counted in `merged`), links inside it disappear. A service
+ * in several collapsed business services moves to each of them.
+ */
+export function collapseBusinessServices(
+  model: GraphModel,
+  collapsed: ReadonlySet<string>
+): GraphModel {
+  if (collapsed.size === 0) return model;
+  const owners = new Map<string, string[]>();
+  for (const link of model.links)
+    if (link.kind === 'member' && collapsed.has(link.source))
+      owners.set(link.target, [...(owners.get(link.target) ?? []), link.source]);
+  if (owners.size === 0) return model;
+  const links = new Map<string, GraphLink>();
+  for (const link of model.links) {
+    if (link.kind === 'member' && collapsed.has(link.source)) continue;
+    const sources = owners.get(link.source);
+    const targets = owners.get(link.target);
+    if (!sources && !targets) {
+      links.set(link.key, link);
+      continue;
+    }
+    for (const source of sources ?? [link.source])
+      for (const target of targets ?? [link.target]) {
+        if (source === target) continue;
+        const key = `agg:${link.kind}:${source}>${target}`;
+        const seen = links.get(key);
+        links.set(
+          key,
+          seen
+            ? {
+                ...seen,
+                merged: (seen.merged ?? 1) + 1,
+                suggested: seen.suggested && link.suggested,
+              }
+            : {
+                ...link,
+                key,
+                source,
+                target,
+                dependencyId: null,
+                traffic: null,
+                diff: undefined,
+                merged: 1,
+              }
+        );
+      }
+  }
+  return { items: model.items.filter(item => !owners.has(item.key)), links: [...links.values()] };
+}
+
+/**
+ * The filtered graph plus what an impact or path reaches through items the filters hide, so the
+ * chain stays visible: those items come back flagged `filteredOut` and the canvas mutes them.
+ */
+export function revealEmphasis(
+  visible: GraphModel,
+  full: GraphModel,
+  emphasis: { keys: ReadonlySet<string>; linkKeys: ReadonlySet<string> } | null
+): GraphModel {
+  if (!emphasis) return visible;
+  const shown = new Set(visible.items.map(item => item.key));
+  const extra = full.items
+    .filter(item => emphasis.keys.has(item.key) && !shown.has(item.key))
+    .map(item => ({ ...item, filteredOut: true }));
+  const linked = new Set(visible.links.map(link => link.key));
+  const extraLinks = full.links.filter(
+    link => emphasis.linkKeys.has(link.key) && !linked.has(link.key)
+  );
+  if (extra.length === 0 && extraLinks.length === 0) return visible;
+  for (const item of extra) shown.add(item.key);
+  return {
+    items: [...visible.items, ...extra],
+    links: [
+      ...visible.links,
+      ...extraLinks.filter(link => shown.has(link.source) && shown.has(link.target)),
+    ],
+  };
+}
+
+/**
+ * Hands back last pass's object for a key while its inputs are identical (Object.is), so React
+ * Flow and the memoised cards skip unchanged nodes on select, search, emphasis or a live status
+ * poll. Call `sweep()` after each full pass so keys that were not asked for are forgotten.
+ */
+export function createReuseCache<T>() {
+  let previous = new Map<string, { deps: readonly unknown[]; value: T }>();
+  let next = new Map<string, { deps: readonly unknown[]; value: T }>();
+  return {
+    get(key: string, deps: readonly unknown[], make: () => T): T {
+      const seen = previous.get(key);
+      const entry =
+        seen &&
+        seen.deps.length === deps.length &&
+        seen.deps.every((dep, i) => Object.is(dep, deps.at(i)))
+          ? seen
+          : { deps, value: make() };
+      next.set(key, entry);
+      return entry.value;
+    },
+    sweep() {
+      previous = next;
+      next = new Map();
+    },
   };
 }
 
@@ -424,13 +537,38 @@ export const STATUS_HEX: Readonly<Record<BsStatus, string>> = {
 
 const escapeXml = (text: string) => text.replace(/[&<>"']/g, ch => `&#${ch.charCodeAt(0)};`);
 
-/** The laid-out graph as a standalone SVG (what is loaded, at the positions shown). */
+const SVG_THEME = {
+  light: {
+    page: '#fafafa',
+    card: '#ffffff',
+    border: '#d4d4d8',
+    text: '#18181b',
+    muted: '#52525b',
+    line: '#71717a',
+  },
+  dark: {
+    page: '#09090b',
+    card: '#18181b',
+    border: '#3f3f46',
+    text: '#fafafa',
+    muted: '#a1a1aa',
+    line: '#a1a1aa',
+  },
+} as const;
+
+/** The laid-out graph as a standalone SVG (what is loaded, at the positions shown, in the viewer's theme). */
 export function exportGraphSvg(
   items: readonly GraphItem[],
   links: readonly GraphLink[],
   positions: Readonly<Record<string, { x: number; y: number }>>,
-  size: (item: GraphItem) => { width: number; height: number }
+  size: (item: GraphItem) => { width: number; height: number },
+  options: {
+    theme?: 'light' | 'dark';
+    /** ELK routes by link key; links without one are drawn straight. */
+    routes?: Readonly<Record<string, ReadonlyArray<{ x: number; y: number }>>>;
+  } = {}
 ): string {
+  const colors = SVG_THEME[options.theme ?? 'light'];
   const placed = items.flatMap(item => {
     const at = positions[item.key];
     return at ? [{ item, ...at, ...size(item) }] : [];
@@ -451,16 +589,25 @@ export function exportGraphSvg(
         ? ' stroke-dasharray="10 3 2 3"'
         : link.kind === 'member'
           ? ' stroke-dasharray="2 3"'
-          : '';
+          : link.kind === 'support'
+            ? ' stroke-dasharray="12 5"'
+            : '';
+    const route = options.routes?.[link.key];
+    const points = route?.length
+      ? route
+      : [
+          { x: a.x + a.width, y: a.y + a.height / 2 },
+          { x: b.x, y: b.y + b.height / 2 },
+        ];
     return [
-      `<line x1="${a.x + a.width}" y1="${a.y + a.height / 2}" x2="${b.x}" y2="${b.y + b.height / 2}" stroke="#71717a" stroke-width="1.5"${dash} marker-end="url(#arrow)"/>`,
+      `<polyline points="${points.map(p => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="${colors.line}" stroke-width="1.5"${dash} marker-end="url(#arrow)"/>`,
     ];
   });
   const boxes = placed.map(
     ({ item, x, y, width, height }) =>
-      `<g><rect x="${x}" y="${y}" width="${width}" height="${height}" rx="${item.kind === 'bs' ? 4 : 12}" fill="#fff" stroke="#d4d4d8"/><rect x="${x}" y="${y}" width="5" height="${height}" fill="${STATUS_HEX[item.status]}"/><text x="${x + 14}" y="${y + 26}" font-family="sans-serif" font-size="13" font-weight="600" fill="#18181b">${escapeXml(item.name.slice(0, 40))}</text><text x="${x + 14}" y="${y + 46}" font-family="sans-serif" font-size="11" fill="#52525b">${escapeXml(item.status.replace('_', ' ').toLowerCase())}${item.openIncidents ? ` · ${item.openIncidents} open` : ''}</text></g>`
+      `<g><rect x="${x}" y="${y}" width="${width}" height="${height}" rx="${item.kind === 'bs' ? 4 : 12}" fill="${colors.card}" stroke="${colors.border}"/><rect x="${x}" y="${y}" width="5" height="${height}" fill="${STATUS_HEX[item.status]}"/><text x="${x + 14}" y="${y + 26}" font-family="sans-serif" font-size="13" font-weight="600" fill="${colors.text}">${escapeXml(item.name.slice(0, 40))}</text><text x="${x + 14}" y="${y + 46}" font-family="sans-serif" font-size="11" fill="${colors.muted}">${escapeXml(item.status.replace('_', ' ').toLowerCase())}${item.openIncidents ? ` · ${item.openIncidents} open` : ''}</text></g>`
   );
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${maxX - minX} ${maxY - minY}" width="${maxX - minX}" height="${maxY - minY}"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#71717a"/></marker></defs><rect x="${minX}" y="${minY}" width="${maxX - minX}" height="${maxY - minY}" fill="#fafafa"/>${lines.join('')}${boxes.join('')}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${maxX - minX} ${maxY - minY}" width="${maxX - minX}" height="${maxY - minY}"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="${colors.line}"/></marker></defs><rect x="${minX}" y="${minY}" width="${maxX - minX}" height="${maxY - minY}" fill="${colors.page}"/>${lines.join('')}${boxes.join('')}</svg>`;
 }
 
 export type SortKey = 'name' | 'team' | 'status' | 'incidents' | 'dependsOn' | 'usedBy';
@@ -532,5 +679,85 @@ export function trafficStyle(
 }
 
 export const formatRate = (rate: number) =>
-  rate >= 100 ? `${Math.round(rate)}/s` : rate >= 1 ? `${rate.toFixed(1)}/s` : `${rate.toFixed(2)}/s`;
+  rate >= 100
+    ? `${Math.round(rate)}/s`
+    : rate >= 1
+      ? `${rate.toFixed(1)}/s`
+      : `${rate.toFixed(2)}/s`;
 export const formatErrorRate = (rate: number) => `${(rate * 100).toFixed(rate < 0.1 ? 2 : 1)}%`;
+
+/** What a link is, in words, for the edge tooltip and its accessible name. */
+export function edgeSummary(link: GraphLink): string[] {
+  const kind =
+    link.kind === 'member'
+      ? 'Member service'
+      : link.kind === 'support'
+        ? 'Supporting business service'
+        : `${link.suggested ? 'Suggested' : link.dependencyType === 'SOFT' ? 'Soft' : 'Hard'} dependency`;
+  const lines = [link.merged && link.merged > 1 ? `${kind} (${link.merged} combined)` : kind];
+  if (link.criticality) lines.push(`${link.criticality.toLowerCase()} criticality`);
+  if (link.traffic)
+    lines.push(
+      `${formatRate(link.traffic.requestRate)} requests · ${formatErrorRate(link.traffic.errorRate)} errors`
+    );
+  if (link.diff)
+    lines.push(link.diff === 'added' ? 'Added in this period' : 'Removed in this period');
+  return lines;
+}
+
+/**
+ * One channel per meaning on edges, so red is never ambiguous: status hues only for an impacted
+ * dependency on the highlighted path, teal (the data-viz hue) for measured traffic with an error
+ * label, neutral ink plus a "new"/"removed" label for the Changes diff. Dashes mark the link type.
+ */
+export const EDGE_STROKE = {
+  traffic: 'var(--chart-series-1)',
+  added: 'hsl(var(--ui-foreground))',
+  removed: 'hsl(var(--ui-muted-foreground))',
+} as const;
+
+export function edgeDash(link: GraphLink): string | undefined {
+  if (link.diff === 'removed') return '3 4';
+  if (link.suggested) return '6 4';
+  if (link.kind === 'member') return '2 3';
+  if (link.kind === 'support') return '12 5';
+  if (link.dependencyType === 'SOFT') return '10 3 2 3';
+  return undefined;
+}
+
+export function edgeAppearance(
+  link: GraphLink,
+  lit: boolean,
+  impacted: BsStatus | null
+): {
+  stroke: string | undefined;
+  width: number;
+  dash: string | undefined;
+  label: { text: string; tone: 'neutral' | 'elevated' | 'critical' } | null;
+} {
+  const traffic = trafficStyle(link.traffic);
+  const stroke = impacted
+    ? STATUS_HEX[impacted] // eslint-disable-line security/detect-object-injection -- typed status enum
+    : link.diff
+      ? EDGE_STROKE[link.diff]
+      : traffic
+        ? EDGE_STROKE.traffic
+        : undefined;
+  const width =
+    lit || link.diff
+      ? 2.5
+      : link.kind === 'member'
+        ? 1
+        : link.kind === 'support'
+          ? 2
+          : (traffic?.width ?? 1.5);
+  const label = link.diff
+    ? { text: link.diff === 'added' ? 'new' : 'removed', tone: 'neutral' as const }
+    : traffic && traffic.tone !== 'ok' && link.traffic
+      ? {
+          text: `${formatErrorRate(link.traffic.errorRate)} err`,
+          tone: traffic.tone === 'bad' ? ('critical' as const) : ('elevated' as const),
+        }
+      : null;
+  return { stroke, width, dash: edgeDash(link), label };
+}

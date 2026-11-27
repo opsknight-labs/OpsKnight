@@ -1151,6 +1151,46 @@
     "requiredHeaders": [],
     "bodyRequired": true
   },
+  "getBusinessServiceScorecardRubric": {
+    "method": "GET",
+    "path": "/settings/business-service-scorecard",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateBusinessServiceScorecardRubric": {
+    "method": "PUT",
+    "path": "/settings/business-service-scorecard",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "getBusinessServiceScorecard": {
+    "method": "GET",
+    "path": "/business-services/{id}/scorecard",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listBusinessServiceChanges": {
+    "method": "GET",
+    "path": "/business-services/{id}/changes",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getBusinessServiceSlaReport": {
+    "method": "GET",
+    "path": "/business-services/{id}/sla-report",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "listStatusPageServices": {
     "method": "GET",
     "path": "/status-pages/{id}/services",

@@ -103,7 +103,13 @@ export async function subscribeWebhookRequest(req: NextRequest, slug: string) {
     if (typeof rawUrl !== 'string') return jsonError('A webhook URL is required.', 400);
 
     const snapshot = await getOpenStatusSnapshot(slug);
-    if (!snapshot || !snapshot.page.showSubscribe) return jsonError('Not found', 404);
+    if (
+      !snapshot ||
+      !snapshot.page.showSubscribe ||
+      (snapshot.page.subscription?.channels &&
+        !snapshot.page.subscription.channels.includes('WEBHOOK'))
+    )
+      return jsonError('Not found', 404);
     const pageId = snapshot.page.id;
 
     const checked = await validateSubscriberWebhookUrl(rawUrl);

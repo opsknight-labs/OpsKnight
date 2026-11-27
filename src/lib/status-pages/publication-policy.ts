@@ -154,6 +154,8 @@ export const STATUS_PAGE_PRESENTATION_FIELDS = [
   'showServicesByRegion',
   // Groups already-published services under business services; never publishes a new service.
   'serviceLayout',
+  // Initial open/closed state of business-service groups; publishes nothing new.
+  'expandGroupsByDefault',
   'showRegionHeatmap',
   'uptimeExcellentThreshold',
   'uptimeGoodThreshold',

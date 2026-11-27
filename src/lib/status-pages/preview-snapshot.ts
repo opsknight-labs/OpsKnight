@@ -7,8 +7,12 @@ import type {
   PublicStatusService,
   PublicStatusBranding,
   PublicPagePresentation,
+  PublicServiceLayout,
 } from './public-contract';
 import { aggregatePublicRegions } from './history';
+import { buildPublicBusinessServices } from './business-services';
+import { buildBusinessHierarchy } from './business-hierarchy';
+import { concealHiddenGroupMembers } from './member-concealment';
 import {
   deriveOverallPublicHealth,
   getWorstPublicStatus,
@@ -37,6 +41,7 @@ type PreviewIncident = {
   acknowledgedAt?: string | Date | null;
   resolvedAt?: string | Date | null;
   service?: { id: string; name: string; region?: string | null };
+  businessServices?: Array<{ id: string; name: string }>;
   events?: Array<{ id: string; message: string; createdAt: string | Date }>;
   postmortem?: { id: string; status: string; isPublic?: boolean | null } | null;
 };
@@ -51,6 +56,16 @@ type PreviewAnnouncement = {
 };
 
 type PreviewPrivacy = Record<string, unknown> | null | undefined;
+
+/** A business service as the admin has it on the page right now (shown ones only, in order). */
+type PreviewBusinessService = {
+  id: string;
+  name: string;
+  memberServiceIds: string[];
+  showMembers?: boolean;
+  /** Business services this one supports on the page (support hierarchy parents). */
+  parentIds?: string[];
+};
 
 const ACTIVE_STATUSES = new Set(['OPEN', 'ACKNOWLEDGED']);
 
@@ -107,9 +122,14 @@ export function buildPreviewSnapshot(input: {
   showMetrics?: boolean;
   showUptimeHistory?: boolean;
   showTeamInformation?: boolean;
-  regions?: any[];
-  maintenance?: any[];
+  regions?: PublicStatusPageSnapshot['regions'];
+  maintenance?: PublicStatusPageSnapshot['maintenance'];
   thresholds: { uptimeExcellent: number; uptimeGood: number };
+  serviceLayout?: PublicServiceLayout;
+  expandGroupsByDefault?: boolean;
+  businessServices?: PreviewBusinessService[];
+  /** Services the admin published directly; a hidden-member group never conceals them. */
+  directServiceIds?: string[];
   now?: Date;
 }): PublicStatusPageSnapshot {
   const now = input.now ?? new Date();
@@ -132,12 +152,19 @@ export function buildPreviewSnapshot(input: {
   const rangeEnd = now;
   const rangeStart = new Date(now.getTime() - 90 * 86_400_000);
 
+  // Page order (the mappings arrive sorted), as the published list and group members use.
+  const position = new Map(input.mappings.map((mapping, index) => [mapping.serviceId, index]));
+  const byPosition = (a: string, b: string) =>
+    (position.get(a) ?? Number.MAX_SAFE_INTEGER) - (position.get(b) ?? Number.MAX_SAFE_INTEGER);
   const services: PublicStatusService[] = input.showServices
     ? input.services
         .filter(service => visible.has(service.id))
+        .sort((a, b) => byPosition(a.id, b.id))
         .map(service => {
           const impact = activeByService.get(service.id);
-          const rawStatus = (service as any).status;
+          // Callers may pass already-projected rows; read those fields when present.
+          const projected = service as Partial<PublicStatusService>;
+          const rawStatus = projected.status;
           const status = impact
             ? getWorstPublicStatus(impact.statuses)
             : rawStatus && rawStatus !== 'OPERATIONAL'
@@ -147,8 +174,8 @@ export function buildPreviewSnapshot(input: {
           const uptimePct =
             typeof input.uptime90?.[service.id] === 'number'
               ? input.uptime90[service.id]
-              : typeof (service as any).uptime?.days90?.percentage === 'number'
-                ? (service as any).uptime.days90.percentage
+              : typeof projected.uptime?.days90?.percentage === 'number'
+                ? projected.uptime.days90.percentage
                 : status === 'OPERATIONAL'
                   ? 100
                   : 98.5;
@@ -160,7 +187,7 @@ export function buildPreviewSnapshot(input: {
                 ? ('GOOD' as const)
                 : ('BELOW_TARGET' as const);
 
-          const serviceHistory = (service as any).history ?? {
+          const serviceHistory = projected.history ?? {
             rangeStart: rangeStart.toISOString(),
             rangeEnd: rangeEnd.toISOString(),
             coverage: 'COMPLETE' as const,
@@ -170,23 +197,23 @@ export function buildPreviewSnapshot(input: {
                     {
                       startAt: new Date(now.getTime() - 4 * 3600_000).toISOString(),
                       endAt: now.toISOString(),
-                      status: status as any,
+                      status,
                     },
                   ]
                 : [],
           };
 
-          const serviceUptime = (service as any).uptime ?? {
+          const serviceUptime = projected.uptime ?? {
             days30: {
               percentage: uptimePct,
-              incidentCount: impact?.count ?? (service as any).activeIncidentCount ?? 0,
+              incidentCount: impact?.count ?? projected.activeIncidentCount ?? 0,
               measuredDays: 30,
               complete: true,
               grade,
             },
             days90: {
               percentage: uptimePct,
-              incidentCount: impact?.count ?? (service as any).activeIncidentCount ?? 0,
+              incidentCount: impact?.count ?? projected.activeIncidentCount ?? 0,
               measuredDays: 90,
               complete: true,
               grade,
@@ -216,12 +243,40 @@ export function buildPreviewSnapshot(input: {
               ? { team: service.team ?? null }
               : {}),
             status,
-            activeIncidentCount: impact?.count ?? (service as any).activeIncidentCount ?? 0,
+            activeIncidentCount: impact?.count ?? projected.activeIncidentCount ?? 0,
             ...(showMetricsAllowed ? { uptime: serviceUptime } : {}),
             ...(showHistoryAllowed ? { history: serviceHistory } : {}),
           };
         })
     : [];
+
+  // Same builder as the projector, over the admin's unsaved layout and the demo service rows.
+  const grouped = input.showServices && (input.serviceLayout ?? 'FLAT') !== 'FLAT';
+  const built = grouped
+    ? buildPublicBusinessServices(
+        (input.businessServices ?? []).map(group => ({
+          id: group.id,
+          name: group.name,
+          showMembers: group.showMembers,
+          memberServiceIds: [...group.memberServiceIds].sort(byPosition),
+        })),
+        services
+      )
+    : undefined;
+  const hierarchy = buildBusinessHierarchy(
+    (built ?? []).map(item => item.id),
+    (input.businessServices ?? []).flatMap(group =>
+      (group.parentIds ?? []).map(parentId => ({ parentId, childId: group.id }))
+    )
+  );
+  const businessServices = built?.map(item => {
+    const node = hierarchy.get(item.id);
+    return {
+      ...item,
+      ...(node?.parentId ? { parentId: node.parentId } : {}),
+      ...(node?.childIds.length ? { childIds: node.childIds } : {}),
+    };
+  });
 
   const nowMs = now.getTime();
   const previewDetailCutoffMs = (() => {
@@ -281,6 +336,9 @@ export function buildPreviewSnapshot(input: {
                 },
               }
             : {}),
+          ...(grouped && allow('showAffectedServices') && incident.businessServices?.length
+            ? { businessServices: incident.businessServices }
+            : {}),
           ...(incident.postmortem?.isPublic ? { postIncidentReview: true } : {}),
           ...(redacted ? { redacted: true as const } : {}),
         };
@@ -323,7 +381,7 @@ export function buildPreviewSnapshot(input: {
           }))
       : undefined;
 
-  const overallBase = deriveOverallPublicHealth(services);
+  const overallBase = deriveOverallPublicHealth(services, businessServices);
   const impactedServiceCount = services.filter(
     service => service.status !== 'OPERATIONAL' && service.status !== 'UNKNOWN'
   ).length;
@@ -335,7 +393,7 @@ export function buildPreviewSnapshot(input: {
     item => item.state === 'IN_PROGRESS'
   ).length;
 
-  return {
+  const snapshot: PublicStatusPageSnapshot = {
     schemaVersion: 3,
     pageId: input.pageId,
     revision: 'preview',
@@ -383,6 +441,8 @@ export function buildPreviewSnapshot(input: {
       },
       showSubscribe: input.showSubscribe !== false,
       showServicesByRegion: input.showServicesByRegion ?? false,
+      ...(grouped ? { serviceLayout: input.serviceLayout } : {}),
+      ...(grouped && input.expandGroupsByDefault ? { expandGroupsByDefault: true } : {}),
       showRegionHeatmap: input.showRegionHeatmap ?? false,
       showPostIncidentReview: input.showPostIncidentReview ?? false,
       showChangelog: input.showChangelog !== false,
@@ -421,6 +481,7 @@ export function buildPreviewSnapshot(input: {
     },
     thresholds: input.thresholds,
     services,
+    ...(businessServices ? { businessServices } : {}),
     regions:
       input.regions && input.regions.length > 0 ? input.regions : aggregatePublicRegions(services),
     incidents,
@@ -446,4 +507,5 @@ export function buildPreviewSnapshot(input: {
     },
     historyDays: 90,
   };
+  return concealHiddenGroupMembers(snapshot, new Set(input.directServiceIds ?? []));
 }

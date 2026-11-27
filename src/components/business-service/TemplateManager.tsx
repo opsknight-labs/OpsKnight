@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus } from 'lucide-react';
+import { FileStack, MoreHorizontal, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import {
@@ -14,6 +14,14 @@ import {
   SelectValue,
 } from '@/components/ui/shadcn/select';
 import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/shadcn/dropdown-menu';
+import { EmptyState } from '@/components/patterns';
+import { CRITICALITY_LABEL } from './HealthBadge';
 import { notify } from '@/lib/toast';
 import {
   createTemplateAction,
@@ -90,7 +98,8 @@ export default function TemplateManager({
       ownerTeamId: template.ownerTeamId ?? NONE,
     });
     // The form sits beside the list; move focus to it so keyboard and screen-reader users land on the edit.
-    document.getElementById('tpl-name')?.focus();
+    // After the row menu has closed, which would otherwise keep focus.
+    requestAnimationFrame(() => document.getElementById('tpl-name')?.focus());
   };
   const reset = () => {
     setEditing(null);
@@ -138,6 +147,7 @@ export default function TemplateManager({
     });
   };
 
+  const [deleting, setDeleting] = useState<TemplateView | null>(null);
   const remove = async (template: TemplateView) => {
     const result = await deleteTemplateAction(template.id);
     if (!result.ok) return { error: result.error };
@@ -150,18 +160,24 @@ export default function TemplateManager({
     <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
       <section aria-label="Templates" className="rounded-lg border bg-card">
         {templates.length === 0 ? (
-          <p className="p-6 text-sm text-muted-foreground">
-            No templates yet. Create one to pre-fill new business services.
-          </p>
+          <div className="p-6">
+            <EmptyState
+              variant="simple"
+              size="sm"
+              icon={<FileStack className="h-5 w-5" aria-hidden />}
+              title="No templates yet"
+              description="A template pre-fills criticality, SLO, tags and ownership for new business services. Create one with the form."
+            />
+          </div>
         ) : (
           <ul className="divide-y">
             {templates.map(template => (
-              <li key={template.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
+              <li key={template.id} className="flex items-center gap-2 px-4 py-3 text-sm">
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{template.name}</p>
                   <p className="truncate text-xs text-muted-foreground">
                     {[
-                      template.criticality?.replace('TIER_', 'Tier '),
+                      template.criticality ? CRITICALITY_LABEL[template.criticality] : null,
                       template.sloTarget === null ? null : `${template.sloTarget}% SLO`,
                       template.ownerTeamName,
                       template.tags.length ? template.tags.join(', ') : null,
@@ -170,7 +186,7 @@ export default function TemplateManager({
                       .join(' · ') || 'No defaults set'}
                   </p>
                 </div>
-                <Button asChild size="sm" variant="outline">
+                <Button asChild size="sm" variant="outline" className="h-8">
                   <Link
                     href={`/services/business/new?template=${template.id}`}
                     aria-label={`Use template ${template.name}`}
@@ -178,35 +194,49 @@ export default function TemplateManager({
                     Use
                   </Link>
                 </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  aria-label={`Edit template ${template.name}`}
-                  onClick={() => load(template)}
-                >
-                  Edit
-                </Button>
-                <DeleteConfirmDialog
-                  title="Delete this template?"
-                  description={`${template.name} will be removed. Business services already created from it are not affected.`}
-                  onConfirm={() => remove(template)}
-                  trigger={
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
                     <Button
                       type="button"
-                      size="sm"
+                      size="icon"
                       variant="ghost"
+                      className="h-8 w-8"
                       disabled={isPending}
-                      aria-label={`Delete template ${template.name}`}
+                      aria-label={`More actions for ${template.name}`}
                     >
-                      Delete
+                      <MoreHorizontal className="h-4 w-4" aria-hidden />
                     </Button>
-                  }
-                />
+                  </DropdownMenuTrigger>
+                  {/* Focus goes to the edit form or the delete dialog, not back to this trigger. */}
+                  <DropdownMenuContent
+                    align="end"
+                    onCloseAutoFocus={event => event.preventDefault()}
+                  >
+                    <DropdownMenuItem onSelect={() => load(template)}>Edit</DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onSelect={() => setDeleting(template)}
+                    >
+                      Delete…
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </li>
             ))}
           </ul>
         )}
+        <DeleteConfirmDialog
+          open={deleting !== null}
+          onOpenChange={open => !open && setDeleting(null)}
+          title="Delete this template?"
+          description={`${deleting?.name ?? 'This template'} will be removed. Business services already created from it are not affected.`}
+          onConfirm={async () => {
+            if (!deleting) return;
+            const result = await remove(deleting);
+            if (!result) setDeleting(null);
+            return result;
+          }}
+        />
       </section>
 
       <form

@@ -27,6 +27,7 @@ import {
   diffGraph,
   findSinglePointsOfFailure,
   getGraphAt,
+  graphTimeline,
   simulateFailure,
 } from '@/lib/intelligence/dependencies/insights/service';
 import {
@@ -345,12 +346,20 @@ const scope = {
 };
 const atSchema = z.object({ at: z.iso.datetime({ offset: true }), ...scope }).strict();
 const diffSchema = z.object({ since: z.iso.datetime({ offset: true }), ...scope }).strict();
-const spofSchema = z.object({ threshold: z.number().int().min(1).max(200).optional(), ...scope }).strict();
-const simulateSchema = z
-  .object({ serviceIds: z.array(id).min(1).max(20), maxDepth: z.number().int().min(1).max(10).optional() })
+const spofSchema = z
+  .object({ threshold: z.number().int().min(1).max(200).optional(), ...scope })
   .strict();
+const simulateSchema = z
+  .object({
+    serviceIds: z.array(id).min(1).max(20),
+    maxDepth: z.number().int().min(1).max(10).optional(),
+  })
+  .strict();
+const timelineSchema = z.object({ ...scope }).strict();
 const viewIdSchema = z.object({ id }).strict();
-const shareSchema = z.object({ id, expiresInDays: z.number().int().min(1).max(90).default(30) }).strict();
+const shareSchema = z
+  .object({ id, expiresInDays: z.number().int().min(1).max(90).default(30) })
+  .strict();
 const embedSchema = z.object({ enabled: z.boolean() }).strict();
 
 const invalid = <T>(): InsightResult<T> => ({ ok: false, message: 'That request was not valid.' });
@@ -369,6 +378,13 @@ export async function diffGraphAction(input: unknown) {
   return insight('changes', actor =>
     diffGraph(actor, new Date(p.data.since), { focus: p.data.focus, hops: p.data.hops })
   );
+}
+
+/** Per-day incident and change counts for the time-travel slider's tick marks. */
+export async function getGraphTimelineAction(input: unknown) {
+  const p = timelineSchema.safeParse(input);
+  if (!p.success) return invalid<Awaited<ReturnType<typeof graphTimeline>>>();
+  return insight('timeline', actor => graphTimeline(actor, p.data));
 }
 
 export async function findSpofAction(input: unknown) {
@@ -396,7 +412,10 @@ export async function createGraphViewAction(input: unknown) {
 }
 
 export async function renameGraphViewAction(input: unknown) {
-  const p = z.object({ id, name: z.string().trim().min(1).max(120) }).strict().safeParse(input);
+  const p = z
+    .object({ id, name: z.string().trim().min(1).max(120) })
+    .strict()
+    .safeParse(input);
   if (!p.success) return invalid<Awaited<ReturnType<typeof updateView>>>();
   return insight('rename view', actor => updateView(actor, p.data.id, { name: p.data.name }));
 }

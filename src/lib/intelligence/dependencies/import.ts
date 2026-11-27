@@ -30,6 +30,8 @@ export interface CatalogEntity {
   dependsOn: string[];
   /** Backstage `spec.system` (lower-cased name) for components; business-service import uses it. */
   system?: string | null;
+  /** Backstage `spec.domain` of a system; the scheduled business-service sync may map it. */
+  domain?: string | null;
 }
 
 type Json = Record<string, unknown>;
@@ -79,6 +81,13 @@ function entityFrom(document: unknown): CatalogEntity | null {
     system:
       typeof spec.system === 'string' && spec.system.trim()
         ? spec.system.trim().toLowerCase()
+        : null,
+    domain:
+      typeof spec.domain === 'string' && spec.domain.trim()
+        ? spec.domain
+            .trim()
+            .replace(/^domain:/i, '')
+            .replace(/^[^/]+\//, '')
         : null,
   };
 }

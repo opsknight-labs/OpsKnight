@@ -94,6 +94,7 @@ export type StatusPageConfigProps = {
     showSubscribe?: boolean;
     showServicesByRegion?: boolean;
     serviceLayout?: StatusPageServiceLayout;
+    expandGroupsByDefault?: boolean;
     businessServices?: Array<{
       businessServiceId: string;
       order: number;
@@ -341,8 +342,19 @@ export function useStatusPageConfigState({
     [...(statusPage.businessServices ?? [])]
       .sort((a, b) => a.order - b.order)
       .map(mapping => mapping.businessServiceId);
-  const [serviceLayout, setServiceLayout] = useState<StatusPageServiceLayout>(
-    statusPage.serviceLayout ?? 'FLAT'
+  // A page set up from scratch in an org that models business services starts on the grouped,
+  // expandable layout; saving the Services section keeps it. Saved pages keep their layout.
+  const getInitialServiceLayout = (): StatusPageServiceLayout =>
+    (statusPage.serviceLayout ?? 'FLAT') === 'FLAT' &&
+    statusPage.services.length === 0 &&
+    (statusPage.businessServices ?? []).length === 0 &&
+    allBusinessServices.length > 0
+      ? 'BUSINESS_EXPANDABLE'
+      : (statusPage.serviceLayout ?? 'FLAT');
+  const [serviceLayout, setServiceLayout] =
+    useState<StatusPageServiceLayout>(getInitialServiceLayout);
+  const [expandGroupsByDefault, setExpandGroupsByDefault] = useState(
+    statusPage.expandGroupsByDefault === true
   );
   const [businessServiceIds, setBusinessServiceIds] = useState<string[]>(
     getInitialBusinessServiceIds
@@ -434,7 +446,8 @@ export function useStatusPageConfigState({
     setPrivacySettings(getInitialPrivacySettings());
     setSelectedServices(getInitialSelectedServices());
     setServiceConfigs(getInitialServiceConfigs());
-    setServiceLayout(statusPage.serviceLayout ?? 'FLAT');
+    setServiceLayout(getInitialServiceLayout());
+    setExpandGroupsByDefault(statusPage.expandGroupsByDefault === true);
     setBusinessServiceIds(getInitialBusinessServiceIds());
     setBusinessServiceConfigs(getInitialBusinessServiceConfigs());
     setError(null);
@@ -616,6 +629,7 @@ export function useStatusPageConfigState({
                 serviceIds: Array.from(selectedServices),
                 serviceConfigs: serviceConfigs,
                 serviceLayout,
+                expandGroupsByDefault,
                 businessServiceIds,
                 // Only rows that will exist after the save; new rows take the defaults first.
                 businessServiceConfigs: Object.fromEntries(
@@ -958,6 +972,25 @@ export function useStatusPageConfigState({
       enableUptimeExports: formData.enableUptimeExports,
       uptimeExcellentThreshold: formData.uptimeExcellentThreshold,
       uptimeGoodThreshold: formData.uptimeGoodThreshold,
+      serviceLayout,
+      expandGroupsByDefault,
+      businessServices: businessServiceIds.flatMap(id => {
+        const option = allBusinessServices.find(item => item.id === id);
+        const config = businessServiceConfigs[id];
+        if (!option || config?.showOnPage === false) return [];
+        return [
+          {
+            id,
+            name: config?.displayName?.trim() || option.name,
+            memberServiceIds: option.memberServiceIds,
+            showMembers: config?.showMembers !== false,
+            parentIds: option.parentIds,
+          },
+        ];
+      }),
+      directServiceIds: statusPage.services
+        .filter(row => !row.viaBusinessService)
+        .map(row => row.serviceId),
     };
   })();
 
@@ -1008,6 +1041,8 @@ export function useStatusPageConfigState({
     getInitialBusinessServiceIds,
     serviceLayout,
     setServiceLayout,
+    expandGroupsByDefault,
+    setExpandGroupsByDefault,
     businessServiceIds,
     setBusinessServiceIds,
     getInitialBusinessServiceConfigs,

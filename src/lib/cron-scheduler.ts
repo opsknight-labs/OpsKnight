@@ -48,12 +48,12 @@ let lastJobCleanup = 0;
 let schedulerProfile: SchedulerProfile = 'full';
 let activeLeaseEpoch: number | null = null;
 
-
 let businessServiceSweepsRunning = false;
 
 /**
- * Business-service ownership hygiene (hourly, admin-enabled, off by default). It may notify many
- * owners, so it must never hold up the tick: run detached, one at a time per process.
+ * Business-service ownership hygiene (hourly) and error-budget alerts (every 15 minutes), both
+ * admin-enabled and off by default. They may notify many owners, so they must never hold up the
+ * tick: run detached, one at a time per process.
  */
 function kickBusinessServiceSweeps() {
   if (businessServiceSweepsRunning) return;
@@ -64,6 +64,12 @@ function kickBusinessServiceSweeps() {
       await runBusinessServiceHygieneIfDue();
     } catch (error) {
       logger.warn('[Cron] Business-service hygiene sweep failed', { error });
+    }
+    try {
+      const { runErrorBudgetAlertsIfDue } = await import('./business-services/budget-alerts');
+      await runErrorBudgetAlertsIfDue();
+    } catch (error) {
+      logger.warn('[Cron] Business-service error-budget alerts failed', { error });
     }
   })().finally(() => {
     businessServiceSweepsRunning = false;

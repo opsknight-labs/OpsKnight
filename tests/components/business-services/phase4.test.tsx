@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import type { ImpactTimelineEntry } from '@/lib/business-services/contract';
 import ImpactTimeline, {
   TIMELINE_CAP,
@@ -12,14 +12,14 @@ import ActivityPanel from '@/components/business-service/ActivityPanel';
 import BusinessServiceForm from '@/components/service/BusinessServiceForm';
 import { previewSentence } from '@/components/service/BusinessServiceFormExtras';
 import { formValueFromTemplate } from '@/components/service/business-service-form-defaults';
-import { distribution } from '@/components/business-service/catalog-model';
+import { distribution, parseCatalogParams } from '@/components/business-service/catalog-model';
 import { diffAuditDetails } from '@/lib/business-services/audit-diff';
 import { countAgainstDraft } from '@/lib/business-services/impact-preview';
 
-const { unmark } = vi.hoisted(() => ({ unmark: vi.fn() }));
+const { unmark, create } = vi.hoisted(() => ({ unmark: vi.fn(), create: vi.fn() }));
 vi.mock('@/app/(app)/services/business/actions', () => ({
   unmarkImpactAction: unmark,
-  createBusinessServiceAction: vi.fn(),
+  createBusinessServiceAction: create,
   updateBusinessServiceAction: vi.fn(),
   deleteBusinessServiceAction: vi.fn(),
   searchBusinessServiceOptionsAction: vi.fn().mockResolvedValue([]),
@@ -54,7 +54,24 @@ beforeEach(() => {
 });
 
 describe('ImpactTimeline interaction', () => {
-  it('shows details on keyboard focus and lets a responder unmark a manual impact', async () => {
+  it('is one chart with one tab stop: arrow keys move between days and select them', () => {
+    render(<ImpactTimeline entries={[entry()]} window={window} showIncidents now={now} />);
+    const group = screen.getByRole('group', { name: /1 impact in the last 30 days/ });
+    const days = within(group).getAllByRole('button');
+    expect(days).toHaveLength(30);
+    expect(days.filter(day => day.tabIndex === 0)).toHaveLength(1);
+    // The impact started two days ago: its column holds the tab stop.
+    const impacted = days.find(day => day.tabIndex === 0)!;
+    expect(impacted.getAttribute('aria-label')).toMatch(/1h 0m of impact, worst partial outage/);
+    expect(impacted.getAttribute('title')).toMatch(/UTC/);
+    fireEvent.keyDown(impacted, { key: 'ArrowRight' });
+    const next = days[days.indexOf(impacted) + 1]!;
+    expect(next).toHaveFocus();
+    expect(next).toHaveAttribute('tabindex', '0');
+    expect(next).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('lists a selected day and asks before a responder unmarks a manual impact', async () => {
     render(
       <ImpactTimeline
         entries={[entry()]}
@@ -65,21 +82,44 @@ describe('ImpactTimeline interaction', () => {
         now={now}
       />
     );
-    const bar = screen.getByRole('button', { name: /Partial outage, Marked by a responder/ });
-    fireEvent.focus(bar);
+    const group = screen.getByRole('group', { name: /impact in the last 30 days/ });
+    fireEvent.click(
+      within(group)
+        .getAllByRole('button')
+        .find(day => day.tabIndex === 0)!
+    );
     expect(screen.getByTestId('impact-detail')).toHaveTextContent('Card auth failing');
     fireEvent.click(screen.getByRole('button', { name: 'Unmark' }));
-    expect(unmark).toHaveBeenCalledWith('i1', 'bs1');
+    expect(unmark).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Unmark impact' }));
+    await waitFor(() => expect(unmark).toHaveBeenCalledWith('i1', 'bs1'));
   });
 
   it('hides Unmark from readers who cannot manage, and warns when the list was cut', () => {
     const many = Array.from({ length: TIMELINE_CAP }, (_, i) =>
-      entry({ incidentId: `i${i}`, source: 'DIRECT' })
+      entry({ incidentId: `i${i}`, source: 'MANUAL' })
     );
     render(<ImpactTimeline entries={many} window={window} showIncidents now={now} />);
-    fireEvent.focus(screen.getAllByRole('button', { name: /Partial outage/ })[0]!);
     expect(screen.queryByRole('button', { name: 'Unmark' })).toBeNull();
     expect(screen.getByRole('note')).toHaveTextContent(`newest ${TIMELINE_CAP}`);
+  });
+
+  it('offers the 7/30/90 window switch as links', () => {
+    render(
+      <ImpactTimeline
+        entries={[]}
+        window={window}
+        showIncidents
+        now={now}
+        ranges={[7, 30, 90].map(days => ({ days, href: `?impact=${days}`, current: days === 30 }))}
+      />
+    );
+    const nav = screen.getByRole('navigation', { name: 'Impact window' });
+    expect(within(nav).getByRole('link', { name: '30 days' })).toHaveAttribute(
+      'aria-current',
+      'true'
+    );
+    expect(within(nav).getByRole('link', { name: '7 days' })).toHaveAttribute('href', '?impact=7');
   });
 
   it('counts overlapping impact once per day', () => {
@@ -113,7 +153,7 @@ describe('catalog health distribution and saved views', () => {
     ['c', { status: 'OPERATIONAL' as const }],
   ]);
 
-  it('counts by status and by tier, and links every chip and cell to a filter', () => {
+  it('counts by status and by tier, and links each cell to a filter that keeps the search and team', () => {
     const data = distribution(rows, health);
     expect(data.byStatus.OPERATIONAL).toBe(2);
     expect(data.matrix.map(r => [r.tier, r.total])).toEqual([
@@ -123,16 +163,25 @@ describe('catalog health distribution and saved views', () => {
     render(
       <HealthDistribution
         data={data}
-        query={{ q: '', tier: '', status: 'MAJOR_OUTAGE', team: '', needs: '' }}
+        query={{ ...parseCatalogParams().query, q: 'pay', team: 't1', sort: 'tier_asc' }}
       />
     );
-    const chip = screen.getByRole('link', { name: /Major outage 1/ });
-    expect(chip).toHaveAttribute('href', '/services/business?status=MAJOR_OUTAGE');
-    expect(chip).toHaveAttribute('aria-current', 'true');
+    // The health chips live in the filter bar; the distribution has none of its own.
+    expect(screen.queryByRole('list', { name: 'Filter by health' })).toBeNull();
     expect(screen.getByRole('link', { name: '1 Tier 0, major outage' })).toHaveAttribute(
       'href',
-      '/services/business?tier=TIER_0&status=MAJOR_OUTAGE'
+      '/services/business?q=pay&tier=TIER_0&status=MAJOR_OUTAGE&team=t1&sort=tier_asc'
     );
+  });
+
+  it('folds the tier matrix away when nothing is impacted', () => {
+    const calm = distribution(rows, new Map([['a', { status: 'OPERATIONAL' as const }]]));
+    const { container } = render(
+      <HealthDistribution data={calm} query={parseCatalogParams().query} />
+    );
+    expect(container.querySelector('details')).not.toBeNull();
+    expect(container.querySelector('details')).not.toHaveAttribute('open');
+    expect(screen.getByText('All 3 without impact')).toBeInTheDocument();
   });
 
   it('saves the current filters as a named view and removes it again', async () => {
@@ -219,6 +268,79 @@ describe('form', () => {
       '#bs-name'
     );
     await waitFor(() => expect(name).toHaveFocus());
+  });
+
+  it('edits links as rows and tags as chips, and sends them in the stored shape', async () => {
+    create.mockResolvedValue({ ok: true, id: 'new' });
+    render(<BusinessServiceForm services={[]} teams={[]} users={[]} />);
+    expect(screen.getByRole('heading', { name: 'Basics' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Checkout' } });
+    fireEvent.change(screen.getByLabelText('Link 1 label'), { target: { value: 'Runbook' } });
+    fireEvent.change(screen.getByLabelText('Link 1 URL'), {
+      target: { value: 'https://wiki.example.com/rb' },
+    });
+    const tags = screen.getByLabelText('Tags');
+    fireEvent.change(tags, { target: { value: 'pci' } });
+    fireEvent.keyDown(tags, { key: 'Enter' });
+    fireEvent.change(tags, { target: { value: 'payments' } });
+    fireEvent.keyDown(tags, { key: ',' });
+    expect(screen.getByRole('button', { name: 'Remove tag pci' })).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('switch', { name: 'Publish status page updates automatically' })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Create business service' }));
+    await waitFor(() => expect(create).toHaveBeenCalled());
+    expect(create.mock.calls[0][0]).toMatchObject({
+      links: [{ label: 'Runbook', url: 'https://wiki.example.com/rb' }],
+      tags: ['pci', 'payments'],
+      autoPublishStatusUpdates: true,
+    });
+  });
+
+  it('marks unsaved changes, links Cancel to the detail page when editing, and has a danger zone', () => {
+    render(
+      <BusinessServiceForm
+        services={[{ id: 's1', name: 'API' }]}
+        teams={[]}
+        users={[]}
+        canDelete
+        initial={{
+          ...formValueFromTemplate({ tags: [], lifecycle: 'ACTIVE' } as never),
+          id: 'bs1',
+          name: 'Checkout',
+          memberServiceIds: ['s1'],
+        }}
+      />
+    );
+    expect(screen.getByRole('link', { name: 'Cancel' })).toHaveAttribute(
+      'href',
+      '/services/business/bs1'
+    );
+    expect(screen.getByRole('heading', { name: 'Danger zone' })).toBeInTheDocument();
+    expect(screen.queryByText('Unsaved changes')).toBeNull();
+    // The member row's critical control is a labelled switch, not a struck-through button.
+    const critical = screen.getByRole('switch', { name: /API is critical/ });
+    expect(critical).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(critical);
+    expect(screen.getByRole('switch', { name: /API is critical/ })).toHaveAttribute(
+      'aria-checked',
+      'false'
+    );
+    expect(screen.getByText('Non-critical')).toBeInTheDocument();
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+    // In-app links now ask first.
+    fireEvent.click(screen.getByRole('link', { name: 'Cancel' }));
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Leave with unsaved changes?');
+  });
+
+  it('keeps quorum and hops under Advanced, and opens it for an error there', async () => {
+    const { container } = render(<BusinessServiceForm services={[]} teams={[]} users={[]} />);
+    const details = container.querySelector('details')!;
+    expect(details).not.toHaveAttribute('open');
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'x' } });
+    fireEvent.change(screen.getByLabelText('Partial at (% down)'), { target: { value: '500' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create business service' }));
+    await waitFor(() => expect(details).toHaveAttribute('open'));
   });
 
   it('previews what the thresholds would count', async () => {

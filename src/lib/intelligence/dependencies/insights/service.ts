@@ -16,6 +16,7 @@ import { getServiceGraphForActor, type ServiceGraphView } from '../graph-view';
 import { MAX_DEPENDENCIES } from '../service';
 import {
   articulationPoints,
+  countByDaysAgo,
   diffEdges,
   diffStatuses,
   fanOut,
@@ -130,7 +131,9 @@ async function snapshotAt(
   ]);
   // Edges written before history existed (or by a writer that does not record it) replay from createdAt.
   const events: EdgeEvent[] = stored.map(row => ({ ...row }));
-  const withEvents = new Set(stored.map(row => `${row.upstreamServiceId}>${row.downstreamServiceId}`));
+  const withEvents = new Set(
+    stored.map(row => `${row.upstreamServiceId}>${row.downstreamServiceId}`)
+  );
   for (const row of current)
     if (!withEvents.has(`${row.upstreamServiceId}>${row.downstreamServiceId}`))
       events.push({
@@ -142,7 +145,8 @@ async function snapshotAt(
       });
   const suggestions = canSeeSuggestions(actor);
   const edges = replayEdges(events, at);
-  for (const [key, edge] of edges) if (edge.state === 'SUGGESTED' && !suggestions) edges.delete(key);
+  for (const [key, edge] of edges)
+    if (edge.state === 'SUGGESTED' && !suggestions) edges.delete(key);
 
   const activeEdges = [...edges.values()].filter(edge => edge.state === 'ACTIVE');
   const open = incidents.slice(0, MAX_INCIDENTS);
@@ -150,15 +154,14 @@ async function snapshotAt(
   for (const incident of open) {
     const entry = worst.get(incident.serviceId) ?? { urgency: incident.urgency, count: 0 };
     entry.count += 1;
-    if (urgencyRank[incident.urgency] > urgencyRank[entry.urgency]) entry.urgency = incident.urgency;
+    if (urgencyRank[incident.urgency] > urgencyRank[entry.urgency])
+      entry.urgency = incident.urgency;
     worst.set(incident.serviceId, entry);
   }
   const derived = derivedDependencyStatuses(
     activeEdges,
     new Map(
-      [...worst].map(
-        ([id, entry]) => [id, { incidentId: '', urgency: entry.urgency }] as const
-      )
+      [...worst].map(([id, entry]) => [id, { incidentId: '', urgency: entry.urgency }] as const)
     )
   );
   const serviceStatus: Snapshot['serviceStatus'] = new Map();
@@ -252,7 +255,11 @@ async function businessStatusesAt(
 const clampAt = (at: Date) => (at.getTime() > Date.now() ? new Date() : at);
 
 /** The graph as it was at `at`: edges, service statuses and business-service statuses. */
-export async function getGraphAt(actor: AuthorizationActor, at: Date, options: InsightOptions = {}) {
+export async function getGraphAt(
+  actor: AuthorizationActor,
+  at: Date,
+  options: InsightOptions = {}
+) {
   const graph = await visibleGraph(actor, options);
   const when = clampAt(at);
   const snapshot = await snapshotAt(actor, graph, when);
@@ -290,16 +297,77 @@ export async function getGraphAt(actor: AuthorizationActor, at: Date, options: I
   };
 }
 
+const TIMELINE_DAYS = 90;
+
+/**
+ * Incidents opened and dependency changes per day over the time-travel window, for the slider's
+ * tick marks. Counts only; incidents follow the viewer's read scope (stakeholders get counts, as
+ * on the live graph) and suggestion events count only for viewers who may see suggestions.
+ */
+export async function graphTimeline(actor: AuthorizationActor, options: InsightOptions = {}) {
+  const graph = await visibleGraph(actor, options);
+  const now = new Date();
+  const since = new Date(now.getTime() - TIMELINE_DAYS * 864e5);
+  const ids = graph.nodes.map(node => node.id);
+  let incidentScope: ReturnType<typeof incidentReadWhere>;
+  try {
+    incidentScope = incidentReadWhere(actor);
+  } catch {
+    incidentScope = {};
+  }
+  const [incidents, events] = await Promise.all([
+    prisma.incident.findMany({
+      where: { AND: [{ serviceId: { in: ids }, createdAt: { gte: since } }, incidentScope] },
+      select: { createdAt: true },
+      take: MAX_INCIDENTS,
+    }),
+    prisma.serviceDependencyEvent.findMany({
+      where: {
+        upstreamServiceId: { in: ids },
+        downstreamServiceId: { in: ids },
+        occurredAt: { gte: since },
+        ...(canSeeSuggestions(actor)
+          ? {}
+          : { state: { in: ['ACTIVE' as const, 'REMOVED' as const] } }),
+      },
+      select: { occurredAt: true },
+      take: MAX_EVENTS,
+    }),
+  ]);
+  return {
+    days: TIMELINE_DAYS,
+    incidents: countByDaysAgo(
+      incidents.map(row => row.createdAt),
+      now,
+      TIMELINE_DAYS
+    ),
+    changes: countByDaysAgo(
+      events.map(row => row.occurredAt),
+      now,
+      TIMELINE_DAYS
+    ),
+    truncated: incidents.length >= MAX_INCIDENTS || events.length >= MAX_EVENTS,
+  };
+}
+
 const MAX_DIFF_DAYS = 400;
 
 /** What changed between `since` and now: edges, edges awaiting review, and status changes. */
-export async function diffGraph(actor: AuthorizationActor, since: Date, options: InsightOptions = {}) {
+export async function diffGraph(
+  actor: AuthorizationActor,
+  since: Date,
+  options: InsightOptions = {}
+) {
   const now = new Date();
   if (since.getTime() >= now.getTime() || now.getTime() - since.getTime() > MAX_DIFF_DAYS * 864e5)
     throw new AppError({
       code: 'VALIDATION_FAILED',
       fields: [
-        { field: 'since', code: 'custom', message: `Use a past time within ${MAX_DIFF_DAYS} days.` },
+        {
+          field: 'since',
+          code: 'custom',
+          message: `Use a past time within ${MAX_DIFF_DAYS} days.`,
+        },
       ],
     });
   const graph = await visibleGraph(actor, options);
@@ -354,7 +422,10 @@ export interface SpofOptions extends InsightOptions {
  * escalation policy with a step). There is no redundancy model: alternatives are not detected.
  * Fan-out is counted over what the actor can see, so scoped actors get a lower bound.
  */
-export async function findSinglePointsOfFailure(actor: AuthorizationActor, options: SpofOptions = {}) {
+export async function findSinglePointsOfFailure(
+  actor: AuthorizationActor,
+  options: SpofOptions = {}
+) {
   const graph = await visibleGraph(actor, options);
   const threshold = Math.min(Math.max(Math.trunc(options.threshold ?? 5), 1), 200);
   const edges = graph.edges.filter(edge => edge.status === 'ACTIVE');
@@ -366,10 +437,14 @@ export async function findSinglePointsOfFailure(actor: AuthorizationActor, optio
     where: { id: { in: candidates } },
     select: { id: true, policy: { select: { steps: { take: 1, select: { id: true } } } } },
   });
-  const hasOnCall = new Map(policies.map(row => [row.id, (row.policy?.steps.length ?? 0) > 0] as const));
+  const hasOnCall = new Map(
+    policies.map(row => [row.id, (row.policy?.steps.length ?? 0) > 0] as const)
+  );
   const byService = new Map<string, Array<{ id: string; critical: boolean }>>();
   for (const member of graph.memberEdges)
-    (byService.get(member.serviceId) ?? byService.set(member.serviceId, []).get(member.serviceId)!).push({
+    (
+      byService.get(member.serviceId) ?? byService.set(member.serviceId, []).get(member.serviceId)!
+    ).push({
       id: member.businessServiceId,
       critical: member.critical,
     });
@@ -428,7 +503,9 @@ export async function simulateFailure(
   if (seeds.length === 0 || seeds.length > MAX_SIM_SEEDS)
     throw new AppError({
       code: 'VALIDATION_FAILED',
-      fields: [{ field: 'serviceIds', code: 'custom', message: `Provide 1 to ${MAX_SIM_SEEDS} ids.` }],
+      fields: [
+        { field: 'serviceIds', code: 'custom', message: `Provide 1 to ${MAX_SIM_SEEDS} ids.` },
+      ],
     });
   const maxDepth = Math.min(Math.max(Math.trunc(options.maxDepth ?? 5), 1), 10);
   const graph = await visibleGraph(actor);
@@ -442,7 +519,8 @@ export async function simulateFailure(
           {
             field: 'serviceIds',
             code: 'custom',
-            message: 'The service graph is too large to simulate a service outside its first 2000 services.',
+            message:
+              'The service graph is too large to simulate a service outside its first 2000 services.',
           },
         ],
       });
@@ -510,12 +588,22 @@ export async function simulateFailure(
   const affectedBusiness = graph.businessServices.flatMap(bs => {
     const projected = health.get(bs.id)?.status ?? 'UNKNOWN';
     if (projected === 'OPERATIONAL' || projected === 'UNKNOWN') return [];
-    return [{ id: bs.id, name: bs.name, criticality: bs.criticality, currentStatus: bs.status, projectedStatus: projected }];
+    return [
+      {
+        id: bs.id,
+        name: bs.name,
+        criticality: bs.criticality,
+        currentStatus: bs.status,
+        projectedStatus: projected,
+      },
+    ];
   });
   const exposed = affectedBusiness.filter(bs => rankedOut.has(bs.projectedStatus));
   const sum = (key: 'revenuePerHourCents' | 'customersTotal') => {
-    // eslint-disable-next-line security/detect-object-injection -- key is a closed typed union / internal name, never request input
-    const values = exposed.map(bs => extras.get(bs.id)?.[key]).filter((v): v is number => typeof v === 'number');
+    const values = exposed
+      // eslint-disable-next-line security/detect-object-injection -- key is a closed typed union / internal name, never request input
+      .map(bs => extras.get(bs.id)?.[key])
+      .filter((v): v is number => typeof v === 'number');
     return values.length ? values.reduce((a, b) => a + b, 0) : null;
   };
   const toList = (entries: Iterable<[string, number]>) =>

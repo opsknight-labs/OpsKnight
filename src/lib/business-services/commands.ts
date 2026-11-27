@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
-import { emitAuditEvent, type AuditEventSource } from '@/lib/audit';
+import { emitAuditEvent, type AuditEventActor, type AuditEventSource } from '@/lib/audit';
 import {
   AUTHORIZATION_ACTIONS,
   authorize,
@@ -75,6 +75,8 @@ export const BusinessServiceInputSchema = z
     customerReportThreshold: z.number().int().min(1).max(100_000).nullable().optional(),
     customerReportWindowMinutes: z.number().int().min(5).max(1440).nullable().optional(),
     reviewIntervalDays: z.number().int().min(7).max(730).nullable().optional(),
+    /** Publish status-page updates on impact/recovery without approval (meant for TIER_0). */
+    autoPublishStatusUpdates: z.boolean().optional(),
   })
   .strict();
 
@@ -110,6 +112,7 @@ export const BUSINESS_SERVICE_SELECT = {
   customerReportThreshold: true,
   customerReportWindowMinutes: true,
   reviewIntervalDays: true,
+  autoPublishStatusUpdates: true,
   createdAt: true,
   updatedAt: true,
   ownerTeam: { select: { id: true, name: true } },
@@ -388,7 +391,12 @@ function conflict(error: unknown): never {
   throw error;
 }
 
-type CommandContext = { actor: AuthorizationActor; source?: AuditEventSource };
+type CommandContext = {
+  actor: AuthorizationActor;
+  source?: AuditEventSource;
+  /** Audit as this actor instead of the user, e.g. a scheduled catalog sync. */
+  auditActor?: AuditEventActor;
+};
 
 async function audit(
   tx: Prisma.TransactionClient,
@@ -402,7 +410,7 @@ async function audit(
       action,
       source: context.source ?? 'UI',
       target: { type: 'BUSINESS_SERVICE', id },
-      actor: { type: 'USER', id: context.actor.id },
+      actor: context.auditActor ?? { type: 'USER', id: context.actor.id },
       ...(newValue ? { newValue } : {}),
     },
     tx
@@ -447,6 +455,7 @@ function columns(input: ParsedInput) {
       'customerReportThreshold',
       'customerReportWindowMinutes',
       'reviewIntervalDays',
+      'autoPublishStatusUpdates',
     ]),
     ...(input.customAttributes !== undefined
       ? { customAttributes: input.customAttributes ?? Prisma.DbNull }
@@ -501,7 +510,21 @@ function auditFields(
       input.customerReportThreshold !== undefined
         ? input.customerReportThreshold
         : (current?.customerReportThreshold ?? null),
+    autoPublishStatusUpdates: input.autoPublishStatusUpdates ?? null,
   };
+}
+
+/** A contact channel that names a chat channel must exist in the connected workspace. */
+async function assertContactChannel(value: string | null | undefined) {
+  if (!value) return;
+  const { validateContactChannel } = await import('./chat-channels');
+  const problem = await validateContactChannel(value);
+  if (problem)
+    throw new AppError({
+      code: 'VALIDATION_FAILED',
+      userMessage: problem,
+      fields: [{ field: 'contactChannel', code: 'invalid', message: problem }],
+    });
 }
 
 export async function createBusinessService(
@@ -511,6 +534,7 @@ export async function createBusinessService(
 ) {
   assertCanManageBusinessServices(context.actor);
   const input = BusinessServiceInputSchema.parse(raw);
+  await assertContactChannel(input.contactChannel);
   const run = async (tx: Prisma.TransactionClient) => {
     await assertReferencesExist(tx, input, context.actor);
     const created = await tx.businessService
@@ -536,6 +560,8 @@ export async function updateBusinessService(
   client?: Prisma.TransactionClient
 ) {
   assertCanManageBusinessServices(context.actor);
+  // The workspace check calls Slack/Teams, so it runs before the transaction opens.
+  if (typeof raw.contactChannel === 'string') await assertContactChannel(raw.contactChannel.trim());
   const run = async (tx: Prisma.TransactionClient) => {
     const current = await tx.businessService.findFirst({
       where: { AND: [{ id }, businessServiceWriteWhere(context.actor)] },
@@ -668,6 +694,9 @@ export type IncidentBusinessServiceImpactView = {
   excluded: boolean;
   /** Still impacting now (open incident, open impact). */
   active: boolean;
+  criticality: Prisma.BusinessServiceGetPayload<{ select: { criticality: true } }>['criticality'];
+  /** Current health of the business service; null when the snapshot could not be read. */
+  status: BusinessServiceHealth['status'] | null;
 };
 
 /**
@@ -685,10 +714,18 @@ export async function impactedBusinessServicesForIncident(
   if (!views.size) return [];
   const visible = await prisma.businessService.findMany({
     where: { AND: [{ id: { in: [...views.keys()] } }, businessServiceReadWhere(actor)] },
-    select: { id: true, name: true },
+    select: { id: true, name: true, criticality: true },
     orderBy: { name: 'asc' },
   });
-  return visible.map(service => ({ ...service, ...views.get(service.id)! }));
+  const { getHealthSnapshot } = await import('./health');
+  const health = await getHealthSnapshot({ requireIds: visible.map(service => service.id) })
+    .then(snapshot => snapshot.health)
+    .catch(() => null);
+  return visible.map(service => ({
+    ...service,
+    ...views.get(service.id)!,
+    status: health?.get(service.id)?.status ?? null,
+  }));
 }
 
 type BusinessServiceRow = Prisma.BusinessServiceGetPayload<{
@@ -724,6 +761,7 @@ export function businessServiceDto(
     ownerUser: row.ownerUser ? { id: row.ownerUser.id, name: row.ownerUser.name } : null,
     escalationPolicy: row.escalationPolicy,
     contactChannel: row.contactChannel,
+    autoPublishStatusUpdates: row.autoPublishStatusUpdates,
     tags: row.tags,
     environment: row.environment,
     lifecycle: row.lifecycle,

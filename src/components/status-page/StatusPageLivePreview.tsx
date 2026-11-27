@@ -16,6 +16,7 @@ import {
   compileStatusPageColorSchemeCss,
 } from '@/lib/status-pages/theme-contract';
 import { cn } from '@/lib/utils';
+import type { PublicStatusPageSnapshot } from '@/lib/status-pages/public-contract';
 import {
   Monitor,
   Tablet,
@@ -138,10 +139,21 @@ export interface StatusPagePreviewData {
   layout: string;
   privacySettings?: StatusPagePreviewPrivacySettings | null;
   enableUptimeExports?: boolean;
-  regions?: unknown[];
-  maintenance?: unknown[];
+  regions?: PublicStatusPageSnapshot['regions'];
+  maintenance?: PublicStatusPageSnapshot['maintenance'];
   uptimeExcellentThreshold?: number | null;
   uptimeGoodThreshold?: number | null;
+  /** The unsaved business-service layout, so the preview shows the same group rows. */
+  serviceLayout?: 'FLAT' | 'BUSINESS' | 'BUSINESS_EXPANDABLE';
+  expandGroupsByDefault?: boolean;
+  businessServices?: Array<{
+    id: string;
+    name: string;
+    memberServiceIds: string[];
+    showMembers?: boolean;
+    parentIds?: string[];
+  }>;
+  directServiceIds?: string[];
 }
 
 export interface StatusPageLivePreviewProps {
@@ -233,6 +245,10 @@ function StatusPageLivePreview({
         showTeamInformation: previewData.privacySettings?.showTeamInformation,
         regions: previewData.regions,
         maintenance: previewData.maintenance,
+        serviceLayout: previewData.serviceLayout,
+        expandGroupsByDefault: previewData.expandGroupsByDefault,
+        businessServices: previewData.businessServices,
+        directServiceIds: previewData.directServiceIds,
         thresholds: {
           uptimeExcellent:
             typeof previewData.uptimeExcellentThreshold === 'number'

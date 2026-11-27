@@ -7,8 +7,16 @@ audience: [administrator, responder]
 reader: { status: READER_COMPLETE, task: Configure status-page subscriber and API delivery. }
 verification:
   level: source
-  verified_at: 2026-10-01
-  evidence: ["src/components/status-page/StatusPageWorkspace.tsx", "src/app/api/status-page/subscribers/route.ts", "src/app/api/settings/status-pages/[pageId]/[section]/route.ts"]
+  verified_at: 2026-11-27
+  evidence:
+    - src/components/status-page/StatusPageWorkspace.tsx
+    - src/app/api/status-page/subscribers/route.ts
+    - src/app/api/settings/status-pages/[pageId]/[section]/route.ts
+    - src/components/status-page/StatusPageSubscriberChannels.tsx
+    - src/components/status-page/StatusPageSubscribe.tsx
+    - src/components/status-page/StatusPageSubscribers.tsx
+    - src/lib/status-pages/subscriber-channel-policy.ts
+    - src/lib/status-pages/subscriber-channel-requests.ts
 ---
 
 # Manage status-page subscribers and API access
@@ -29,6 +37,27 @@ Open **Settings → Status Pages**, select the page, then use its announcements,
 4. Create a page-scoped API token, copy it once to the approved secret manager, and record its owner/purpose.
 5. Revoke unused tokens and retest consumers after rotation.
 
+## Choose subscriber channels
+
+In the page's **Subscribers** section, **Subscriber channels** sets what visitors can pick in the
+subscribe dialog. Only admins can change it. **Email** and **Webhook** are on by default; the
+others are off.
+
+| Channel                | How a visitor subscribes                                                                            |
+| ---------------------- | --------------------------------------------------------------------------------------------------- |
+| **Email**              | Enters an address and confirms it from the link we send.                                            |
+| **Webhook**            | Enters an HTTPS endpoint; it must answer a signed verification request.                             |
+| **Slack**              | Pastes a Slack incoming-webhook URL. It becomes active once a test message posts to the channel.    |
+| **Microsoft Teams**    | Pastes a Teams incoming-webhook or Workflows URL. It becomes active once a test message posts.      |
+| **Text message (SMS)** | Enters a mobile number with country code, then the 6-digit code we text. The code lasts 10 minutes. |
+
+SMS needs an SMS provider in notification settings first; until then its switch stays off. Slack
+and Teams accept only Slack or Microsoft webhook URLs. Visitors pick services or business services
+the same way on every channel, and every message carries an unsubscribe link.
+
+Turning a channel off pauses delivery to its subscribers; they are kept. The subscriber list shows
+each subscriber's channel, for example an SMS number or "Slack webhook".
+
 ## What OpsKnight does
 
 Subscriptions require verification and support unsubscribe. Page tokens and webhooks are scoped to the status-page surface; they do not replace application API keys. Announcements may be scheduled and associated with services.
@@ -43,7 +72,8 @@ End/cancel an announcement, disable a webhook, or revoke a token from the same p
 
 ## Troubleshooting
 
-- **Subscriber receives nothing:** verify subscription, page state, provider delivery, and unsubscribe status.
+- **Subscriber receives nothing:** verify subscription, page state, provider delivery, and unsubscribe status. Check the channel is still switched on in **Subscriber channels**.
+- **SMS code fails:** codes expire after 10 minutes and allow five tries; request a new code.
 - **Webhook fails:** inspect test response, TLS, receiver logs, and rate/timeout behavior.
 - **API returns unauthorized:** confirm page, token, revocation state, and expected authentication header.
 

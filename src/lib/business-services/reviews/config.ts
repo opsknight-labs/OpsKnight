@@ -13,6 +13,8 @@ export type ReviewConfig = {
   enabled: boolean;
   /** Warn on change risk and the service page when an error budget is exhausted. Off by default. */
   freezeWarningEnabled: boolean;
+  /** Tell owners and followers when an error budget turns at risk, breached or recovers. Off by default. */
+  errorBudgetAlertsEnabled: boolean;
   /** 1..28 so every month has the day. */
   dayOfMonth: number;
   hour: number;
@@ -24,6 +26,7 @@ export type ReviewConfig = {
 export const DEFAULT_REVIEW_CONFIG: ReviewConfig = {
   enabled: false,
   freezeWarningEnabled: false,
+  errorBudgetAlertsEnabled: false,
   dayOfMonth: 1,
   hour: 9,
   timeZone: 'UTC',
@@ -34,6 +37,7 @@ export const reviewConfigSchema = z
   .object({
     enabled: z.boolean(),
     freezeWarningEnabled: z.boolean(),
+    errorBudgetAlertsEnabled: z.boolean(),
     dayOfMonth: z.number().int().min(1).max(28),
     hour: z.number().int().min(0).max(23),
     timeZone: z.string().trim().min(1).max(64).refine(isValidTimeZone, 'Unknown time zone'),
@@ -65,6 +69,10 @@ export async function getReviewConfig(): Promise<ReviewConfig> {
 
 export async function isFreezeWarningEnabled(): Promise<boolean> {
   return (await getReviewConfig()).freezeWarningEnabled;
+}
+
+export async function isErrorBudgetAlertsEnabled(): Promise<boolean> {
+  return (await getReviewConfig()).errorBudgetAlertsEnabled;
 }
 
 /** Merges a partial update, resolves summary recipients to existing users, audits old and new. */

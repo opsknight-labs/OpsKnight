@@ -5,6 +5,7 @@ import StatusPageLivePreview from '@/components/status-page/StatusPageLivePrevie
 import { InlineNotice } from '@/components/ui/InlineNotice';
 import StatusPageWebhooksSettings from '@/components/status-page/StatusPageWebhooksSettings';
 import StatusPageSubscribers from '@/components/status-page/StatusPageSubscribers';
+import StatusPageSubscriberChannels from '@/components/status-page/StatusPageSubscriberChannels';
 import StatusPageEmailConfig from '@/components/status-page/StatusPageEmailConfig';
 import StatusPageAnnouncementManager from '@/components/status-page/StatusPageAnnouncementManager';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -204,7 +205,10 @@ export default function StatusPageConfig(props: StatusPageConfigProps) {
                           description="Manage your subscriber audience, search emails, view verification status, and perform bulk unsubscription."
                           icon={<Users className="w-5 h-5 text-primary" />}
                         >
-                          <StatusPageSubscribers statusPageId={statusPage.id} />
+                          <div className="space-y-6">
+                            <StatusPageSubscriberChannels statusPageId={statusPage.id} />
+                            <StatusPageSubscribers statusPageId={statusPage.id} />
+                          </div>
                         </StatusPageSectionCard>
                       </div>
                     )}

@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState, useTransition } from 'react';
 import { useT } from '@/lib/status-pages/i18n/context';
+import type { I18nKey } from '@/lib/status-pages/i18n/en';
 import StatusPageWebhookSubscribe from './StatusPageWebhookSubscribe';
 
 interface ServiceOption {
@@ -24,6 +25,10 @@ interface StatusPageSubscribeProps {
   initialSelectedId?: string | null;
   /** Page slug; when set (and webhook subscriptions are on) a Webhook tab is offered. */
   webhookSlug?: string | null;
+  /** Channels the page offers (the public snapshot's `subscription.channels`). */
+  channels?: readonly string[] | null;
+  /** Slug for the non-email subscribe routes; null when the page has no slug routes. */
+  subscribeSlug?: string | null;
 }
 
 const MAX_EMAIL_LEN = 254;
@@ -225,6 +230,141 @@ function SuccessCheckIcon() {
   );
 }
 
+type ServiceScope = ReturnType<typeof useServiceScope>;
+
+/** "All services" or a picked subset; shared by every subscriber channel form. */
+function useServiceScope(services: ServiceOption[], initialSelectedId: string | null) {
+  const [mode, setMode] = useState<'all' | 'selected'>(initialSelectedId ? 'selected' : 'all');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(
+    () => new Set(initialSelectedId ? [initialSelectedId] : [])
+  );
+  const hasPicker = services.length > 0;
+  const toggle = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  /** The API's `preferences`, or undefined when the visitor follows the whole page. */
+  const preferences = (timezone?: string) => {
+    if (!hasPicker || mode !== 'selected') return undefined;
+    const businessIds = new Set(
+      services.filter(option => option.kind === 'business').map(option => option.id)
+    );
+    const picked = [...selectedIds];
+    const pickedBusiness = picked.filter(id => businessIds.has(id));
+    return {
+      selectedServiceIds: picked.filter(id => !businessIds.has(id)),
+      ...(pickedBusiness.length ? { selectedBusinessServiceIds: pickedBusiness } : {}),
+      ...(timezone ? { timezone } : {}),
+    };
+  };
+  return {
+    mode,
+    setMode,
+    selectedIds,
+    setSelectedIds,
+    hasPicker,
+    toggle,
+    missingSelection: hasPicker && mode === 'selected' && selectedIds.size === 0,
+    preferences,
+  };
+}
+
+function ServiceScopePicker({
+  services,
+  scope,
+}: {
+  services: ServiceOption[];
+  scope: ServiceScope;
+}) {
+  const allIds = useMemo(() => services.map(s => s.id), [services]);
+  return (
+    <>
+      {scope.hasPicker && (
+        <div className="status-subscribe__segment" role="group" aria-label="Notification scope">
+          <button
+            type="button"
+            className={`status-subscribe__segbtn${scope.mode === 'all' ? ' status-subscribe__segbtn--active' : ''}`}
+            aria-pressed={scope.mode === 'all'}
+            onClick={() => scope.setMode('all')}
+          >
+            <GlobeIcon />
+            <span>All services</span>
+          </button>
+          <button
+            type="button"
+            className={`status-subscribe__segbtn${scope.mode === 'selected' ? ' status-subscribe__segbtn--active' : ''}`}
+            aria-pressed={scope.mode === 'selected'}
+            onClick={() => scope.setMode('selected')}
+          >
+            <CheckListIcon />
+            <span>Selected services</span>
+          </button>
+        </div>
+      )}
+
+      {scope.hasPicker && scope.mode === 'selected' && (
+        <div className="status-subscribe__picker" role="group" aria-label="Select services">
+          <div className="status-subscribe__picker-head">
+            <span className="status-subscribe__picker-title">Services on this page</span>
+            <div className="status-subscribe__picker-actions">
+              <span className="status-subscribe__picker-count" aria-live="polite">
+                {scope.selectedIds.size} of {services.length} selected
+              </span>
+              <button
+                type="button"
+                className="status-subscribe__picker-btn"
+                onClick={() => {
+                  if (allIds.length > 100) {
+                    scope.setSelectedIds(new Set(allIds.slice(0, 100)));
+                  } else {
+                    scope.setSelectedIds(new Set(allIds));
+                  }
+                }}
+                title={allIds.length > 100 ? 'Limited to 100 services per subscription' : undefined}
+              >
+                Select all{allIds.length > 100 ? ' (100 max)' : ''}
+              </button>
+              <button
+                type="button"
+                className="status-subscribe__picker-btn"
+                onClick={() => scope.setSelectedIds(new Set())}
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+          <div className="status-subscribe__picker-grid">
+            {services.map(service => {
+              const isChecked = scope.selectedIds.has(service.id);
+              return (
+                <label
+                  key={service.id}
+                  className={`status-subscribe__check${isChecked ? ' status-subscribe__check--on' : ''}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => scope.toggle(service.id)}
+                    className="status-subscribe__check-input"
+                  />
+                  <span className="status-subscribe__check-box" aria-hidden="true">
+                    {isChecked && <CheckIcon />}
+                  </span>
+                  <span className="status-subscribe__check-label">{service.name}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function StatusPageEmailSubscribe({
   statusPageId,
   services = [],
@@ -236,27 +376,11 @@ function StatusPageEmailSubscribe({
   initialSelectedId = null,
 }: StatusPageSubscribeProps) {
   const [email, setEmail] = useState('');
-  const [mode, setMode] = useState<'all' | 'selected'>(initialSelectedId ? 'selected' : 'all');
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(
-    () => new Set(initialSelectedId ? [initialSelectedId] : [])
-  );
+  const scope = useServiceScope(services, initialSelectedId);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const emailRef = useRef<HTMLInputElement>(null);
-
-  const hasPicker = services.length > 0;
-  const selectedCount = selectedIds.size;
-  const allIds = useMemo(() => services.map(s => s.id), [services]);
-
-  const toggleService = (id: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -268,7 +392,7 @@ function StatusPageEmailSubscribe({
       emailRef.current?.focus();
       return;
     }
-    if (hasPicker && mode === 'selected' && selectedIds.size === 0) {
+    if (scope.missingSelection) {
       setError(SERVICES_ERROR);
       return;
     }
@@ -283,18 +407,8 @@ function StatusPageEmailSubscribe({
       email: trimmed,
       timezone: userTz,
     };
-    if (hasPicker && mode === 'selected') {
-      const businessIds = new Set(
-        services.filter(option => option.kind === 'business').map(option => option.id)
-      );
-      const picked = [...selectedIds];
-      const pickedBusiness = picked.filter(id => businessIds.has(id));
-      payload.preferences = {
-        selectedServiceIds: picked.filter(id => !businessIds.has(id)),
-        ...(pickedBusiness.length ? { selectedBusinessServiceIds: pickedBusiness } : {}),
-        timezone: userTz,
-      };
-    }
+    const preferences = scope.preferences(userTz);
+    if (preferences) payload.preferences = preferences;
 
     startTransition(async () => {
       try {
@@ -400,84 +514,7 @@ function StatusPageEmailSubscribe({
         </div>
       )}
 
-      {hasPicker && (
-        <div className="status-subscribe__segment" role="group" aria-label="Notification scope">
-          <button
-            type="button"
-            className={`status-subscribe__segbtn${mode === 'all' ? ' status-subscribe__segbtn--active' : ''}`}
-            aria-pressed={mode === 'all'}
-            onClick={() => setMode('all')}
-          >
-            <GlobeIcon />
-            <span>All services</span>
-          </button>
-          <button
-            type="button"
-            className={`status-subscribe__segbtn${mode === 'selected' ? ' status-subscribe__segbtn--active' : ''}`}
-            aria-pressed={mode === 'selected'}
-            onClick={() => setMode('selected')}
-          >
-            <CheckListIcon />
-            <span>Selected services</span>
-          </button>
-        </div>
-      )}
-
-      {hasPicker && mode === 'selected' && (
-        <div className="status-subscribe__picker" role="group" aria-label="Select services">
-          <div className="status-subscribe__picker-head">
-            <span className="status-subscribe__picker-title">Services on this page</span>
-            <div className="status-subscribe__picker-actions">
-              <span className="status-subscribe__picker-count" aria-live="polite">
-                {selectedCount} of {services.length} selected
-              </span>
-              <button
-                type="button"
-                className="status-subscribe__picker-btn"
-                onClick={() => {
-                  if (allIds.length > 100) {
-                    setSelectedIds(new Set(allIds.slice(0, 100)));
-                  } else {
-                    setSelectedIds(new Set(allIds));
-                  }
-                }}
-                title={allIds.length > 100 ? 'Limited to 100 services per subscription' : undefined}
-              >
-                Select all{allIds.length > 100 ? ' (100 max)' : ''}
-              </button>
-              <button
-                type="button"
-                className="status-subscribe__picker-btn"
-                onClick={() => setSelectedIds(new Set())}
-              >
-                Clear
-              </button>
-            </div>
-          </div>
-          <div className="status-subscribe__picker-grid">
-            {services.map(service => {
-              const isChecked = selectedIds.has(service.id);
-              return (
-                <label
-                  key={service.id}
-                  className={`status-subscribe__check${isChecked ? ' status-subscribe__check--on' : ''}`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={() => toggleService(service.id)}
-                    className="status-subscribe__check-input"
-                  />
-                  <span className="status-subscribe__check-box" aria-hidden="true">
-                    {isChecked && <CheckIcon />}
-                  </span>
-                  <span className="status-subscribe__check-label">{service.name}</span>
-                </label>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      <ServiceScopePicker services={services} scope={scope} />
 
       <label className="status-subscribe__label" htmlFor={emailId}>
         Email address
@@ -558,32 +595,306 @@ function StatusPageEmailSubscribe({
   );
 }
 
-/** Email form, plus a Webhook tab when the page supports subscriber webhooks. */
+async function postJson(
+  url: string,
+  body: unknown
+): Promise<{ ok: boolean; data: Record<string, unknown>; error?: string }> {
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const payload = (await response.json().catch(() => ({}))) as {
+      error?: string | { message?: string };
+      data?: Record<string, unknown>;
+    } & Record<string, unknown>;
+    if (!response.ok) {
+      const message = typeof payload.error === 'string' ? payload.error : payload.error?.message;
+      return { ok: false, data: {}, error: message || 'Failed to subscribe' };
+    }
+    return { ok: true, data: payload.data ?? payload };
+  } catch {
+    return { ok: false, data: {}, error: 'Failed to subscribe' };
+  }
+}
+
+function ChannelSuccess({ title, message }: { title: string; message: string }) {
+  return (
+    <div className="status-subscribe__success" role="status">
+      <span className="status-subscribe__success-icon">
+        <SuccessCheckIcon />
+      </span>
+      <strong className="status-subscribe__success-title">{title}</strong>
+      <p className="status-subscribe__success-msg">{message}</p>
+    </div>
+  );
+}
+
+const CHAT_COPY = {
+  SLACK: { label: 'subscribe.slackUrl', placeholder: 'https://hooks.slack.com/services/…' },
+  MICROSOFT_TEAMS: {
+    label: 'subscribe.teamsUrl',
+    placeholder: 'https://….webhook.office.com/…',
+  },
+} as const;
+
+/** A Slack or Teams channel, by incoming-webhook URL. Active once it accepted a test message. */
+function StatusPageChatSubscribe({
+  slug,
+  channel,
+  services = [],
+  initialSelectedId = null,
+}: {
+  slug: string;
+  channel: 'SLACK' | 'MICROSOFT_TEAMS';
+  services?: ServiceOption[];
+  initialSelectedId?: string | null;
+}) {
+  // eslint-disable-next-line security/detect-object-injection -- channel is a closed union
+  const copy = CHAT_COPY[channel];
+  const t = useT();
+  const scope = useServiceScope(services, initialSelectedId);
+  const [url, setUrl] = useState('');
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<null | { already: boolean }>(null);
+  const id = `status-subscribe-${channel.toLowerCase()}-${slug}`;
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    setError(null);
+    if (scope.missingSelection) return setError(SERVICES_ERROR);
+    startTransition(async () => {
+      const result = await postJson(`/api/status/${encodeURIComponent(slug)}/subscribe/chat`, {
+        channel,
+        url: url.trim(),
+        ...(scope.preferences() ? { preferences: scope.preferences() } : {}),
+      });
+      if (!result.ok) return setError(result.error ?? t('subscribe.failed'));
+      setDone({ already: Boolean(result.data.alreadySubscribed) });
+    });
+  };
+
+  if (done)
+    return (
+      <ChannelSuccess
+        title={t('subscribe.chatDone')}
+        message={done.already ? t('subscribe.chatAlready') : t('subscribe.chatCheck')}
+      />
+    );
+
+  return (
+    <form
+      onSubmit={submit}
+      noValidate
+      aria-busy={pending || undefined}
+      className="status-subscribe"
+    >
+      <ServiceScopePicker services={services} scope={scope} />
+      <label className="status-subscribe__label" htmlFor={id}>
+        {t(copy.label)}
+      </label>
+      <div className="status-subscribe__controls">
+        <input
+          id={id}
+          type="url"
+          inputMode="url"
+          autoComplete="off"
+          maxLength={2048}
+          placeholder={copy.placeholder}
+          className="status-subscribe__input"
+          value={url}
+          onChange={event => setUrl(event.target.value)}
+          aria-describedby={`${id}-hint`}
+          aria-invalid={Boolean(error) || undefined}
+          disabled={pending}
+        />
+        <button
+          type="submit"
+          className="status-subscribe__button"
+          disabled={pending || !url.trim()}
+        >
+          {pending ? t('subscribe.submitting') : t('subscribe.submit')}
+        </button>
+      </div>
+      <p id={`${id}-hint`} className="status-subscribe__hint">
+        {t('subscribe.chatHint')}
+      </p>
+      {error && (
+        <div className="status-subscribe__error" role="alert">
+          <span>{error}</span>
+        </div>
+      )}
+    </form>
+  );
+}
+
+/** Text messages: phone number, then the 6-digit code we text to it. */
+function StatusPageSmsSubscribe({
+  slug,
+  services = [],
+  initialSelectedId = null,
+}: {
+  slug: string;
+  services?: ServiceOption[];
+  initialSelectedId?: string | null;
+}) {
+  const t = useT();
+  const scope = useServiceScope(services, initialSelectedId);
+  const [phone, setPhone] = useState('');
+  const [code, setCode] = useState('');
+  const [step, setStep] = useState<'phone' | 'code' | 'done'>('phone');
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const base = `/api/status/${encodeURIComponent(slug)}/subscribe/sms`;
+  const id = `status-subscribe-sms-${slug}`;
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    setError(null);
+    if (step === 'phone' && scope.missingSelection) return setError(SERVICES_ERROR);
+    startTransition(async () => {
+      const result =
+        step === 'phone'
+          ? await postJson(base, {
+              phone: phone.trim(),
+              ...(scope.preferences() ? { preferences: scope.preferences() } : {}),
+            })
+          : await postJson(`${base}/verify`, { phone: phone.trim(), code: code.trim() });
+      if (!result.ok) return setError(result.error ?? t('subscribe.failed'));
+      setStep(step === 'phone' ? 'code' : 'done');
+    });
+  };
+
+  if (step === 'done')
+    return <ChannelSuccess title={t('subscribe.smsDone')} message={t('subscribe.smsDoneHint')} />;
+
+  return (
+    <form
+      onSubmit={submit}
+      noValidate
+      aria-busy={pending || undefined}
+      className="status-subscribe"
+    >
+      {step === 'phone' && <ServiceScopePicker services={services} scope={scope} />}
+      <label className="status-subscribe__label" htmlFor={`${id}-${step}`}>
+        {step === 'phone' ? t('subscribe.phone') : t('subscribe.code')}
+      </label>
+      <div className="status-subscribe__controls">
+        {step === 'phone' ? (
+          <input
+            id={`${id}-phone`}
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            maxLength={32}
+            placeholder="+14155550100"
+            className="status-subscribe__input"
+            value={phone}
+            onChange={event => setPhone(event.target.value)}
+            aria-describedby={`${id}-hint`}
+            aria-invalid={Boolean(error) || undefined}
+            disabled={pending}
+          />
+        ) : (
+          <input
+            id={`${id}-code`}
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            pattern="[0-9]{6}"
+            maxLength={6}
+            placeholder="123456"
+            className="status-subscribe__input"
+            value={code}
+            onChange={event => setCode(event.target.value.replace(/\D/g, ''))}
+            aria-describedby={`${id}-hint`}
+            aria-invalid={Boolean(error) || undefined}
+            disabled={pending}
+          />
+        )}
+        <button
+          type="submit"
+          className="status-subscribe__button"
+          disabled={pending || (step === 'phone' ? !phone.trim() : code.length !== 6)}
+        >
+          {pending
+            ? t('subscribe.sending')
+            : step === 'phone'
+              ? t('subscribe.sendCode')
+              : t('subscribe.verify')}
+        </button>
+      </div>
+      <p id={`${id}-hint`} className="status-subscribe__hint">
+        {step === 'phone'
+          ? t('subscribe.phoneHint')
+          : t('subscribe.codeHint', { phone: phone.trim() })}
+      </p>
+      {error && (
+        <div className="status-subscribe__error" role="alert">
+          <span>{error}</span>
+        </div>
+      )}
+    </form>
+  );
+}
+
+type TabId = 'EMAIL' | 'WEBHOOK' | 'SLACK' | 'MICROSOFT_TEAMS' | 'SMS';
+const TAB_LABEL = {
+  EMAIL: 'subscribe.tabEmail',
+  SLACK: 'subscribe.tabSlack',
+  MICROSOFT_TEAMS: 'subscribe.tabTeams',
+  SMS: 'subscribe.tabSms',
+} as const satisfies Record<Exclude<TabId, 'WEBHOOK'>, I18nKey>;
+
+/** The channels this page offers (email by default), one tab each when there is more than one. */
 export default function StatusPageSubscribe(props: StatusPageSubscribeProps) {
   const t = useT();
-  const [tab, setTab] = useState<'email' | 'webhook'>('email');
-  const { webhookSlug, ...emailProps } = props;
-  if (!webhookSlug) return <StatusPageEmailSubscribe {...emailProps} />;
+  const { webhookSlug, channels, subscribeSlug, ...emailProps } = props;
+  const slug = subscribeSlug ?? webhookSlug ?? null;
+  // Older callers pass only webhookSlug: email, plus webhook when it is set.
+  const offered = (channels ?? (webhookSlug ? ['EMAIL', 'WEBHOOK'] : ['EMAIL'])).filter(
+    (channel): channel is TabId => channel in TAB_LABEL || channel === 'WEBHOOK'
+  );
+  // Everything but email posts to slug routes.
+  const tabs = offered.filter(channel => channel === 'EMAIL' || slug);
+  const [tab, setTab] = useState<TabId>(tabs[0] ?? 'EMAIL');
+  if (tabs.length === 0) return null;
+  if (tabs.length === 1 && tabs[0] === 'EMAIL') return <StatusPageEmailSubscribe {...emailProps} />;
+  const active = tabs.includes(tab) ? tab : tabs[0];
+  const shared = { services: emailProps.services, initialSelectedId: emailProps.initialSelectedId };
   return (
     <div>
-      <div className="status-subscribe__segment" role="tablist" aria-label="Subscription channel">
-        {(['email', 'webhook'] as const).map(id => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={tab === id}
-            className={`status-subscribe__segbtn${tab === id ? ' status-subscribe__segbtn--active' : ''}`}
-            onClick={() => setTab(id)}
-          >
-            <span>{id === 'email' ? 'Email' : t('subscribe.webhook')}</span>
-          </button>
-        ))}
-      </div>
-      {tab === 'email' ? (
+      {tabs.length > 1 && (
+        <div
+          className="status-subscribe__segment"
+          role="tablist"
+          aria-label={t('subscribe.channelTabs')}
+        >
+          {tabs.map(id => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={active === id}
+              className={`status-subscribe__segbtn${active === id ? ' status-subscribe__segbtn--active' : ''}`}
+              onClick={() => setTab(id)}
+            >
+              {/* eslint-disable-next-line security/detect-object-injection -- id is a closed TabId */}
+              <span>{id === 'WEBHOOK' ? t('subscribe.webhook') : t(TAB_LABEL[id])}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {active === 'EMAIL' ? (
         <StatusPageEmailSubscribe {...emailProps} />
+      ) : active === 'WEBHOOK' ? (
+        <StatusPageWebhookSubscribe slug={slug!} />
+      ) : active === 'SMS' ? (
+        <StatusPageSmsSubscribe slug={slug!} {...shared} />
       ) : (
-        <StatusPageWebhookSubscribe slug={webhookSlug} />
+        <StatusPageChatSubscribe slug={slug!} channel={active} {...shared} />
       )}
     </div>
   );
