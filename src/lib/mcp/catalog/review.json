@@ -3302,7 +3302,7 @@
     "routeSha256": "ec09ca7055d739a8e0dd4e09a89d789bc05c4ff2d8fc066ebe5bce3d5e110c47",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-approval-destructive-items.test.ts",
-    "contractSha256": "5d34280a7261366f7e3ba509edbe022b636ad1afe96d7fbd7cd7af8e494171b6",
+    "contractSha256": "7933fa3b0aa515f44423407344620d102280e8a891f65b2fb047fe698ab3b124",
     "actions": ["schedule.manage"],
     "impactPreview": "getScheduleOverride",
     "additionalScopes": ["schedules:read"]

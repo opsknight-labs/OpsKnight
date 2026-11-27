@@ -307,8 +307,8 @@ describe('getScheduleOverride', () => {
         scheduleId: schedule.id,
         userId: responder.user.id,
         replacesUserId: replaced.id,
-        start: new Date('2026-11-01T00:00:00.000Z'),
-        end: new Date('2026-11-01T08:00:00.000Z'),
+        start: new Date('2099-11-01T00:00:00.000Z'),
+        end: new Date('2099-11-01T08:00:00.000Z'),
       },
     });
     return { admin, responder, schedule, override };
