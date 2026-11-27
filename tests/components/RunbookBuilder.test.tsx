@@ -332,6 +332,30 @@ describe('Runbook nested check builder', () => {
     expect(saved.steps[1].name).toBe('Initial Manual Step (Copy)');
   });
 
+  it('duplicates a step on a plain-http origin where crypto.randomUUID is missing', () => {
+    vi.stubGlobal('crypto', {});
+    try {
+      const initialStep = newBuilderStep('MANUAL', 'first_action');
+      initialStep.name = 'Initial Manual Step';
+      const { container } = render(
+        <RunbookBuilder
+          initialDefinition={{ steps: [initialStep] }}
+          initialInputs={[]}
+          action={async () => {}}
+        />
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Duplicate Initial Manual Step' }));
+
+      const saved = parseRunbookDefinition(
+        JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value)
+      );
+      expect(saved.steps).toHaveLength(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('displays inline validation error when step name is empty', () => {
     const initialStep = newBuilderStep('MANUAL', 'test_step');
 

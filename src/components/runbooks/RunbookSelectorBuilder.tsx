@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Label } from '@/components/ui/shadcn/label';
 import { parseAgentSelector } from '@/lib/runbooks/selector-input';
 import { schedulingLabelsSchema } from '@/lib/runbooks/labels';
+import { localId } from '@/lib/local-id';
 export default function RunbookSelectorBuilder({ initialValue = {} }: { initialValue?: unknown }) {
   const id = useId();
   const [rows, setRows] = useState<Array<{ id: string; key: string; value: string }>>(() => {
@@ -64,7 +65,7 @@ export default function RunbookSelectorBuilder({ initialValue = {} }: { initialV
             else if (parsed.success)
               setRows(
                 Object.entries(parsed.data).map(([key, value]) => ({
-                  id: crypto.randomUUID(),
+                  id: localId(),
                   key,
                   value,
                 }))
@@ -161,9 +162,7 @@ export default function RunbookSelectorBuilder({ initialValue = {} }: { initialV
           size="sm"
           className="gap-1.5"
           disabled={rows.length >= 32}
-          onClick={() =>
-            setRows(current => [...current, { id: crypto.randomUUID(), key: '', value: '' }])
-          }
+          onClick={() => setRows(current => [...current, { id: localId(), key: '', value: '' }])}
         >
           <Plus className="h-3.5 w-3.5" aria-hidden />
           Add selector label

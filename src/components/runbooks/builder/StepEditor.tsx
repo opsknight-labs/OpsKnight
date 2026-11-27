@@ -62,6 +62,7 @@ const AGENT_PREREQUISITES: Record<RunbookStepType, string> = {
   APPROVAL: 'Requires a responder with runbook.approve and access to the incident.',
 };
 import ManualActionEditor from './action-editors/ManualActionEditor';
+import { localId } from '@/lib/local-id';
 
 interface StepEditorProps {
   step: RunbookStepDefinition;
@@ -754,7 +755,7 @@ function NestedChecks({
             variant="outline"
             size="sm"
             onClick={() => {
-              const key = `${phase}_${crypto.randomUUID().replaceAll('-', '_').slice(0, 8)}`;
+              const key = `${phase}_${localId().replaceAll('-', '_').slice(0, 8)}`;
               setIdentities([...identities, key]);
               commit([...checks, newBuilderStep(type, key)]);
             }}
