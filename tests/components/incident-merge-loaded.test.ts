@@ -35,6 +35,16 @@ describe('mergeLatestWithOlder', () => {
   it('returns the incoming list itself when nothing older was loaded', () => {
     const latest = [row('c', '2026-01-03')];
     expect(mergeLatestWithOlder(latest, [row('c', '2026-01-03')])).toBe(latest);
-    expect(mergeLatestWithOlder([], olderLoaded)).toEqual([]);
+    expect(mergeLatestWithOlder([], [])).toEqual([]);
+  });
+
+  it('keeps what the viewer paged in when the refreshed newest page is empty', () => {
+    // The first page is trimmed to the span all tables cover, so it can come back empty.
+    const loaded = [...page1, ...olderLoaded];
+
+    const merged = mergeLatestWithOlder<(typeof loaded)[number]>([], loaded);
+
+    expect(merged.map(item => item.id)).toEqual(['c', 'b', 'a']);
+    expect(merged).not.toBe(loaded);
   });
 });
