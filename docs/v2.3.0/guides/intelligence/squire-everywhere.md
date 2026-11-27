@@ -1,6 +1,6 @@
 ---
 title: Ask Squire in Slack, Microsoft Teams, MCP and on mobile
-description: Turn on Squire outside the web app, ask it in incident channels and war rooms, confirm its suggestions with a button, and use ask_squire from an AI assistant.
+description: Turn on Squire outside the web app, ask it in Slack channels and war rooms, confirm its suggestions with a button, and use ask_squire from an AI assistant.
 type: how-to
 product_area: intelligence
 audience: [responder, administrator]
@@ -9,24 +9,14 @@ reader:
   task: Enable and use Squire in Slack, Microsoft Teams, MCP clients and the mobile incident page.
 verification:
   level: test
-  verified_at: 2026-11-10
+  verified_at: 2026-11-27
   evidence:
-    [
-      src/lib/chatops/squire,
-      src/lib/mcp/core/ask-squire.ts,
-      src/components/squire/MobileSquireMount.tsx,
-      tests/integration/intelligence/squire-chat-surfaces.test.ts,
-      tests/unit/chatops-squire-render.test.ts,
-      tests/components/squire/SquireMobile.test.tsx,
-      tests/components/squire/SquireSurfaces.test.tsx,
-      tests/unit/squire-surfaces-contract.test.ts,
-      tests/integration/intelligence/squire-pinned-briefing.test.ts,
-      tests/mcp/tools-list-contract.test.ts,
-      src/components/squire/SquireChart.tsx,
-      src/lib/intelligence/assistant/feedback.ts,
-      tests/integration/intelligence/squire-charts-feedback.test.ts,
-      tests/components/squire/SquireChart.test.tsx,
-    ]
+    - src/lib/chatops/squire
+    - src/lib/mcp/core/ask-squire.ts
+    - src/components/squire/MobileSquireMount.tsx
+    - tests/unit/chatops-squire-normal-channel.test.ts
+    - tests/unit/chatops-squire-render.test.ts
+    - tests/integration/intelligence/squire-chat-surfaces.test.ts
 ---
 
 # Ask Squire in Slack, Microsoft Teams, MCP and on mobile
@@ -39,7 +29,7 @@ An administrator opens **Settings → Intelligence → Assistant**. The assistan
 
 | Switch                                  | What it adds                                                                |
 | --------------------------------------- | --------------------------------------------------------------------------- |
-| **Slack and Microsoft Teams**           | `@OpsKnight` in incident channels and war rooms, and `/incident ask` in Slack. |
+| **Slack and Microsoft Teams**           | `@OpsKnight` in Slack channels (and in incident war rooms and Teams war rooms), and `/incident ask` in Slack. |
 | **AI assistants over MCP (ask_squire)** | The read-only `ask_squire` tool for connected assistants.                   |
 | **Mobile incident pages**               | The assistant, full screen, on `/m/incidents/…`.                            |
 
@@ -47,12 +37,14 @@ Turning a switch off stops new questions at once. Suggestions already shown in c
 
 ## Slack
 
-In an OpsKnight incident channel:
+Mention the OpsKnight app in any channel it is in, or in an incident channel:
 
-- **`@OpsKnight what changed before this started?`** Squire replies in the thread, visible to the channel.
-- **`/incident ask is this related to yesterday's outage?`** Squire replies only to you.
+- **`@OpsKnight what changed before this started?`** Squire replies in the thread, visible to the channel. In an incident channel it knows which incident the room is about; in any other channel it answers as a general question.
+- **`/incident ask is this related to yesterday's outage?`** Squire replies only to you, in a war room.
 
-Your Slack account must match an active OpsKnight account by its verified email address, as for the other `/incident` commands. Otherwise Squire tells you it cannot answer for you. Squire answers only in incident channels; elsewhere it points you to OpsKnight.
+![Squire's reply in a normal Slack channel, showing the answer, its source, and that it answered with the asker's permissions](/docs/v2.3.0/assets/slack-squire-normal-channel.png)
+
+Because a channel reply is visible to everyone in the channel, Squire uses only its channel-safe read tools there, and it still answers as you: it cannot show you, or the channel, anything your own OpsKnight account cannot read. Your Slack account must match an active OpsKnight account by its verified email address, as for the other `/incident` commands. Otherwise Squire tells you privately that it cannot answer for you. `investigate` needs an incident channel. Typing `@squire` as plain text works only in incident channels; elsewhere use the real `@OpsKnight` mention.
 
 Mention the OpsKnight app you already installed (`@OpsKnight`); Squire is its assistant, not a separate app. The Slack app needs the `app_mentions:read` event subscription, which may ask you to re-approve the app once. The existing interactivity URL handles the buttons.
 

@@ -180,3 +180,51 @@ manualAssets:
     sha256: 89082ffbc0dc48d554e7a73546c10885731f36d24161c5dd819dc635c1e2e153
     provenance: Guided single sign-on capture for OpsKnight 2.2.0 added in commit 15ba1d860ff12c5a275db96049ca4b81ad49c48c (#957).
     classification: manual-product-example
+  slack-command-who.png:
+    sha256: 5a2fa40477e98a8ba4baa4d426f3dd7dd18cda534def7644568785eb29d6bc4a
+    provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop 5f87675 (#1072) on 2026-11-27, with a demo incident and demo users.
+    classification: manual-product-example
+  slack-declare-form.png:
+    sha256: 26e6a9790b568e009b91e9d492a19ba86fefd074c7a7a64f3a25c2b068b0343a
+    provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop 5f87675 (#1072) on 2026-11-27, with a demo incident and demo users.
+    classification: manual-product-example
+  slack-escalation-broadcast.png:
+    sha256: 3b2d01a96a404d35e7cf454ff7a2b78055fac22baa90366ed4ed21ec5cf4ef35
+    provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop 5f87675 (#1072) on 2026-11-27, with a demo incident and demo users.
+    classification: manual-product-example
+  slack-incident-card-resolved.png:
+    sha256: 2d6674fbf2cb30eba8a0032ea4ab2c6f9a5f3a02fe09ea19fb3b5843d7e1a9dd
+    provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop 5f87675 (#1072) on 2026-11-27, with a demo incident and demo users.
+    classification: manual-product-example
+  slack-incident-card-snoozed.png:
+    sha256: e278c80516bda8351f1fc87414b4946ec474a05eb311fc0900818bf38724f0e2
+    provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop 5f87675 (#1072) on 2026-11-27, with a demo incident and demo users.
+    classification: manual-product-example
+  slack-incident-card.png:
+    sha256: 959d5b701127201dc10037fe27c71af605ddb4f7f335dad15f14c5b814ef3098
+    provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop 5f87675 (#1072) on 2026-11-27, with a demo incident and demo users.
+    classification: manual-product-example
+  slack-incident-thread.png:
+    sha256: 679e0bed0d34e4e4a6c869c42b447cb9bd33418fd2a5a6683e0a413ffad358e4
+    provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop 5f87675 (#1072) on 2026-11-27, with a demo incident and demo users.
+    classification: manual-product-example
+  slack-settings-health.png:
+    sha256: 1d8879b7ad89b27746ac7b87b7f6d896f6d42b68866331e6095da75bd1bed288
+    provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop 5f87675 (#1072) on 2026-11-27, with a demo incident and demo users.
+    classification: manual-product-example
+  slack-squire-normal-channel.png:
+    sha256: b09ba44f893b18174d2a17ca31551060c317c76753442c20b4446ce8b3351c62
+    provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop 5f87675 (#1072) on 2026-11-27, with a demo incident and demo users.
+    classification: manual-product-example
+  slack-war-room-open-links.png:
+    sha256: 8f96b151ced150deefac207946aa48b40a8ee4fe992d56f55ac1a7348e4c1d29
+    provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop 5f87675 (#1072) on 2026-11-27, with a demo incident and demo users.
+    classification: manual-product-example
+  slack-war-room-status-card.png:
+    sha256: ddd2389fedf3da37e735f8711ac103f74b54b636e6a29474f3785d7b84cfca23
+    provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop 5f87675 (#1072) on 2026-11-27, with a demo incident and demo users.
+    classification: manual-product-example
+  slack-war-room-welcome.png:
+    sha256: 15d87e5b88276470ac1d137234d0a33507bb1947aaf1023d49d82a2c34d5e41d
+    provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop 5f87675 (#1072) on 2026-11-27, with a demo incident and demo users.
+    classification: manual-product-example

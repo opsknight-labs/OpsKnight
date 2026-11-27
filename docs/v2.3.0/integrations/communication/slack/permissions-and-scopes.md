@@ -7,14 +7,12 @@ product_area: chatops
 audience: [administrator, operator]
 verification:
   level: source
-  verified_at: 2026-11-23
+  verified_at: 2026-11-27
   evidence:
-    [
-      src/lib/slack/app-manifest.ts,
-      src/lib/chatops/squire/identity.ts,
-      tests/lib/slack-app-manifest.test.ts,
-      tests/integration/chatops/squire-channel.test.ts,
-    ]
+    - src/lib/slack/app-manifest.ts
+    - src/lib/slack/health.ts
+    - src/components/settings/slack/SlackHealthPanel.tsx
+    - tests/lib/slack-app-manifest.test.ts
 ---
 
 # Slack permissions and scopes
@@ -30,6 +28,15 @@ OpsKnight assistant, uses two more optional scopes: `app_mentions:read` (receive
 also registers the `reaction_added`, `app_mention`, `app_uninstalled`, and
 `tokens_revoked` events, the `/incident` command, and signed interactivity
 endpoints.
+
+Four more optional scopes switch on features. Without them OpsKnight skips the feature quietly; nothing else changes:
+
+| Scope | What it enables |
+| --- | --- |
+| `chat:write.public` | Post to a public channel without inviting the bot first. |
+| `pins:write` | Pin the status card in war rooms. |
+| `bookmarks:write` | Bookmark the incident in war-room channels. |
+| `im:write` | Page responders with a Slack direct message (see [identity linking](./user-identity-linking)). |
 
 The generated app manifest, OAuth request, and settings health check all use
 the same source-owned scope lists.
@@ -76,3 +83,12 @@ Workspaces connected on 2.1 show `commands` as a missing required scope under
 
 Other Slack setup is unchanged; see
 [Connect Slack with OAuth](./connect-with-oauth.md).
+
+## Update an existing install
+
+If the Slack app was installed from an older manifest, **Settings → Integrations → Slack** shows **Slack app manifest out of date** with the scopes it is missing and what each one unlocks. Everything that worked before keeps working; those features stay off until you update the app:
+
+1. Select **Copy manifest**, open your app in the Slack API console, paste it under **App Manifest**, and save.
+2. Select **Reconnect Slack** in OpsKnight and approve the new scopes.
+
+When the grant is complete the notice disappears and the **Bot permissions** tile shows every scope granted. A missing *required* scope is shown as a critical warning with the same **Reconnect Slack** button.

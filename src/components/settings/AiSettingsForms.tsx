@@ -389,7 +389,7 @@ export function AiSettingsForm({
         <Check
           name="squireChatOpsEnabled"
           label="Slack and Microsoft Teams"
-          help="People ask with @squire or /incident ask in incident channels and war rooms. Answers use the asker's own permissions; suggested changes need a button press by the person who asked."
+          help="People ask by mentioning @OpsKnight in any channel the app is in (plain-text @squire also works in incident channels), or with /incident ask in a war room. Answers use the asker's own permissions; suggested changes need a button press by the person who asked."
           defaultChecked={settings.squireChatOpsEnabled ?? false}
           disabled={disabled}
         />

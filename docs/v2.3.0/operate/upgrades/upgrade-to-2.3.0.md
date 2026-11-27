@@ -1,6 +1,6 @@
 ---
 title: Upgrade to OpsKnight 2.3.0
-description: What changes when you upgrade from 2.2.x to 2.3.0 (Node.js 22 and Prisma 7.3.0 on the node-postgres driver), how to check your database connections first, apply the upgrade, and recover from a failed migration.
+description: What changes when you upgrade from 2.2.x to 2.3.0 (Node.js 22 and Prisma 7.3.0 on the node-postgres driver), how to check your database connections first, apply the upgrade, and recover from a failed migration, plus the Slack and Microsoft Teams ChatOps changes and the optional steps to switch them on.
 type: deployment
 product_area: upgrades
 audience: [operator, administrator]
@@ -10,7 +10,7 @@ reader:
   task: Prepare, apply, verify, and if necessary recover an upgrade from OpsKnight 2.2.x to 2.3.0.
 verification:
   level: source
-  verified_at: 2026-11-22
+  verified_at: 2026-11-27
   evidence:
     - package.json
     - prisma.config.ts
@@ -20,6 +20,14 @@ verification:
     - scripts/db/check-connection.cjs
     - deploy/kubernetes/helm/opsknight/templates/migration-job.yaml
     - Dockerfile
+    - src/lib/slack/incident-card.ts
+    - src/lib/slack/live-card.ts
+    - src/lib/microsoft-teams/cards.ts
+    - src/lib/microsoft-teams/health-checklist.ts
+    - prisma/migrations/20261204100000_slack_incident_message
+    - prisma/migrations/20261204100100_chatops_slack_war_room_settings
+    - prisma/migrations/20261204100200_user_slack_dm_notifications
+    - prisma/migrations/20261204100400_teams_secret_expiry_activity
 ---
 # Upgrade to OpsKnight 2.3.0
 This page covers what is different about the 2.2.x to 2.3.0 upgrade. Follow it together with the
@@ -61,6 +69,34 @@ not UTC (Prisma 5 could miss rows or shift raw-SQL writes by the offset). No act
 ### Failed connections are retried consistently
 Every connection failure now carries a code, and a first-connection failure during a database outage is
 classified retryable, like later outages. Escalation steps retry instead of failing permanently.
+## Slack and Microsoft Teams ChatOps
+
+2.3.0 also brings the Slack and Teams integrations up to date. Nothing here needs action on upgrade; the optional steps below switch on the extra features.
+
+What changes for responders:
+
+- **Slack channel alerts are one live card per incident.** The card is edited as the incident is acknowledged, snoozed, escalated, and resolved, with a short thread reply for each change, instead of a new message for every event. Buttons now include **Snooze**, **Escalate**, and **Assign to me**, and **Resolve** and **Escalate** ask for confirmation. Messages posted before the upgrade, and messages sent through an incoming webhook, keep posting new messages. See [Slack incident notifications](../../integrations/communication/slack/incident-notifications).
+- **Every escalation refreshes the Slack and Teams cards**, whether it came from the engine, the web app, the API, Slack, or Teams.
+- **Slack war rooms** get a welcome message, a pinned status card with the description, room settings for private rooms and delayed archiving (both off by default), and 📌 reactions that save a message as an incident note. See [war rooms](../../integrations/communication/slack/war-rooms).
+- **`/incident declare`** has priority, visibility, and assignee fields, and **`/incident list`** and **`/incident oncall`** work in any channel. See [commands](../../integrations/communication/slack/commands).
+- **Squire answers `@OpsKnight` mentions in ordinary Slack channels**, not only incident rooms. See [Ask Squire in Slack](../../guides/intelligence/squire-everywhere).
+- **Microsoft Teams cards** have a header colour that follows the state, a single status badge, who acknowledged or resolved the incident, a distinct escalated card, local-time timestamps, and **Acknowledge** and **Resolve** on the posted card. The person who clicks sees the updated card immediately.
+- **Slack and Teams settings show live health checks**, including a notice when the Slack app was installed from an older manifest and a warning before a Teams client secret expires.
+
+Behaviour changes for administrators:
+
+- The service's notify switches stop **new** Slack and Teams posts only; an existing card is still updated so it never shows a stale state.
+- A Slack rate limit (HTTP 429) is retried after the delay Slack asks for and is never treated as "might have been delivered". Teams card updates handle 429 and server errors, re-post a card that was deleted, and recover from an uncertain create after 10 minutes instead of silencing the channel.
+- Slack OAuth handles Enterprise Grid installs and rotating tokens, and no longer logs OAuth state values. Teams sign-in validation throttles key refetches, tolerates 5 minutes of clock skew, and rejects a single-tenant install whose tenant id is empty or does not match.
+- The Teams settings page no longer sends the whole configuration row, including the encrypted client secret, to the browser.
+
+Database: the migrations are additive. They add the `SlackIncidentMessage` table and nullable or defaulted columns on `ChatOpsConfig`, `SlackIntegration`, `User`, `MicrosoftTeamsConfig`, and `MicrosoftTeamsInstallation`. Nothing is rewritten or removed, so [rolling back](./rollback) leaves them in place and unused.
+
+### Optional steps after upgrading
+
+1. **Slack:** under **Settings → Integrations → Slack**, select **Copy manifest**, paste it under **App Manifest** in the Slack API console, save, then select **Reconnect Slack**. This switches on pinned and bookmarked status cards, direct-message paging, posting to public channels without inviting the bot, and Squire posting under its own name. See [permissions and scopes](../../integrations/communication/slack/permissions-and-scopes).
+2. **Microsoft Teams:** under **Settings → Integrations → Microsoft Teams**, select **Download updated app package** (version 1.4.0) and upload it to Teams, to get Squire by `@OpsKnight` mention and direct message and the bot's command list. The existing 1.3.0 package keeps working.
+
 ## Password hashes remain compatible
 bcryptjs 3 writes new local-password hashes with the `$2b$` prefix instead of `$2a$`.
 Existing password hashes remain valid; no password reset or database rewrite is required.
