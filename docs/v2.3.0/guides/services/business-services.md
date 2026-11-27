@@ -217,6 +217,13 @@ these updates straight away and notify subscribers. It is off by default; keep i
 services whose impact is always public, such as Tier 0. Every draft and publish is in the audit
 log.
 
+## Monthly review digest
+
+The digest lists up to three top causes for each service. A cause is the first line of the root
+cause of a **published** postmortem, or the incident title when the postmortem is a draft, archived
+or missing. The digest goes to opted-in team members of any role, so a draft root cause is never
+quoted in it.
+
 ## Error budget alerts
 
 Admins can turn on **Alert on error budget changes** in **Settings → Notifications**, under
