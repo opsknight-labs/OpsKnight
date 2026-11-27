@@ -20,7 +20,7 @@ import { getDefaultAvatar } from '@/lib/avatar';
 import { logAudit } from '@/lib/audit';
 import { isValidTimeZone } from '@/lib/timezone';
 import { CAPABILITIES, isApiScope, capabilitiesOf } from '@/lib/authorization';
-import { getCurrentUser } from '@/lib/rbac';
+import { assertPermanentAdminForAdminTargets, getCurrentUser } from '@/lib/rbac';
 import {
   createServiceAccount,
   issueServiceAccountToken,
@@ -772,6 +772,11 @@ export async function createServiceAccountAction(
     if (!name) {
       return { error: 'Service account name is required.' };
     }
+    // An ADMIN identity outlives a time-boxed grant, so only an assigned admin with a fresh sign-in mints one.
+    if (role === 'ADMIN') {
+      await assertPermanentAdminForAdminTargets(user, [], role);
+      await assertRecentAuthentication(undefined, 'creating an administrator service account');
+    }
 
     await createServiceAccount({
       name,
@@ -780,7 +785,7 @@ export async function createServiceAccountAction(
       description,
       teamIds: teamIds.length > 0 ? teamIds : undefined,
       actorId: user.id,
-      consoleSession: true,
+      consoleSession: user.baseRole === 'ADMIN',
     });
 
     revalidatePath('/settings/api-keys');
@@ -818,6 +823,18 @@ export async function issueServiceAccountTokenAction(
     if (scopes.length === 0) {
       return { error: 'At least one scope must be selected.' };
     }
+    // A token for an ADMIN service account is an admin credential: same rule as creating the account.
+    const account = await prisma.user.findUnique({
+      where: { id: serviceAccountId },
+      select: { role: true },
+    });
+    if (account?.role === 'ADMIN') {
+      await assertPermanentAdminForAdminTargets(user, [serviceAccountId]);
+      await assertRecentAuthentication(
+        undefined,
+        'issuing a token for an administrator service account'
+      );
+    }
 
     const result = await issueServiceAccountToken({
       serviceAccountId,
@@ -826,7 +843,7 @@ export async function issueServiceAccountTokenAction(
       expiresInDays: expiresInDays && expiresInDays > 0 ? expiresInDays : undefined,
       neverExpires,
       actorId: user.id,
-      consoleSession: true,
+      consoleSession: user.baseRole === 'ADMIN',
     });
 
     revalidatePath('/settings/api-keys');

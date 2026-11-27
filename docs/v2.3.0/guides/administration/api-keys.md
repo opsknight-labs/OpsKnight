@@ -39,6 +39,11 @@ included. At the limit, creating another key fails with "This account already ha
 keys, the maximum" until you revoke a key or one expires. Rate limits are counted per key, which is
 why the number of keys is capped. Service account tokens are not counted against this limit.
 
+A service account with the Admin role is an administrator identity that keeps working after a temporary
+grant ends. Creating one, or issuing any token for one, needs an assigned administrator who signed in within
+the last 15 minutes. Anyone using temporary admin access, or whose sign-in is older, is refused and nothing is
+created.
+
 The secret is displayed once. Store it in a secret manager; OpsKnight retains a
 keyed hash, the visible prefix, owner, scopes, expiration, and last used time.
 Send the secret as `Authorization: Bearer <key>` or `X-API-Key` where documented.
