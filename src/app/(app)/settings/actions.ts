@@ -10,6 +10,7 @@ import { assertRecentAuthentication } from '@/lib/access/step-up';
 import { sendPasswordChangedNotice } from '@/lib/password-reset';
 import { revalidatePath } from 'next/cache';
 import { generateApiKey } from '@/lib/api-keys';
+import { assertApiKeyCapacity } from '@/lib/api-key-capacity';
 import { disallowedScopesForRole } from '@/lib/api-scope-registry';
 import { validatePasswordStrength } from '@/lib/passwords';
 import { getPushConfig } from '@/lib/notification-providers';
@@ -672,6 +673,7 @@ export async function createApiKey(
     const { token, prefix, tokenHash } = generateApiKey();
 
     await prisma.$transaction(async tx => {
+      await assertApiKeyCapacity(tx, user.id);
       const key = await tx.apiKey.create({
         data: {
           name,

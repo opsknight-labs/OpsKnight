@@ -34,6 +34,11 @@ Open **Settings → API keys**. Review existing name, prefix, owner, scopes, exp
 4. Copy the secret once directly into a secret manager.
 5. Make a test request and verify **Last used** changes.
 
+Each person can hold at most 25 active keys (not revoked and not yet expired), administrators
+included. At the limit, creating another key fails with "This account already has 25 active API
+keys, the maximum" until you revoke a key or one expires. Rate limits are counted per key, which is
+why the number of keys is capped. Service account tokens are not counted against this limit.
+
 The secret is displayed once. Store it in a secret manager; OpsKnight retains a
 keyed hash, the visible prefix, owner, scopes, expiration, and last used time.
 Send the secret as `Authorization: Bearer <key>` or `X-API-Key` where documented.
