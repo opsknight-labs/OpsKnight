@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import UngroupButton from '../intelligence/UngroupButton';
+import { mergeLatestWithOlder } from './merge-loaded';
 import {
   INTELLIGENCE_TIMELINE_KIND_LABEL,
   formatOnsetOffset,
@@ -314,7 +315,7 @@ export default function IncidentTimeline({
     setLoadedEvents(prev => {
       if (prev === events) return prev;
       if (prev.length === 0 && events.length === 0) return prev;
-      return events;
+      return mergeLatestWithOlder(events, prev);
     });
   }, [events]);
 
@@ -324,7 +325,7 @@ export default function IncidentTimeline({
     setLoadedNotes(prev => {
       if (prev === notes) return prev;
       if (prev.length === 0 && notes.length === 0) return prev;
-      return notes;
+      return mergeLatestWithOlder(notes, prev);
     });
   }, [notes]);
 
@@ -334,9 +335,15 @@ export default function IncidentTimeline({
     setLoadedNotifications(prev => {
       if (prev === notifications) return prev;
       if (prev.length === 0 && notifications.length === 0) return prev;
-      return notifications;
+      return mergeLatestWithOlder(notifications, prev);
     });
   }, [notifications]);
+
+  useEffect(() => {
+    // Fresh server data may have more behind it than the last "load older" found.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHasExhaustedOlder(false);
+  }, [events, notes, notifications]);
 
   const totalItemsCount =
     totalActivityCount ??
