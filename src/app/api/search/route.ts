@@ -5,7 +5,7 @@ import { getAuthOptions } from '@/lib/auth';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
-import type { IncidentStatus, IncidentUrgency } from '@prisma/client';
+import type { IncidentStatus, IncidentUrgency, Prisma } from '@prisma/client';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import {
   incidentReadWhere,
@@ -23,6 +23,19 @@ import { businessServiceReadWhere } from '@/lib/business-services/commands';
 import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
 
 const INSENSITIVE_MODE = 'insensitive' as const;
+
+const INCIDENT_LIMIT = 8;
+
+const incidentSelect = {
+  id: true,
+  title: true,
+  status: true,
+  urgency: true,
+  automationSourceRestricted: true,
+  automationTraces: { select: { incidentId: true }, take: 1 },
+  automationDecision: { select: { incidentId: true } },
+  service: { select: { id: true, name: true } },
+} satisfies Prisma.IncidentSelect;
 
 const BUSINESS_STATUS_LABEL = new Map<string, string>([
   ['OPERATIONAL', 'Operational'],
@@ -231,18 +244,9 @@ export async function GET(req: NextRequest) {
             },
           ],
         },
-        take: 8, // Reduced for faster response on small systems
+        take: INCIDENT_LIMIT, // Reduced for faster response on small systems
         orderBy: [{ createdAt: 'desc' }],
-        select: {
-          id: true,
-          title: true,
-          status: true,
-          urgency: true,
-          automationSourceRestricted: true,
-          automationTraces: { select: { incidentId: true }, take: 1 },
-          automationDecision: { select: { incidentId: true } },
-          service: { select: { id: true, name: true } },
-        },
+        select: incidentSelect,
       }),
 
       // Search services
@@ -448,8 +452,26 @@ export async function GET(req: NextRequest) {
         : Promise.resolve([]),
     ];
 
+    // Exact title matches rank first: the newest-first limit above must not cut an older exact match.
+    const exactIncidentsPromise = prisma.incident.findMany({
+      where: {
+        AND: [
+          incidentAccess,
+          unrestrictedSource,
+          { title: { equals: sanitizedTerm, mode: INSENSITIVE_MODE } },
+        ],
+      },
+      take: INCIDENT_LIMIT,
+      orderBy: [{ createdAt: 'desc' }],
+      select: incidentSelect,
+    });
+
+    const [searchResults, exactIncidents] = await Promise.all([
+      Promise.all(searchPromises),
+      exactIncidentsPromise,
+    ]);
     const [
-      incidents,
+      broadIncidents,
       services,
       teams,
       users,
@@ -458,7 +480,12 @@ export async function GET(req: NextRequest) {
       schedules,
       runbooks,
       businessServices,
-    ] = (await Promise.all(searchPromises)) as SearchResponses;
+    ] = searchResults as SearchResponses;
+    const exactIncidentIds = new Set(exactIncidents.map(incident => incident.id));
+    const incidents = [
+      ...exactIncidents,
+      ...broadIncidents.filter(incident => !exactIncidentIds.has(incident.id)),
+    ].slice(0, INCIDENT_LIMIT) as IncidentWithService[];
     // Health for the status dot, from the cached snapshot; a miss leaves the dot off.
     const businessHealth = businessServices.length
       ? await import('@/lib/business-services/health')

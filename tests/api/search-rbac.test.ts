@@ -146,6 +146,43 @@ describe('global search RBAC', () => {
     });
   });
 
+  it('keeps an older incident whose title is exactly the query when newer ones fill the limit', async () => {
+    mocks.userFindUnique.mockResolvedValue({
+      id: 'responder-1',
+      role: 'RESPONDER',
+      status: 'ACTIVE',
+      teamMemberships: [],
+    });
+    const incident = (id: string, title: string) => ({
+      id,
+      title,
+      status: 'OPEN',
+      urgency: 'LOW',
+      automationSourceRestricted: false,
+      automationTraces: [],
+      automationDecision: null,
+      service: null,
+    });
+    const newer = Array.from({ length: 8 }, (_, n) => incident(`new-${n}`, `failover note ${n}`));
+    mocks.findMany.mockImplementation(
+      async (args?: { where?: unknown; select?: { urgency?: unknown } }) => {
+        if (!args?.select?.urgency) return [];
+        // The exact-title query adds a third AND clause to the access scope and restricted-source filter.
+        const exactQuery = (args.where as { AND: unknown[] }).AND.length === 3;
+        return exactQuery ? [incident('old-exact', 'failover')] : newer;
+      }
+    );
+
+    const response = await GET(new NextRequest('http://localhost/api/search?q=failover'));
+    const body = await response.json();
+    const results: Array<{ id: string; type: string }> = (
+      body.data?.results ?? body.results
+    ).filter((result: { type: string }) => result.type === 'incident');
+
+    expect(results).toHaveLength(8);
+    expect(results[0].id).toBe('old-exact');
+  });
+
   it.each([
     ['AUDITOR', true],
     ['USER', true],

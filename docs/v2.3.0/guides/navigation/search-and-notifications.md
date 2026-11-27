@@ -39,7 +39,9 @@ notification drawer.
 2. Review the result type before opening a match. Search can return authorized
    incidents, services, teams, users, escalation policies, and postmortems.
 3. Add a more specific title, identifier, service, or person fragment if results
-   are broad.
+   are broad. Search lists at most eight incidents: any incident whose title is
+   exactly what you typed is always included, and the rest are the newest
+   matches.
 4. Open the result and verify its record identity before taking an action.
 
 Record results are permission-aware. Incident and service queries apply
