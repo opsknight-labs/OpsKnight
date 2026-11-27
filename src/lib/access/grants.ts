@@ -278,7 +278,8 @@ export async function activateBreakGlass(input: {
 
 /**
  * Reverts side effects of grants that expired or were revoked, then notifies the holder.
- * Enforcement never depends on this sweep: every check compares `expiresAt` at request time.
+ * Role and capability grants never depend on this sweep: every check compares `expiresAt` at request
+ * time. Team grants do, because they are real TeamMember rows that only this sweep removes.
  */
 export async function processEndedAccessGrants(now: Date = new Date(), onlyGrantId?: string) {
   const ended = await prisma.accessGrant.findMany({

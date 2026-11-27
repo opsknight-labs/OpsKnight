@@ -719,46 +719,78 @@ async function runOnce() {
       logger.warn('[Cron] Business service reviews failed', { error });
     }
 
-    // Group 3: Maintenance tasks (low priority, run last)
-    const { processAuthenticationAlerts } = await import('./auth-control/security-events');
-    await processAuthenticationAlerts();
-    const { cleanAuthenticationCeremonies } = await import('./auth-control/sessions');
-    await cleanAuthenticationCeremonies();
-    const { observeAuthenticationReplica } = await import('./auth-control/replicas');
-    if (process.env.OPSKNIGHT_PROCESS_ROLE !== 'scheduler') await observeAuthenticationReplica();
-    const tokenCleanup = await cleanupUserTokens();
-    const rateLimitCleanup = await cleanupExpiredRateLimits();
+    // Group 3: Maintenance tasks (low priority, run last). Each step is isolated: a step that keeps
+    // failing must not skip the ones after it (team-grant expiry reverts real TeamMember rows).
+    const maintenanceStep = async <T>(name: string, step: () => Promise<T>): Promise<T | null> => {
+      try {
+        return await step();
+      } catch (error) {
+        logger.warn(`[Cron] ${name} failed`, { error });
+        return null;
+      }
+    };
+    await maintenanceStep('Authentication alerts', async () => {
+      const { processAuthenticationAlerts } = await import('./auth-control/security-events');
+      await processAuthenticationAlerts();
+    });
+    await maintenanceStep('Authentication ceremony cleanup', async () => {
+      const { cleanAuthenticationCeremonies } = await import('./auth-control/sessions');
+      await cleanAuthenticationCeremonies();
+    });
+    await maintenanceStep('Authentication replica observation', async () => {
+      const { observeAuthenticationReplica } = await import('./auth-control/replicas');
+      if (process.env.OPSKNIGHT_PROCESS_ROLE !== 'scheduler') await observeAuthenticationReplica();
+    });
+    const tokenCleanup = await maintenanceStep('User token cleanup', cleanupUserTokens);
+    const rateLimitCleanup = await maintenanceStep('Rate limit cleanup', cleanupExpiredRateLimits);
     // MCP maintenance failure must not block incident-response maintenance; it logs and counts
     // its own failures.
-    const { runMcpMaintenance } = await import('./mcp/maintenance');
-    const mcpCleanup = await runMcpMaintenance();
-    const { cleanupExpiredNotificationCapacityData } = await import('./notification-fanout');
-    const notificationCapacityCleanup = await cleanupExpiredNotificationCapacityData();
-    const { expireDuePrivacyExportArtifacts } = await import('./privacy/export/artifact');
-    const privacyExportArtifactsExpired = await expireDuePrivacyExportArtifacts();
+    const mcpCleanup = await maintenanceStep('MCP maintenance', async () => {
+      const { runMcpMaintenance } = await import('./mcp/maintenance');
+      return runMcpMaintenance();
+    });
+    const notificationCapacityCleanup = await maintenanceStep(
+      'Notification capacity cleanup',
+      async () => {
+        const { cleanupExpiredNotificationCapacityData } = await import('./notification-fanout');
+        return cleanupExpiredNotificationCapacityData();
+      }
+    );
+    const privacyExportArtifactsExpired = await maintenanceStep(
+      'Privacy export expiry',
+      async () => {
+        const { expireDuePrivacyExportArtifacts } = await import('./privacy/export/artifact');
+        return expireDuePrivacyExportArtifacts();
+      }
+    );
     // Access control maintenance: revert ended temporary access, expire stale requests, and
-    // start scheduled access reviews. Enforcement never depends on this (checked per request).
-    let accessMaintenance: Record<string, unknown> | null = null;
-    try {
-      const { processEndedAccessGrants } = await import('./access/grants');
-      const { expireStaleAccessRequests } = await import('./access/requests');
-      const { maybeStartScheduledAccessReview } = await import('./access/admin');
-      accessMaintenance = {
-        grants: await processEndedAccessGrants(),
-        requests: await expireStaleAccessRequests(),
-        review: await maybeStartScheduledAccessReview(),
-      };
-    } catch (error) {
-      logger.warn('[Cron] Access-control maintenance failed', { error });
-    }
+    // start scheduled access reviews. Enforcement never depends on this for individual access
+    // grants (checked per request), but team grants are real TeamMember rows only this reverts.
+    const accessMaintenance = {
+      grants: await maintenanceStep('Access grant expiry', async () => {
+        const { processEndedAccessGrants } = await import('./access/grants');
+        return processEndedAccessGrants();
+      }),
+      requests: await maintenanceStep('Access request expiry', async () => {
+        const { expireStaleAccessRequests } = await import('./access/requests');
+        return expireStaleAccessRequests();
+      }),
+      review: await maintenanceStep('Scheduled access review', async () => {
+        const { maybeStartScheduledAccessReview } = await import('./access/admin');
+        return maybeStartScheduledAccessReview();
+      }),
+    };
     let jobsCleaned = false;
     if (Date.now() - lastJobCleanup > 24 * 60 * 60 * 1000) {
-      const { default: automationStore } = await import('./prisma');
-      const { scheduleAutomationRetention } = await import('./automation/jobs');
-      await scheduleAutomationRetention(automationStore);
-      await cleanupOldJobs(7);
-      lastJobCleanup = Date.now();
-      jobsCleaned = true;
+      jobsCleaned =
+        (await maintenanceStep('Background job cleanup', async () => {
+          const { default: automationStore } = await import('./prisma');
+          const { scheduleAutomationRetention } = await import('./automation/jobs');
+          await scheduleAutomationRetention(automationStore);
+          await cleanupOldJobs(7);
+          lastJobCleanup = Date.now();
+          return true;
+        })) ?? false;
     }
     logger.info('[Cron] Maintenance tasks processed', {
       tokenCleanup,
