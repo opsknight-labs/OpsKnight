@@ -181,6 +181,7 @@ export async function createWindowAction(
         recurrence: optional(form, 'recurrence') ?? null,
         effect,
         downgradeUrgency: effect === 'DOWNGRADE' ? optional(form, 'downgradeUrgency') : undefined,
+        coversCritical: flag(form, 'coversCritical'),
       },
       actorOf(user)
     );
@@ -253,6 +254,7 @@ export async function createRuleAction(
         matchers,
         effect,
         downgradeUrgency: effect === 'DOWNGRADE' ? optional(form, 'downgradeUrgency') : undefined,
+        coversCritical: flag(form, 'coversCritical'),
         expiresAt: optional(form, 'expiresAt')
           ? new Date(text(form, 'expiresAt')).toISOString()
           : null,

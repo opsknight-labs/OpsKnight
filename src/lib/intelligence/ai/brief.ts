@@ -4,6 +4,7 @@
  * a section keeps whole lines until its budget is spent and says how many it left out. Callers pass facts
  * the reader is already allowed to see; nothing here reads the database.
  */
+import { neutralizeInstructions } from './redact';
 
 export interface BriefSection {
   heading?: string;
@@ -84,8 +85,8 @@ export interface IncidentBriefInput {
 
 export function incidentBrief(input: IncidentBriefInput): string {
   const header = [
-    `Incident: ${clipText(input.title, 300)}`,
-    `Service: ${clipText(input.serviceName, 200)}`,
+    `Incident: ${clipText(neutralizeInstructions(input.title), 300)}`,
+    `Service: ${clipText(neutralizeInstructions(input.serviceName), 200)}`,
     `Status: ${input.status.toLowerCase()}; urgency ${input.urgency.toLowerCase()}${
       input.alertCount === undefined ? '' : `; alerts ${input.alertCount}`
     }`,
@@ -96,23 +97,28 @@ export function incidentBrief(input: IncidentBriefInput): string {
   return renderBrief([
     { lines: header, budget: BRIEF_BUDGETS.header },
     {
-      lines: input.description ? [`Description: ${input.description}`] : [],
+      lines: input.description ? [`Description: ${neutralizeInstructions(input.description)}`] : [],
       budget: BRIEF_BUDGETS.text,
     },
     {
-      lines: input.resolutionNote ? [`Resolution note: ${input.resolutionNote}`] : [],
+      lines: input.resolutionNote
+        ? [`Resolution note: ${neutralizeInstructions(input.resolutionNote)}`]
+        : [],
       budget: BRIEF_BUDGETS.text,
     },
     {
       heading: 'Timeline (oldest first):',
-      lines: (input.timeline ?? []).map(event => `- ${iso(event.at)} ${clipText(event.text, 300)}`),
+      lines: (input.timeline ?? []).map(
+        event => `- ${iso(event.at)} ${clipText(neutralizeInstructions(event.text), 300)}`
+      ),
       budget: BRIEF_BUDGETS.timeline,
       keep: 'tail',
     },
     {
       heading: 'Responder notes (oldest first):',
       lines: (input.notes ?? []).map(
-        note => `- ${iso(note.at)} ${note.author}: ${clipText(note.text, 600)}`
+        note =>
+          `- ${iso(note.at)} ${neutralizeInstructions(note.author)}: ${clipText(neutralizeInstructions(note.text), 600)}`
       ),
       budget: BRIEF_BUDGETS.notes,
       keep: 'tail',
@@ -120,7 +126,8 @@ export function incidentBrief(input: IncidentBriefInput): string {
     {
       heading: 'Changes shortly before onset (correlation only, not confirmed causes):',
       lines: (input.changes ?? []).map(
-        change => `- ${clipText(change.label, 240)} (${change.minutesBefore} min before)`
+        change =>
+          `- ${clipText(neutralizeInstructions(change.label), 240)} (${change.minutesBefore} min before)`
       ),
       budget: BRIEF_BUDGETS.changes,
     },
@@ -128,7 +135,7 @@ export function incidentBrief(input: IncidentBriefInput): string {
       heading: 'Upstream incidents shortly before (correlation only):',
       lines: (input.upstream ?? []).map(
         item =>
-          `- ${clipText(item.title, 200)} on ${item.serviceName}, ${item.minutesBefore} min before`
+          `- ${clipText(neutralizeInstructions(item.title), 200)} on ${neutralizeInstructions(item.serviceName)}, ${item.minutesBefore} min before`
       ),
       budget: BRIEF_BUDGETS.upstream,
     },
@@ -136,8 +143,10 @@ export function incidentBrief(input: IncidentBriefInput): string {
       heading: 'Similar past incidents:',
       lines: (input.similar ?? []).map(
         item =>
-          `- ${clipText(item.label, 200)} (${item.matchPercent}% match)${
-            item.resolution ? `; resolved with: ${clipText(item.resolution, 200)}` : ''
+          `- ${clipText(neutralizeInstructions(item.label), 200)} (${item.matchPercent}% match)${
+            item.resolution
+              ? `; resolved with: ${clipText(neutralizeInstructions(item.resolution), 200)}`
+              : ''
           }`
       ),
       budget: BRIEF_BUDGETS.similar,
@@ -146,7 +155,7 @@ export function incidentBrief(input: IncidentBriefInput): string {
       heading: 'Runbooks that have worked on this service:',
       lines: (input.runbooks ?? []).map(
         runbook =>
-          `- ${clipText(runbook.label, 200)} (${runbook.succeeded} of ${runbook.eligible} runs succeeded)`
+          `- ${clipText(neutralizeInstructions(runbook.label), 200)} (${runbook.succeeded} of ${runbook.eligible} runs succeeded)`
       ),
       budget: BRIEF_BUDGETS.runbooks,
     },

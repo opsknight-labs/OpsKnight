@@ -6142,6 +6142,8 @@ model NoiseMaintenanceWindow {
   recurrence               String?            @db.VarChar(512)
   effect                   NoiseControlEffect @default(SUPPRESS)
   downgradeUrgency         IncidentUrgency?
+  /// A critical or HIGH-urgency alert is never hidden or downgraded unless the window says so.
+  coversCritical           Boolean            @default(false)
   statusPageAnnouncementId String?
   enabled                  Boolean            @default(true)
   /// Set when an operator ends the window early; the window no longer matches from this instant.
@@ -6166,6 +6168,8 @@ model SuppressionRule {
   matchers         Json
   effect           NoiseControlEffect @default(SUPPRESS)
   downgradeUrgency IncidentUrgency?
+  /// A critical or HIGH-urgency alert is never hidden or downgraded unless the rule says so.
+  coversCritical   Boolean            @default(false)
   expiresAt        DateTime?
   ownerId          String?
   enabled          Boolean            @default(true)

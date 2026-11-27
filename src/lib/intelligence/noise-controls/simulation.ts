@@ -15,7 +15,9 @@ import {
 } from './contract';
 import { matchesAll } from './matchers';
 import {
+  decideStatic,
   evaluatePrePagingControls,
+  isCriticalAlert,
   resolvePolicy,
   type CompiledPolicy,
   type CompiledSuppressionRule,
@@ -72,6 +74,8 @@ export interface SimulationOutcome {
   failOpen: number;
   /** HIGH urgency incidents dedup, flapping and storm grouping left alone (`allowHighUrgency` off). */
   highUrgencyExempt: number;
+  /** Critical or HIGH-urgency incidents a matching control skipped because it does not cover critical. */
+  guardedCritical: number;
   byControl: Record<string, number>;
   byAction: Record<string, number>;
   /** Decisive hits per rule or window id (`sourceId`). */
@@ -266,6 +270,7 @@ export async function simulatePrePagingControls(
       transformed: 0,
       failOpen: 0,
       highUrgencyExempt: 0,
+      guardedCritical: 0,
       byControl: {},
       byAction: {},
       bySource: {},
@@ -301,11 +306,19 @@ export async function simulatePrePagingControls(
           outcome.highUrgencyExempt += 1;
         if (decision.action === 'GROUP_CHILD') stormChildren.add(row.incidentId);
         if (decision.failOpen && decision.failOpen.reason !== 'off') outcome.failOpen += 1;
-        // Orchestration rules run in order and stop at the first DROP or SUPPRESS, as in the hook.
-        for (const rule of resolvePolicy(snapshot, input.serviceId)?.orchestration ?? []) {
+        const rowPolicy = resolvePolicy(snapshot, input.serviceId);
+        if (rowPolicy && decideStatic(input, rowPolicy, snapshot, row.createdAt).guarded.length > 0)
+          outcome.guardedCritical += 1;
+        // Orchestration rules run in order and stop at the first DROP or SUPPRESS, as in the hook; a
+        // critical alert passes a rule that does not cover critical.
+        const critical = isCriticalAlert(input.urgency, input.severity);
+        for (const rule of rowPolicy?.orchestration ?? []) {
           if (!matchesAll(rule.conditions, input)) continue;
           outcome.matchedRules[rule.id] = (outcome.matchedRules[rule.id] ?? 0) + 1;
-          if (rule.actions.some(action => action.type === 'DROP' || action.type === 'SUPPRESS'))
+          if (
+            rule.actions.some(action => action.type === 'DROP' || action.type === 'SUPPRESS') &&
+            !(critical && !rule.coversCritical)
+          )
             break;
         }
         if (decision.action !== 'NONE') {
@@ -351,6 +364,7 @@ export async function simulatePrePagingControls(
           held: outcome.held,
           transformed: outcome.transformed,
           failOpen: outcome.failOpen,
+          guardedCritical: outcome.guardedCritical,
           byControl: outcome.byControl,
           byAction: outcome.byAction,
         },

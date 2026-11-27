@@ -246,6 +246,7 @@ describe('pre-paging evaluation', () => {
           recurrence: null,
           effect: 'SUPPRESS',
           downgradeUrgency: null,
+          coversCritical: false,
           endedAt: null,
         },
       ],
@@ -271,6 +272,7 @@ describe('pre-paging evaluation', () => {
       recurrence: null,
       endedAt: null,
       downgradeUrgency: null,
+      coversCritical: false,
     };
     const service = snapshot({
       windows: [
@@ -297,6 +299,7 @@ describe('pre-paging evaluation', () => {
           labelValue: 'PROD',
           effect: 'DOWNGRADE',
           downgradeUrgency: 'LOW',
+          coversCritical: false,
         },
       ],
     });
@@ -335,6 +338,7 @@ describe('pre-paging evaluation', () => {
       ],
       effect: 'SUPPRESS' as const,
       downgradeUrgency: null,
+      coversCritical: false,
       expiresAt: null,
     };
     expect(
@@ -378,6 +382,7 @@ describe('pre-paging evaluation', () => {
       {
         id: 'tag',
         name: 'Tag prod',
+        coversCritical: false,
         conditions: [compileMatcher({ field: 'label', key: 'env', op: 'equals', value: 'prod' })],
         actions: [
           { type: 'SET_LABEL', key: 'Tier', value: 'gold' },
@@ -388,6 +393,7 @@ describe('pre-paging evaluation', () => {
       {
         id: 'drop-test',
         name: 'Drop tests',
+        coversCritical: false,
         conditions: [compileMatcher({ field: 'source', op: 'equals', value: 'synthetic' })],
         actions: [{ type: 'DROP' }],
       },
@@ -420,6 +426,7 @@ describe('pre-paging evaluation', () => {
     const orchestration: CompiledPolicy['orchestration'] = Array.from({ length: 5 }, (_, r) => ({
       id: `attach-${r}`,
       name: `Attach ${r}`,
+      coversCritical: false,
       conditions: [compileMatcher({ field: 'label', key: 'env', op: 'equals', value: 'prod' })],
       actions: Array.from({ length: 6 }, (_, a) => ({
         type: 'ATTACH_RUNBOOK' as const,
@@ -584,6 +591,7 @@ describe('pre-paging evaluation', () => {
           recurrence: null,
           effect: 'SUPPRESS',
           downgradeUrgency: null,
+          coversCritical: false,
           endedAt: null,
         },
       ],
@@ -602,6 +610,7 @@ describe('noise control definition', () => {
     const rule = {
       id: 'a',
       name: 'A',
+      coversCritical: false,
       conditions: [{ field: 'source', op: 'exists' }],
       actions: [{ type: 'DROP' }],
     };

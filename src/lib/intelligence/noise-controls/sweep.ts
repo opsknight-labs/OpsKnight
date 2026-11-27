@@ -10,7 +10,7 @@ import {
   type ClaimedWorkItem,
   type WorkKind,
 } from '../jobs/work-queue';
-import { PREPAGING_LIMITS } from './contract';
+import { noiseControlDefinitionSchema, PREPAGING_LIMITS } from './contract';
 import { isWindowActiveAt } from './recurrence';
 import { compileSuppressionRule } from './cache';
 import { matchesAll } from './matchers';
@@ -127,9 +127,45 @@ async function endedReason(
         ])
       )
     : new Map();
+  // An orchestration SUPPRESS lasts only while the policy that applies to the alert's service (its own, else the
+  // global one, exactly as the hook resolves it) is ON and still holds the rule with a SUPPRESS action. A
+  // disabled or deleted rule, a policy switched off, or a service policy that replaced the global one releases it.
+  const orchRows = eligible.filter(row => row.control === 'ORCHESTRATION' && row.sourceId);
+  const suppressRulesByScope = new Map<string, { on: boolean; rules: Set<string> }>();
+  if (orchRows.length) {
+    const policies = await prisma.noiseControlPolicy.findMany({
+      where: {
+        OR: [
+          { serviceId: null },
+          { serviceId: { in: [...new Set(orchRows.map(row => row.alertServiceId ?? ''))] } },
+        ],
+      },
+      select: { serviceId: true, mode: true, definition: true },
+    });
+    for (const policy of policies) {
+      const parsed = noiseControlDefinitionSchema.safeParse(policy.definition);
+      suppressRulesByScope.set(policy.serviceId ?? '', {
+        on: policy.mode === 'ON',
+        rules: new Set(
+          parsed.success
+            ? parsed.data.orchestration.rules
+                .filter(
+                  rule => rule.enabled && rule.actions.some(action => action.type === 'SUPPRESS')
+                )
+                .map(rule => rule.id)
+            : []
+        ),
+      });
+    }
+  }
   const ended = new Map<string, string>();
   for (const row of eligible) {
-    if (row.control === 'MAINTENANCE') {
+    if (row.control === 'ORCHESTRATION') {
+      const effective =
+        suppressRulesByScope.get(row.alertServiceId ?? '') ?? suppressRulesByScope.get('');
+      const held = Boolean(effective?.on && row.sourceId && effective.rules.has(row.sourceId));
+      if (!held) ended.set(row.id, 'its orchestration rule ended');
+    } else if (row.control === 'MAINTENANCE') {
       const window = row.sourceId ? windows.get(row.sourceId) : undefined;
       if (
         !window ||
@@ -419,19 +455,19 @@ export async function runNoiseSweep(
 }
 
 const schedule = { checkedAt: 0 };
+const inlineSchedule = { checkedAt: 0 };
 
 /** Tests only: forget when the sweeps were last scheduled. */
 export function resetNoiseSweepSchedule(): void {
   schedule.checkedAt = 0;
+  inlineSchedule.checkedAt = 0;
 }
 
 /**
  * Called once per lane cycle: nothing between intervals, then one indexed existence probe, and a coalesced
  * item only for a sweep that has candidates (no suppressed incident / no open storm link: no work queued).
  */
-export async function scheduleNoiseSweeps(now: number): Promise<number> {
-  if (now - schedule.checkedAt < NOISE_SWEEP_INTERVAL_MS) return 0;
-  schedule.checkedAt = now;
+async function dueNoiseSweeps(): Promise<string[]> {
   // Both probes read only partial indexes (idx_sla_pause_open_noise, idx_incident_relationship_storm_open).
   const [due] = await prisma.$queryRaw<Array<{ unsuppress: boolean; cascade: boolean }>>`
     SELECT EXISTS (
@@ -448,12 +484,37 @@ export async function scheduleNoiseSweeps(now: number): Promise<number> {
                AND p.status = 'RESOLVED'
                AND c.status IN ('OPEN', 'ACKNOWLEDGED')
            ) AS cascade`;
-  const subjects = [
+  return [
     ...(due?.unsuppress ? [NOISE_SWEEP_SUBJECTS.unsuppress] : []),
     ...(due?.cascade ? [NOISE_SWEEP_SUBJECTS.stormCascade] : []),
   ];
+}
+
+export async function scheduleNoiseSweeps(now: number): Promise<number> {
+  if (now - schedule.checkedAt < NOISE_SWEEP_INTERVAL_MS) return 0;
+  schedule.checkedAt = now;
+  const subjects = await dueNoiseSweeps();
   if (!subjects.length) return 0;
   return enqueueWorkItems(
     subjects.map(subjectKey => ({ kind: WORK_KINDS.NOISE_SWEEP, subjectKey }))
   );
+}
+
+/**
+ * With Intelligence switched off the lane queues no work, yet incidents that noise controls suppressed
+ * must still page when their reason ends (the switch is also the emergency stop). So the sweeps run
+ * straight from the cycle, at the same interval, a few pages at most.
+ */
+export async function runNoiseSweepsInline(now: number, budget: Budget): Promise<void> {
+  if (now - inlineSchedule.checkedAt < NOISE_SWEEP_INTERVAL_MS) return;
+  inlineSchedule.checkedAt = now;
+  for (const subject of await dueNoiseSweeps()) {
+    for (let page = 0; page < 5; page += 1) {
+      const more =
+        subject === NOISE_SWEEP_SUBJECTS.stormCascade
+          ? await runStormCascadeSweep(budget)
+          : await runUnsuppressSweep(budget);
+      if (!more) break;
+    }
+  }
 }

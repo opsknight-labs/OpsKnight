@@ -326,6 +326,14 @@ groups:
         annotations:
           summary: One kind of intelligence work is paused after repeated failures
           description: The lane skips the {{ $labels.kind }} handler for a few minutes at a time while most of its items fail; other work continues. Check the worker logs for that kind. Paging is unaffected.
+      - alert: OpsKnightNoiseControlsSnapshotStale
+        expr: max(opsknight_prepaging_snapshot_age_seconds) > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: A process has judged alerts by noise-control policy more than five minutes old
+          description: Rules, windows and policies are reloaded every 30 seconds; this process could not. A rule or window an operator already removed may still be hiding alerts here. Check database connectivity and the logs for "Pre-paging snapshot refresh failed", then restart the process.
       - alert: OpsKnightIntelligenceLaneGone
         expr: absent(opsknight_intelligence_lane_up) and on() (max(max_over_time(opsknight_intelligence_lane_up[1h])) == 1)
         for: 5m

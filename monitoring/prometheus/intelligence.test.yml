@@ -322,3 +322,19 @@ tests:
       - eval_time: 20m
         alertname: OpsKnightAiBudgetExhausted
         exp_alerts: []
+  - interval: 1m
+    input_series:
+      - series: 'opsknight_prepaging_snapshot_age_seconds{instance="web-a"}'
+        values: '0 400x15'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: OpsKnightNoiseControlsSnapshotStale
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: OpsKnightNoiseControlsSnapshotStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: A process has judged alerts by noise-control policy more than five minutes old
+              description: Rules, windows and policies are reloaded every 30 seconds; this process could not. A rule or window an operator already removed may still be hiding alerts here. Check database connectivity and the logs for "Pre-paging snapshot refresh failed", then restart the process.

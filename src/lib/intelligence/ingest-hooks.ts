@@ -11,6 +11,7 @@ export {
   linkStormChild,
   noisePipelineOrder,
   automationIntelligenceContext,
+  shouldReleaseOnCriticalRefire,
   type IngestNoiseDecision,
   type IngestNoisePrefetch,
 } from './noise-controls/ingest';

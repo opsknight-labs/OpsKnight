@@ -360,11 +360,22 @@ deleted. Audit entries for AI use record who, which capability, which provider a
 version and token counts, never prompts or answers. See the privacy registry entries `intelligence` and
 `ai-assistant`.
 
-## Not in this release
+## What can change paging
 
-Automatic grouping, any delay or suppression of paging, and assistant write actions are not implemented.
-They need separate certification before they can exist. The open certification gates are listed in
-`plans/intelligence-engine/certification/README.md`. Learned rules are only ever suggested; a person adds them.
+The analysis lane (similar incidents, probable cause, runbook, triage and the Squire assistant's answers) never
+delays, suppresses or drops a page. Three operator-controlled features go further, and each is off until a
+person turns it on:
+
+- **Noise controls** can suppress, drop, downgrade, hold or group alerts before they page. A policy starts in
+  Shadow and needs evidence before it goes On, and a critical or HIGH-urgency alert always pages unless the
+  window, rule or orchestration rule has **Also hide critical and HIGH-urgency alerts** ticked. See
+  [Noise controls](./noise-controls).
+- **Service AUTO** adds reversible related-incident children after paging, only for a service whose
+  certification run passed (see below); global AUTO cannot be enabled.
+- **Assistant write actions** are proposals the signed-in person confirms; the server runs them under that
+  person's own permissions. The extended actions are opt-in. The open certification gates are listed in
+  `plans/intelligence-engine/certification/README.md`. Learned rules are only ever suggested; a person adds
+  them.
 
 ## Measure quality before service AUTO
 

@@ -116,6 +116,30 @@ or (any(http.request.headers.names[*] == "next-action"))
 
 Action: **Skip** → *Specific rules* → choose the rule IDs shown in **Security → Events** for the blocked request. Make a separate exception for provider webhook paths that skips Bot Fight Mode or Super Bot Fight Mode. If you use the Cloudflare OWASP ruleset, keep it at paranoia level 1. Paranoia level 2 adds rule 931130, which blocks the absolute same-origin `callbackUrl`.
 
+### Azure Front Door and Application Gateway WAF
+
+Both Azure WAF products run a managed rule set whose rule IDs follow the OWASP CRS numbers used above (for example 931130, 920230 and the 941xxx, 942xxx and 932xxx families), so the "Typical rule" column applies directly. Application Gateway calls it the Core Rule Set (CRS 3.2 or later) and Front Door the Default Rule Set (DRS 2.0 or 2.1). Keep it in **Prevention** mode and change one rule at a time.
+
+Azure exclusions remove a request attribute from inspection, not a URL path. An exclusion names a match variable (request header name, cookie name, query-string argument name, POST argument name, or, on Front Door DRS 2.0 and later, JSON argument name), an operator (`Equals`, `Contains`, `StartsWith`, `EndsWith`, `Equals any`) and a selector. Scope each one to a single rule rather than the rule set or the whole policy. Selectors are case sensitive. For a JSON body, an exclusion keeps the argument names inspected and skips their values.
+
+| Request | Exclusion (scope: the rule that fired) |
+|---|---|
+| OIDC callback `iss` and `error_description` | Query-string argument name `Equals` `iss`, and `Equals` `error_description`, on rules 931130, 920230 and the SQLi and XSS rules shown in the log |
+| `callbackUrl` on `/login` and `/api/auth/*` | Query-string argument name `Equals` `callbackUrl`; cookie name `Equals` `next-auth.callback-url` and `__Secure-next-auth.callback-url`, on rule 931130 |
+| `Next-Router-State-Tree` header | Request header name `Equals` `Next-Router-State-Tree`, on the SQLi and XSS rules in the log |
+| SSO settings JSON (`/api/auth/control`) | JSON argument name `Equals` `configuration.issuer` and `configuration.clientSecret`, on 931130 and the SQLi rules in the log |
+
+A path cannot be named in an exclusion, so where a rule has to be relaxed for one path only (runbook Server Actions and `/api/runbook-agent/v1/`, `/api/integrations/*`, `/api/events`, branding), use a **custom rule** instead. Custom rules run before the managed rules. A rule with action **Allow** that matches the path (and, for Server Actions, a `Next-Action` header) ends evaluation for that request, so give it a narrow match condition and, where you can, restrict it to the provider's published source ranges:
+
+```text
+RequestUri  BeginsWith  /api/runbook-agent/v1/
+and RequestHeaders[User-Agent]  BeginsWith  OpsKnight-Agent/
+```
+
+Use the same pattern for the provider webhook paths. If the Bot Manager rule set is on, allow `OpsKnight-Agent/` and the provider webhooks there too.
+
+Body inspection is limited. Microsoft documents that the WAF inspects only the first part of a request body, 128 KB by default, and that on Application Gateway the inspection limit and the size limit can be set independently from CRS 3.2 on. The product accepts event bodies up to 1 MiB, so anything past the inspection limit reaches OpsKnight uninspected by the WAF; OpsKnight validates every body itself. Check the current limits in Microsoft's [Application Gateway request size limits](https://learn.microsoft.com/azure/web-application-firewall/ag/application-gateway-waf-request-size-limits) and [Front Door exclusion](https://learn.microsoft.com/azure/web-application-firewall/afds/waf-front-door-exclusion) pages before relying on a number. OpsKnight has been replayed against the OWASP CRS only; run the checks in [Verify every layer](#verify-every-layer) on your Azure policy before go-live.
+
 ### ModSecurity or Coraza with the OWASP CRS
 
 Put exclusions in `REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf` (runtime `ctl:` actions). Remove a rule for one argument or cookie, not for the whole request:
@@ -151,10 +175,66 @@ SecRule &REQUEST_HEADERS:Next-Router-State-Tree "@gt 0" \
 # Runbook Agent results carry command output
 SecRule REQUEST_FILENAME "@beginsWith /api/runbook-agent/v1/" \
   "id:1000103,phase:1,pass,nolog,\
-   ctl:ruleRemoveByTag=attack-rce,ctl:ruleRemoveByTag=attack-lfi"
+   ctl:ruleRemoveByTag=attack-rce,ctl:ruleRemoveByTag=attack-lfi,\
+   ctl:ruleRemoveById=921130"
+
+# Runbook Server Actions: steps hold shell, Docker, Kubernetes and HTTP commands. They are POSTs to the page
+# path, so scope them by path and method (a Next-Action header condition did not match in testing).
+SecRule REQUEST_FILENAME "@rx ^/runbooks(/|$)" \
+  "id:1000105,phase:1,pass,nolog,chain"
+  SecRule REQUEST_METHOD "@streq POST" \
+    "ctl:ruleRemoveByTag=attack-rce,ctl:ruleRemoveByTag=attack-lfi"
+
+# Alert ingestion: internal URLs (generatorURL=http://10.0.0.5:9090/...) and shell text in alert fields
+SecRule REQUEST_FILENAME "@rx ^/api/(events$|integrations/)" \
+  "id:1000106,phase:1,pass,nolog,\
+   ctl:ruleRemoveById=931100,\
+   ctl:ruleRemoveById=932130"
+
+# Status-page branding: custom CSS and base64 logos
+SecRule REQUEST_FILENAME "@streq /api/settings/status-page" \
+  "id:1000107,phase:1,pass,nolog,\
+   ctl:ruleRemoveTargetByTag=attack-rce;ARGS:json.customCss,\
+   ctl:ruleRemoveTargetByTag=attack-xss;ARGS:json.customCss,\
+   ctl:ruleRemoveTargetByTag=attack-rce;ARGS:json.logo,\
+   ctl:ruleRemoveTargetByTag=attack-xss;ARGS:json.logo,\
+   ctl:ruleRemoveTargetById=934170;ARGS:json.logo"
+
+# MCP OAuth: native clients register and redirect to loopback IP URLs (RFC 8252). The authorize and token
+# endpoints take the redirect_uri argument; registration takes a JSON array of them (array members are named
+# json.redirect_uris.array_N, so the rules are removed for that one path instead).
+SecRule REQUEST_FILENAME "@rx ^/oauth/mcp/(authorize|token)$" \
+  "id:1000108,phase:1,pass,nolog,\
+   ctl:ruleRemoveTargetById=931100;ARGS:redirect_uri,\
+   ctl:ruleRemoveTargetById=934110;ARGS:redirect_uri"
+SecRule REQUEST_FILENAME "@streq /oauth/mcp/register" \
+  "id:1000109,phase:1,pass,nolog,\
+   ctl:ruleRemoveById=931100,\
+   ctl:ruleRemoveById=932130,\
+   ctl:ruleRemoveById=934110"
+
+# Only for sites that run paranoia level 2 or 3: routes that carry free text (alert and note text, runbook
+# steps, OAuth parameters, SSO callbacks) stay at paranoia level 1, because levels 2 and 3 flag ordinary SQL,
+# shell and HTML in that text. Everything else keeps the site-wide level.
+SecRule REQUEST_FILENAME "@rx ^/(api/(events$|integrations/|runbook-agent/v1/|settings/status-page|slack/|intelligence/squire|search$|status/subscriptions$|auth/)|runbooks(/|$)|incidents(/|$)|oauth/mcp/|mcp$|login$|m/login$)" \
+  "id:1000110,phase:1,pass,nolog,\
+   setvar:tx.detection_paranoia_level=1,\
+   setvar:tx.blocking_paranoia_level=1"
 ```
 
-Run CRS at paranoia level 1 for OpsKnight unless you have tuned it for a higher level. Set `tx.max_file_size` and `SecRequestBodyLimit` to at least the [documented inbound limits](./reverse-proxy-contract#preserve-application-protocols). Runbook draft and import endpoints are Server Actions, which are POSTs carrying a `Next-Action` header to the page path. Exclude RCE rules for them by that header, not by path.
+The CRS allows only `GET HEAD POST OPTIONS` by default (rule 911100), and the OpsKnight REST API also uses `PUT`, `PATCH` and `DELETE`. Allow them in `crs-setup.conf` (`tx.allowed_methods`) or, in the official container, with `ALLOWED_METHODS="GET HEAD POST OPTIONS PUT PATCH DELETE"`. Set `tx.max_file_size` and `SecRequestBodyLimit` to at least the [documented inbound limits](./reverse-proxy-contract#preserve-application-protocols).
+
+**Paranoia level.** The exclusions above were checked by replaying 22 request shapes (SSO callbacks, Next.js navigations and Server Actions, runbook steps, alert and provider payloads including a 900 KB body, status-page branding, MCP OAuth and JSON-RPC, Slack and GitHub webhooks) through CRS 4.30 on nginx, with 10 hostile requests alongside:
+
+| Paranoia level | Legitimate requests passed | Hostile requests blocked |
+|---|---|---|
+| 1, with these exclusions | 22 of 22 | 9 of 10 |
+| 2 or 3, with these exclusions and the paranoia override | 22 of 22 | 9 of 10 |
+| 2 or 3, without the override | 8 of 22 (level 2), 4 of 22 (level 3) | 9 of 10 |
+
+Levels 2 and 3 add the SQL, shell and HTML rule families (941xxx, 942xxx, 932xxx and 931130), which flag ordinary alert text, notes, runbook steps and OAuth parameters. So the last rule in the file keeps those free-text routes at level 1 and leaves the rest of the site at your level. Use it only if you run level 2 or 3; it is the one place the file widens what reaches OpsKnight beyond a single rule. The one hostile request that passed is an XML body with an external entity sent to `/api/integrations/custom`: the CRS does not block it at any level, and OpsKnight does not parse XML bodies.
+
+Runbook draft and import endpoints are Server Actions, which are POSTs to the page path. The file excludes the RCE and file-inclusion rules by path (`/runbooks/`) and method. In testing, a rule that waited for the `Next-Action` header did not match on CRS 4.30 with nginx, so do not rely on a header condition without trying it on your build.
 
 ## Run internal calls off the WAF
 
@@ -182,6 +262,7 @@ With the WAF in blocking mode, confirm that each of these works and that no rule
 - **403 when saving or testing SSO settings:** a rule matched the issuer URL or client secret in the `/api/auth/control` body. Add the SSO settings exclusion.
 - **Status pages answer 421 for every custom domain:** the middleware status-domain lookup is going through the WAF. Point `INTERNAL_API_URL` at loopback or the in-cluster Service.
 - **Saving a runbook fails but loading it works:** a remote-code-execution or body-size rule is blocking the Server Action. Exclude it for requests with the `Next-Action` header.
+- **A search containing `${jndi:` returns a bare 403 page:** the Log4Shell rule of the managed set blocks the `GET /api/search` query. It is expected for that string; the command palette reports that the search failed. Search for other text, or exclude the rule for the `q` argument on `/api/search` only if you need to search for it.
 - **The Runbook Agent goes offline after the WAF is enabled:** a bot or user-agent rule is blocking it. Allow `OpsKnight-Agent/` on `/api/runbook-agent/v1/`.
 
 ## Related guides

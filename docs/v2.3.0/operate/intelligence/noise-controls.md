@@ -48,9 +48,18 @@ and every decision is recorded and reversible. Highest urgency is never held.
 - **Reversible.** Every decision is listed under _Recent decisions_. Reversing an applied decision
   re-ingests the alert through the normal event path so it pages ("un-group and page"); reversing a shadow
   decision marks it wrong and counts against readiness.
-- **HIGH urgency.** Maintenance windows, suppression rules and orchestration apply to every urgency
-  (they are explicit operator intent). Content dedup, flapping and storm grouping leave HIGH alone unless
-  the policy opts in, and a storm hold is never applied to HIGH.
+- **Critical and HIGH urgency always page.** A critical alert (severity `critical`, or HIGH urgency after
+  orchestration has run) is never suppressed, dropped or downgraded by a maintenance window, suppression
+  rule or orchestration `DROP`/`SUPPRESS` unless that control has **Also hide critical and HIGH-urgency
+  alerts** ticked (`coversCritical`). Controls created before this setting existed do not cover critical.
+  A replay shows how many critical incidents a control matched but left paging. Content dedup, flapping
+  and storm grouping leave HIGH alone unless the policy opts in, and a storm hold is never applied to HIGH.
+- **Released when the reason ends.** A suppressed incident pages again when its window ends, its rule is
+  disabled, deleted or edited so it no longer matches, or its orchestration rule is disabled or removed (or
+  its policy is switched off), as long as the alert is still firing. A repeat of a suppressed alert at
+  HIGH urgency pages at once, unless the control that suppressed it has the critical opt-in ticked and is still
+  in force. Only a hold that noise controls placed is released this way; a suppression a person set stays until
+  a person lifts it. A policy on the service replaces the global one for these checks, as it does for new alerts.
 
 ## Controls
 
@@ -106,7 +115,11 @@ avoided, downgrades and holds, the false-group rate (reversed over applied group
 state. Metrics: `opsknight_prepaging_decisions_total{control,action,mode}`,
 `opsknight_prepaging_fail_open_total{reason}`, `opsknight_prepaging_lookups_total{route,outcome}`
 (evaluations that read the database, on the lookup pool or the savepoint fallback, and how many failed
-open), `opsknight_prepaging_evaluation_seconds`, `opsknight_heartbeat_monitors_missing`, `opsknight_heartbeat_pings_total{outcome}`.
+open), `opsknight_prepaging_evaluation_seconds`,
+`opsknight_prepaging_snapshot_age_seconds` and `opsknight_prepaging_snapshot_refresh_failures_total` (the
+policy snapshot reloads every 30 seconds and a refresh that does not answer in 15 seconds is abandoned; the
+`OpsKnightNoiseControlsSnapshotStale` alert fires when a process has served a snapshot over five minutes
+old), `opsknight_heartbeat_monitors_missing`, `opsknight_heartbeat_pings_total{outcome}`.
 
 ## What ON does to an alert
 

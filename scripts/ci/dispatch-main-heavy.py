@@ -28,6 +28,7 @@ HEAVY = [
     'microsoft-teams-e2e.yml',
     'integration-certification.yml',
     'sbom-validation.yml',
+    'waf-replay.yml',
 ]
 # These pick their own affected checks from a base commit, so they get one instead of a path filter.
 SELF_GATED = {'runbook-validation.yml', 'mcp-certification.yml'}

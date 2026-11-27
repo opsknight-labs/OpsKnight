@@ -338,6 +338,22 @@ export const OPERATIONAL_METRICS = [
     estimatedMaxSeries: 4,
   },
   {
+    name: 'opsknight_prepaging_snapshot_age_seconds',
+    help: 'Age of the pre-paging policy snapshot this process serves at its last refresh attempt; a growing value means rule, window and policy changes are not reaching the hook',
+    kind: 'gauge',
+    labels: [],
+    scope: 'instance',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_prepaging_snapshot_refresh_failures_total',
+    help: 'Pre-paging snapshot refreshes that failed or timed out; the previous snapshot stays in use',
+    kind: 'counter',
+    labels: [],
+    scope: 'counter',
+    estimatedMaxSeries: 1,
+  },
+  {
     name: 'opsknight_prepaging_evaluation_seconds',
     help: 'Pre-paging noise control evaluation duration inside the ingestion transaction',
     kind: 'histogram',

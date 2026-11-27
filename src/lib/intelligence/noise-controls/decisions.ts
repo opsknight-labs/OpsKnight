@@ -23,12 +23,38 @@ export async function recordPrePagingDecision(
   context: { serviceId: string; alertId?: string | null; incidentId?: string | null }
 ): Promise<string | null> {
   if (decision.action === 'NONE' || !decision.control || decision.mode === 'OFF') return null;
+  // A SHADOW decision changes nothing, so losing its audit row must never stop the alert from paging.
+  // Inside a transaction a failed insert would abort it, so the insert runs under a savepoint.
+  if (!decision.apply && !('$transaction' in tx)) {
+    await tx.$executeRaw`SAVEPOINT noise_decision`;
+    try {
+      const id = await insertDecision(tx, decision, context);
+      await tx.$executeRaw`RELEASE SAVEPOINT noise_decision`;
+      return id;
+    } catch (error) {
+      await tx.$executeRaw`ROLLBACK TO SAVEPOINT noise_decision`;
+      await tx.$executeRaw`RELEASE SAVEPOINT noise_decision`;
+      logger.error('[NoiseControls] Shadow decision not recorded; the alert pages as usual', {
+        serviceId: context.serviceId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
+  return insertDecision(tx, decision, context);
+}
+
+async function insertDecision(
+  tx: Client,
+  decision: PrePagingDecisionResult,
+  context: { serviceId: string; alertId?: string | null; incidentId?: string | null }
+): Promise<string> {
   const row = await tx.prePagingDecision.create({
     data: {
       serviceId: context.serviceId,
       incidentId: context.incidentId ?? decision.targetIncidentId ?? null,
       alertId: context.alertId ?? null,
-      control: decision.control as PrePagingControl,
+      control: decision.control! as PrePagingControl,
       action: decision.action as PrePagingAction,
       mode: decision.mode as NoiseControlMode,
       applied: decision.apply,

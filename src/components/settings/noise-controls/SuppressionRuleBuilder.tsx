@@ -17,6 +17,7 @@ import type { SimulationOutcome } from '@/lib/intelligence/noise-controls/simula
 import MatcherRows from './MatcherRows';
 import {
   ActionMessage,
+  CoversCriticalField,
   FieldError,
   fieldClass,
   fromLocalInput,
@@ -79,6 +80,7 @@ export default function SuppressionRuleBuilder({
   const [rows, setRows] = useState<MatcherDraft[]>([emptyMatcher()]);
   const [effect, setEffect] = useState<'SUPPRESS' | 'DOWNGRADE'>('SUPPRESS');
   const [downgradeUrgency, setDowngradeUrgency] = useState<'LOW' | 'MEDIUM'>('LOW');
+  const [coversCritical, setCoversCritical] = useState(false);
   const [ownerId, setOwnerId] = useState(currentUserId);
   const [expiry, setExpiry] = useState<ExpiryPreset>('30d');
   const [customExpiry, setCustomExpiry] = useState('');
@@ -148,6 +150,7 @@ export default function SuppressionRuleBuilder({
       matchers: checked.matchers,
       effect,
       ...(effect === 'DOWNGRADE' ? { downgradeUrgency } : {}),
+      coversCritical,
       expiresAt: expiresAt ? expiresAt.toISOString() : null,
       ownerId: ownerId || null,
     };
@@ -175,6 +178,7 @@ export default function SuppressionRuleBuilder({
     form.set('matchers', JSON.stringify(input.matchers));
     form.set('effect', effect);
     if (effect === 'DOWNGRADE') form.set('downgradeUrgency', downgradeUrgency);
+    if (coversCritical) form.set('coversCritical', 'true');
     if (input.expiresAt) form.set('expiresAt', String(input.expiresAt));
     if (input.ownerId) form.set('ownerId', String(input.ownerId));
     startSave(async () => {
@@ -344,6 +348,7 @@ export default function SuppressionRuleBuilder({
             </select>
           </div>
         )}
+        <CoversCriticalField id={`${id}-cc`} checked={coversCritical} onChange={setCoversCritical} />
         <div className="space-y-1">
           <label htmlFor={`${id}-owner`} className={labelClass}>
             Owner

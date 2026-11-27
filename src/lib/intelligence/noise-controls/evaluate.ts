@@ -47,6 +47,7 @@ export interface CompiledPolicy {
     name: string;
     conditions: CompiledMatcher[];
     actions: OrchestrationAction[];
+    coversCritical: boolean;
   }>;
 }
 
@@ -63,6 +64,8 @@ export interface CompiledWindow {
   recurrence: string | null;
   effect: 'SUPPRESS' | 'DOWNGRADE';
   downgradeUrgency: IncidentUrgency | null;
+  /** Without this a critical or HIGH-urgency alert is never suppressed or downgraded by the window. */
+  coversCritical: boolean;
   /** Ended early by an operator: matches nothing from this instant. */
   endedAt: Date | null;
 }
@@ -74,6 +77,8 @@ export interface CompiledSuppressionRule {
   matchers: CompiledMatcher[];
   effect: 'SUPPRESS' | 'DOWNGRADE';
   downgradeUrgency: IncidentUrgency | null;
+  /** Without this a critical or HIGH-urgency alert is never suppressed or downgraded by the rule. */
+  coversCritical: boolean;
   expiresAt: Date | null;
 }
 
@@ -198,6 +203,14 @@ function windowApplies(
   }
 }
 
+/** HIGH urgency or critical severity: the page-immediately class that static controls must not hide. */
+export function isCriticalAlert(
+  urgency: IncidentUrgency,
+  severity: string | null | undefined
+): boolean {
+  return urgency === 'HIGH' || severity?.toLowerCase() === 'critical';
+}
+
 function lowerUrgency(current: IncidentUrgency, target: IncidentUrgency | null): IncidentUrgency {
   if (!target) return 'LOW';
   return urgencyRank(target) < urgencyRank(current) ? target : current;
@@ -216,14 +229,38 @@ export function decideStatic(
 ): {
   decision: Omit<PrePagingDecisionResult, 'elapsedMs' | 'mode' | 'policyRevision' | 'apply'> | null;
   transform: PrePagingTransform | null;
+  /** Controls that matched a critical alert but were skipped because they do not cover critical. */
+  guarded: Array<{
+    control: 'MAINTENANCE' | 'SUPPRESSION' | 'ORCHESTRATION';
+    id: string;
+    name: string;
+  }>;
 } {
   const transform: PrePagingTransform = {};
   let transformed = false;
   const ruleHits: string[] = [];
+  // A rule that lowers urgency or severity must not strip the protection the alert arrived with.
+  const originallyCritical = isCriticalAlert(input.urgency, input.severity);
+  const guarded: Array<{
+    control: 'MAINTENANCE' | 'SUPPRESSION' | 'ORCHESTRATION';
+    id: string;
+    name: string;
+  }> = [];
   for (const rule of policy.orchestration) {
     if (!matchesAll(rule.conditions, input)) continue;
     ruleHits.push(rule.id);
     for (const action of rule.actions) {
+      // A critical alert is never dropped or suppressed unless the rule says so; the guard sees any
+      // urgency or severity an earlier action of this pass set.
+      if (
+        (action.type === 'DROP' || action.type === 'SUPPRESS') &&
+        !rule.coversCritical &&
+        (originallyCritical ||
+          isCriticalAlert(transform.urgency ?? input.urgency, transform.severity ?? input.severity))
+      ) {
+        guarded.push({ control: 'ORCHESTRATION', id: rule.id, name: rule.name });
+        continue;
+      }
       switch (action.type) {
         case 'DROP':
           return {
@@ -237,6 +274,7 @@ export function decideStatic(
               evidence: { ruleId: rule.id, matchedRules: ruleHits },
             },
             transform: null,
+            guarded,
           };
         case 'SUPPRESS':
           return {
@@ -251,6 +289,7 @@ export function decideStatic(
               transform: transformed ? transform : undefined,
             },
             transform: null,
+            guarded,
           };
         case 'SET_SEVERITY':
           transform.severity = action.value;
@@ -287,12 +326,18 @@ export function decideStatic(
     }
   }
   const effectiveUrgency = transform.urgency ?? input.urgency;
+  const critical =
+    originallyCritical || isCriticalAlert(effectiveUrgency, transform.severity ?? input.severity);
   const teamId = input.teamId ?? snapshot.serviceTeams.get(input.serviceId) ?? null;
 
   for (const window of snapshot.windows) {
     if (window.endedAt && window.endedAt.getTime() <= now.getTime()) continue;
     if (!windowApplies(window, input, teamId)) continue;
     if (!isWindowActiveAt(window, now)) continue;
+    if (critical && !window.coversCritical) {
+      guarded.push({ control: 'MAINTENANCE', id: window.id, name: window.name });
+      continue;
+    }
     const evidence = { windowId: window.id, scope: window.scope, matchedRules: ruleHits };
     if (window.effect === 'SUPPRESS')
       return {
@@ -307,6 +352,7 @@ export function decideStatic(
           transform: transformed ? transform : undefined,
         },
         transform: null,
+        guarded,
       };
     const urgency = lowerUrgency(effectiveUrgency, window.downgradeUrgency);
     if (urgency !== effectiveUrgency)
@@ -323,6 +369,7 @@ export function decideStatic(
           transform: transformed ? transform : undefined,
         },
         transform: null,
+        guarded,
       };
   }
 
@@ -330,6 +377,10 @@ export function decideStatic(
     if (rule.serviceId !== null && rule.serviceId !== input.serviceId) continue;
     if (rule.expiresAt && rule.expiresAt.getTime() <= now.getTime()) continue;
     if (!matchesAll(rule.matchers, input)) continue;
+    if (critical && !rule.coversCritical) {
+      guarded.push({ control: 'SUPPRESSION', id: rule.id, name: rule.name });
+      continue;
+    }
     const evidence = { ruleId: rule.id, matchedRules: ruleHits };
     if (rule.effect === 'SUPPRESS')
       return {
@@ -344,6 +395,7 @@ export function decideStatic(
           transform: transformed ? transform : undefined,
         },
         transform: null,
+        guarded,
       };
     const urgency = lowerUrgency(effectiveUrgency, rule.downgradeUrgency);
     if (urgency !== effectiveUrgency)
@@ -360,11 +412,13 @@ export function decideStatic(
           transform: transformed ? transform : undefined,
         },
         transform: null,
+        guarded,
       };
   }
   return {
     decision: null,
     transform: transformed ? { ...transform, notes: transform.notes } : null,
+    guarded,
   };
 }
 
@@ -542,8 +596,32 @@ export async function evaluatePrePagingControls(
   const base = { mode: policy.mode, policyRevision: policy.revision, policyVersionId };
 
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let staged: ReturnType<typeof decideStatic> | null = null;
+  // The lookups (dedup, flapping, storm) may fail open; the operator's own orchestration rules were
+  // already decided in memory and must still apply, or an urgency raise would be lost with them.
+  const failOpenKeepingTransform = (reason: PrePagingFailOpenReason) => {
+    const failed = failOpen(reason, policy.mode, startedAt, policy.revision, policyVersionId);
+    const transform = staged?.transform;
+    return transform
+      ? result(
+          base,
+          {
+            action: 'TRANSFORM',
+            control: 'ORCHESTRATION',
+            reason: `Transformed by orchestration rules (lookups failed open: ${reason})`,
+            sourceId: null,
+            sourceName: null,
+            targetIncidentId: null,
+            transform,
+            evidence: { transform, failOpen: reason },
+          },
+          startedAt
+        )
+      : failed;
+  };
   try {
     const stage = decideStatic(input, policy, snapshot, now);
+    staged = stage;
     let decision = stage.decision;
     if (!decision) {
       const deadlineMs = options.deadlineMs ?? PREPAGING_LIMITS.deadlineMs;
@@ -559,8 +637,7 @@ export async function evaluatePrePagingControls(
           decideWithLookups(input, policy, snapshot, lookups, now, stage.transform),
           deadline,
         ]);
-        if (outcome === 'deadline')
-          return failOpen('deadline', policy.mode, startedAt, policy.revision, policyVersionId);
+        if (outcome === 'deadline') return failOpenKeepingTransform('deadline');
         decision = outcome;
       } else {
         decision = stage.transform
@@ -594,7 +671,7 @@ export async function evaluatePrePagingControls(
       });
     return final;
   } catch {
-    return failOpen('error', policy.mode, startedAt, policy.revision, policyVersionId);
+    return failOpenKeepingTransform('error');
   } finally {
     if (timer) clearTimeout(timer);
     observeOperationalHistogram(

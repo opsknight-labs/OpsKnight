@@ -55,6 +55,7 @@ function outcome(overrides: Partial<SimulationOutcome> = {}): SimulationOutcome 
     transformed: 0,
     failOpen: 0,
     highUrgencyExempt: 0,
+    guardedCritical: 0,
     byControl: { MAINTENANCE: 4 },
     byAction: { SUPPRESS: 4 },
     bySource: {},
@@ -200,6 +201,7 @@ describe('MaintenanceWindowBuilder', () => {
         recurrence: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,SU',
         effect: 'SUPPRESS',
         downgradeUrgency: null,
+        coversCritical: false,
         enabled: true,
         endedAt: null,
         active: false,
@@ -242,6 +244,7 @@ describe('MaintenanceWindowsPanel', () => {
     recurrence: 'FREQ=WEEKLY;BYDAY=MO',
     effect: 'SUPPRESS',
     downgradeUrgency: null,
+    coversCritical: false,
     enabled: true,
     endedAt: null,
     active: true,
@@ -544,6 +547,7 @@ describe('OrchestrationRulesBuilder', () => {
       id: 'drop-test',
       name: 'Drop test',
       enabled: true,
+      coversCritical: false,
       conditions: [{ field: 'label' as const, key: 'env', op: 'equals' as const, value: 'test' }],
       actions: [{ type: 'DROP' as const }],
     },
@@ -551,6 +555,7 @@ describe('OrchestrationRulesBuilder', () => {
       id: 'lower-info',
       name: 'Lower info',
       enabled: true,
+      coversCritical: false,
       conditions: [{ field: 'severity' as const, op: 'equals' as const, value: 'info' }],
       actions: [{ type: 'SET_URGENCY' as const, value: 'LOW' as const }],
     },
@@ -622,6 +627,7 @@ describe('OrchestrationRulesBuilder', () => {
         id: 'route-db-alerts',
         name: 'Route DB alerts',
         enabled: true,
+        coversCritical: false,
         conditions: [{ field: 'severity', op: 'equals', value: 'postgres' }],
         actions: [{ type: 'REROUTE_SERVICE', serviceId: 'svc-b' }],
       },
@@ -759,5 +765,60 @@ describe('ReplaySummary', () => {
         '118 of 118 incidents are HIGH urgency and exempt; enable "Let dedup, flapping and storms touch HIGH urgency" to include them.'
       )
     ).toBeInTheDocument();
+  });
+
+  it('says how many critical incidents the guard kept paging', () => {
+    render(
+      <ReplaySummary
+        outcome={outcome({ incidentsEvaluated: 40, pagesAvoided: 10, guardedCritical: 3 })}
+      />
+    );
+    expect(
+      screen.getByText(/3 critical or HIGH-urgency incidents matched but would still page/)
+    ).toBeInTheDocument();
+  });
+});
+
+describe('the critical-alert opt-in', () => {
+  it('is off by default and is sent with the window when ticked', async () => {
+    previews.previewWindowAction.mockResolvedValue({
+      ok: true,
+      data: {
+        outcome: outcome(),
+        shiftedWeeks: 0,
+        replayedFrom: new Date('2026-11-02T00:00:00Z'),
+        replayedTo: new Date('2026-11-09T00:00:00Z'),
+      },
+    });
+    render(<MaintenanceWindowBuilder services={services} teams={teams} />);
+    const checkbox = screen.getByLabelText('Also hide critical and HIGH-urgency alerts');
+    expect(checkbox).not.toBeChecked();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Patching' } });
+    fireEvent.change(screen.getByLabelText('Service'), { target: { value: 'svc-a' } });
+    fireEvent.change(screen.getByLabelText('Starts (your time)'), {
+      target: { value: '2030-01-05T01:00' },
+    });
+    fireEvent.change(screen.getByLabelText('Ends (your time)'), {
+      target: { value: '2030-01-05T03:00' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Test against the last 7 days' }));
+    await waitFor(() => expect(previews.previewWindowAction).toHaveBeenCalled());
+    expect(previews.previewWindowAction.mock.calls[0][0]).toMatchObject({ coversCritical: false });
+
+    fireEvent.click(checkbox);
+    fireEvent.click(screen.getByRole('button', { name: 'Test against the last 7 days' }));
+    await waitFor(() => expect(previews.previewWindowAction).toHaveBeenCalledTimes(2));
+    expect(previews.previewWindowAction.mock.calls[1][0]).toMatchObject({ coversCritical: true });
+  });
+
+  it('is offered, unticked, on the suppression rule builder', () => {
+    render(
+      <SuppressionRuleBuilder
+        services={services}
+        owners={[{ id: 'user-1', name: 'Ada' }]}
+        currentUserId="user-1"
+      />
+    );
+    expect(screen.getByLabelText('Also hide critical and HIGH-urgency alerts')).not.toBeChecked();
   });
 });

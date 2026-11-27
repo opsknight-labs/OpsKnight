@@ -60,7 +60,7 @@ import { DIGEST_CHECK_INTERVAL_MS, scheduleDigestIfDue, sendDigestPass } from '.
 import { scheduleSquireMemoryWork, SQUIRE_MEMORY_HANDLERS } from '../memory/handlers';
 import { OPS_INSIGHT_HANDLERS, scheduleOpsInsightsWork } from '../ops-insights/handlers';
 import { runRunbookWeightFit, scheduleRunbookWeightFit } from '../learning/runbook-weights';
-import { runNoiseSweep, scheduleNoiseSweeps } from '../noise-controls/sweep';
+import { runNoiseSweep, runNoiseSweepsInline, scheduleNoiseSweeps } from '../noise-controls/sweep';
 import {
   currentEmbeddingModel,
   embedIncidents,
@@ -638,6 +638,13 @@ async function runCycle(
       (handlers === DEFAULT_HANDLERS &&
         (now() - state.lastConversationSweepAt >= RETENTION_INTERVAL_MS ||
           now() - (state.lastBackgroundTurnSweepAt ?? 0) >= BACKGROUND_TURN_SWEEP_MS));
+    // Switching Intelligence off must never leave a suppressed incident unpaged: release sweeps run anyway.
+    if (!settings.enabled && handlers === DEFAULT_HANDLERS)
+      await runNoiseSweepsInline(now(), { maxDbMs: settings.maxDbMs }).catch(error =>
+        logger.warn('[Intelligence] Noise release sweep failed; will retry', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      );
     if (!settings.enabled && !sweepDue) return { ...base(), status: 'disabled' };
 
     const waitingQueries = await (dependencies.getPoolWaitingQueries ?? getPrismaPoolWaitCount)();
