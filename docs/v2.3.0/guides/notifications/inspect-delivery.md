@@ -32,7 +32,10 @@ identifier when escalating.
 
 ## Trace the operation
 
-1. Open **Settings → Notifications → Operations**.
+1. Open **Settings → Notifications → Operations**. It is open to administrators
+   and to anyone with the `audit.read` permission (the Auditor role or a custom
+   role that includes it); the delivery log behind the page follows the same
+   rule. Only administrators can retry.
 2. Filter by incident, channel, status, recipient, or provider.
 3. Open the operation and record its notification ID and logical event time.
 4. Read attempts oldest to newest. Distinguish provider acceptance from a later
@@ -44,6 +47,15 @@ permanent failure. `Retrying` means a transient attempt failed. `Permanent
 failure` requires correcting credentials, configuration, or the endpoint before
 retry. A superseded intent is intentionally discarded because a newer incident
 state or escalation generation made it stale.
+
+## Export to CSV
+
+**History** and **Operations** each have an **Export CSV** button that exports
+every row matching the current filters, not only the visible page. The file
+opens in Excel or Sheets with correct characters (UTF-8 byte-order mark) and
+CRLF row endings. A cell that starts with `=`, `+`, `-` or `@`, such as an
+incident title or an error message, is prefixed with `'` so the spreadsheet
+shows it as text instead of running it as a formula.
 
 ## Retry and verify
 
