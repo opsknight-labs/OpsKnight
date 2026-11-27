@@ -51,7 +51,12 @@ show an **In maintenance** badge in the service list and on the service page.
      open are released and page normally.
    - **Auto-resolve every held incident**.
 7. Optionally turn on **Show on status pages and notify their subscribers** to publish a maintenance
-   announcement on each status page that shows the services.
+   announcement on each status page that shows the services. Publishing creates a public announcement
+   and emails subscribers, so it needs administrator access, the same as status-page announcements.
+   Anyone else can still schedule windows that are not published; turning publishing on, or changing the
+   title or description of a published window or schedule, is refused with "Publishing a maintenance
+   window to the status page requires administrator access." This applies to the console, API v2 and
+   MCP. Occurrences that an administrator's published schedule creates are not affected.
 8. Select **Schedule**, **Start maintenance**, or **Schedule recurring**.
 
 ## How a maintenance window works
