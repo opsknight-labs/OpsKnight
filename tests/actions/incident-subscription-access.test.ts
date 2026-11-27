@@ -111,4 +111,26 @@ describe('incident self-subscription actions', () => {
       where: { id: 'watcher-2', incidentId: 'inc-1', userId: 'user-2' },
     });
   });
+
+  it('honours a custom role that grants operations.manage, as the page does when it shows the controls', async () => {
+    mocks.getCurrentUser.mockResolvedValue({
+      id: 'user-1',
+      role: 'USER',
+      capabilities: ['operations.manage'],
+    });
+    mocks.watcherFindFirst.mockResolvedValue({ id: 'watcher-2', userId: 'user-2' });
+
+    await addWatcher('inc-1', 'user-2', 'STAKEHOLDER');
+    await removeWatcher('inc-1', 'watcher-2');
+
+    expect(mocks.assertCanViewIncident).not.toHaveBeenCalled();
+    expect(mocks.watcherUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ userId: 'user-2', role: 'STAKEHOLDER' }),
+      })
+    );
+    expect(mocks.watcherDeleteMany).toHaveBeenCalledWith({
+      where: { id: 'watcher-2', incidentId: 'inc-1', userId: 'user-2' },
+    });
+  });
 });

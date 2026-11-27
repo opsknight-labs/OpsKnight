@@ -13,6 +13,7 @@ import {
 import {
   CAPABILITIES,
   PAGEABLE_USER_WHERE,
+  capabilitiesOf,
   hasCapability,
   type AppRole,
 } from '@/lib/authorization';
@@ -247,7 +248,9 @@ export async function reassignIncident(incidentId: string, assigneeId: string, t
 export async function addWatcher(incidentId: string, userId: string, role: string) {
   if (!userId) return;
   const currentUser = await getCurrentUser();
-  const canManage = hasCapability(currentUser.role as AppRole, CAPABILITIES.OPERATIONS_MANAGE);
+  // Effective capabilities, as the incident page used to decide whether to show the controls.
+  const capabilities = new Set(capabilitiesOf(currentUser));
+  const canManage = capabilities.has(CAPABILITIES.OPERATIONS_MANAGE);
   const watcherRole = role || 'FOLLOWER';
 
   if (!canManage) {
@@ -263,7 +266,7 @@ export async function addWatcher(incidentId: string, userId: string, role: strin
 
   await setIncidentWatcher(
     { incidentId, userId, role: watcherRole as 'FOLLOWER' | 'STAKEHOLDER' | 'EXEC' },
-    { id: currentUser.id, role: currentUser.role as AppRole }
+    { id: currentUser.id, role: currentUser.role as AppRole, capabilities }
   );
 
   revalidatePath(`/incidents/${incidentId}`);
@@ -271,12 +274,13 @@ export async function addWatcher(incidentId: string, userId: string, role: strin
 
 export async function removeWatcher(incidentId: string, watcherId: string) {
   const currentUser = await getCurrentUser();
-  const canManage = hasCapability(currentUser.role as AppRole, CAPABILITIES.OPERATIONS_MANAGE);
-  if (!canManage) await assertCanViewIncident(incidentId);
+  const capabilities = new Set(capabilitiesOf(currentUser));
+  if (!capabilities.has(CAPABILITIES.OPERATIONS_MANAGE)) await assertCanViewIncident(incidentId);
 
   await deleteIncidentWatcher(incidentId, watcherId, {
     id: currentUser.id,
     role: currentUser.role as AppRole,
+    capabilities,
   });
 
   revalidatePath(`/incidents/${incidentId}`);
