@@ -924,6 +924,7 @@ export default async function middleware(req: NextRequest) {
     pathname === '/login/emergency' ||
     pathname === '/api/auth/emergency' ||
     pathname === '/api/auth/control' ||
+    pathname === '/api/auth/control/diagnostics' ||
     pathname === '/api/auth/session' ||
     pathname === '/api/auth/csrf' ||
     pathname === '/api/health' ||
