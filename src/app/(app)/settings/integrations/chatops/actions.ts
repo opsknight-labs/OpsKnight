@@ -58,6 +58,13 @@ export async function saveChatOpsConfig(
             ),
           }
         : {}),
+      ...(formData.has('warRoomInviteOnCall')
+        ? {
+            warRoomInviteOnCall: ['on', 'true'].includes(
+              String(formData.get('warRoomInviteOnCall') ?? '')
+            ),
+          }
+        : {}),
       ...(formData.has('warRoomArchiveDelayHours')
         ? {
             warRoomArchiveDelayHours: String(formData.get('warRoomArchiveDelayHours') ?? '').trim()

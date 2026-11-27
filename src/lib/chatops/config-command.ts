@@ -29,6 +29,7 @@ export const chatOpsConfigSchema = z
     archiveOnResolve: z.boolean(),
     /** Optional so API clients that predate these settings leave them unchanged. */
     slackWarRoomPrivate: z.boolean().optional(),
+    warRoomInviteOnCall: z.boolean().optional(),
     /** Hours after resolve before archiving; null archives on resolve. */
     warRoomArchiveDelayHours: z.number().int().min(1).max(720).nullable().optional(),
     /** Slack channel nudges, minutes; null = off. */
@@ -93,6 +94,7 @@ export async function getChatOpsConfiguration(db: Prisma.TransactionClient = pri
     autoCreateOnPriority: config?.autoCreateOnPriority ?? ['P1', 'P2'],
     archiveOnResolve: config?.archiveOnResolve ?? true,
     slackWarRoomPrivate: config?.slackWarRoomPrivate ?? false,
+    warRoomInviteOnCall: config?.warRoomInviteOnCall ?? false,
     warRoomArchiveDelayHours: config?.warRoomArchiveDelayHours ?? null,
     slackUnackedNudgeMinutes: config?.slackUnackedNudgeMinutes ?? null,
     slackNoUpdateNudgeMinutes: config?.slackNoUpdateNudgeMinutes ?? null,
@@ -127,6 +129,9 @@ export async function saveChatOpsConfiguration(
     archiveOnResolve: input.archiveOnResolve,
     ...(input.slackWarRoomPrivate !== undefined
       ? { slackWarRoomPrivate: input.slackWarRoomPrivate }
+      : {}),
+    ...(input.warRoomInviteOnCall !== undefined
+      ? { warRoomInviteOnCall: input.warRoomInviteOnCall }
       : {}),
     ...(input.warRoomArchiveDelayHours !== undefined
       ? { warRoomArchiveDelayHours: input.warRoomArchiveDelayHours }
