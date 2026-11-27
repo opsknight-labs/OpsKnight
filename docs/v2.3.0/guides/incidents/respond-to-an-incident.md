@@ -71,6 +71,8 @@ after a minute away also refreshes it. A note you are writing is kept. Older not
 loaded with **Load older notes** or **Load older activity** stay on the page when it refreshes; only the newest page is replaced, and a row
 that was removed on the server disappears.
 
+On a long incident the timeline merges events, notes and notifications by time. It shows only the span all three are complete for, and **Load older activity** continues from there, so no row is skipped or appears out of order.
+
 A note can contain a Markdown image. Uploads on this site and `data:` images show inline. An image on
 another host (`http` or `https`) does not load by itself, because its host could log the address, browser
 and time of everyone who opens the incident. The note shows `External image from <host> is not loaded
