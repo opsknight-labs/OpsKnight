@@ -175,10 +175,66 @@ SecRule &REQUEST_HEADERS:Next-Router-State-Tree "@gt 0" \
 # Runbook Agent results carry command output
 SecRule REQUEST_FILENAME "@beginsWith /api/runbook-agent/v1/" \
   "id:1000103,phase:1,pass,nolog,\
-   ctl:ruleRemoveByTag=attack-rce,ctl:ruleRemoveByTag=attack-lfi"
+   ctl:ruleRemoveByTag=attack-rce,ctl:ruleRemoveByTag=attack-lfi,\
+   ctl:ruleRemoveById=921130"
+
+# Runbook Server Actions: steps hold shell, Docker, Kubernetes and HTTP commands. They are POSTs to the page
+# path, so scope them by path and method (a Next-Action header condition did not match in testing).
+SecRule REQUEST_FILENAME "@rx ^/runbooks(/|$)" \
+  "id:1000105,phase:1,pass,nolog,chain"
+  SecRule REQUEST_METHOD "@streq POST" \
+    "ctl:ruleRemoveByTag=attack-rce,ctl:ruleRemoveByTag=attack-lfi"
+
+# Alert ingestion: internal URLs (generatorURL=http://10.0.0.5:9090/...) and shell text in alert fields
+SecRule REQUEST_FILENAME "@rx ^/api/(events$|integrations/)" \
+  "id:1000106,phase:1,pass,nolog,\
+   ctl:ruleRemoveById=931100,\
+   ctl:ruleRemoveById=932130"
+
+# Status-page branding: custom CSS and base64 logos
+SecRule REQUEST_FILENAME "@streq /api/settings/status-page" \
+  "id:1000107,phase:1,pass,nolog,\
+   ctl:ruleRemoveTargetByTag=attack-rce;ARGS:json.customCss,\
+   ctl:ruleRemoveTargetByTag=attack-xss;ARGS:json.customCss,\
+   ctl:ruleRemoveTargetByTag=attack-rce;ARGS:json.logo,\
+   ctl:ruleRemoveTargetByTag=attack-xss;ARGS:json.logo,\
+   ctl:ruleRemoveTargetById=934170;ARGS:json.logo"
+
+# MCP OAuth: native clients register and redirect to loopback IP URLs (RFC 8252). The authorize and token
+# endpoints take the redirect_uri argument; registration takes a JSON array of them (array members are named
+# json.redirect_uris.array_N, so the rules are removed for that one path instead).
+SecRule REQUEST_FILENAME "@rx ^/oauth/mcp/(authorize|token)$" \
+  "id:1000108,phase:1,pass,nolog,\
+   ctl:ruleRemoveTargetById=931100;ARGS:redirect_uri,\
+   ctl:ruleRemoveTargetById=934110;ARGS:redirect_uri"
+SecRule REQUEST_FILENAME "@streq /oauth/mcp/register" \
+  "id:1000109,phase:1,pass,nolog,\
+   ctl:ruleRemoveById=931100,\
+   ctl:ruleRemoveById=932130,\
+   ctl:ruleRemoveById=934110"
+
+# Only for sites that run paranoia level 2 or 3: routes that carry free text (alert and note text, runbook
+# steps, OAuth parameters, SSO callbacks) stay at paranoia level 1, because levels 2 and 3 flag ordinary SQL,
+# shell and HTML in that text. Everything else keeps the site-wide level.
+SecRule REQUEST_FILENAME "@rx ^/(api/(events$|integrations/|runbook-agent/v1/|settings/status-page|slack/|intelligence/squire|search$|status/subscriptions$|auth/)|runbooks(/|$)|incidents(/|$)|oauth/mcp/|mcp$|login$|m/login$)" \
+  "id:1000110,phase:1,pass,nolog,\
+   setvar:tx.detection_paranoia_level=1,\
+   setvar:tx.blocking_paranoia_level=1"
 ```
 
-Run CRS at paranoia level 1 for OpsKnight unless you have tuned it for a higher level. Set `tx.max_file_size` and `SecRequestBodyLimit` to at least the [documented inbound limits](./reverse-proxy-contract#preserve-application-protocols). Runbook draft and import endpoints are Server Actions, which are POSTs carrying a `Next-Action` header to the page path. Exclude RCE rules for them by that header, not by path.
+The CRS allows only `GET HEAD POST OPTIONS` by default (rule 911100), and the OpsKnight REST API also uses `PUT`, `PATCH` and `DELETE`. Allow them in `crs-setup.conf` (`tx.allowed_methods`) or, in the official container, with `ALLOWED_METHODS="GET HEAD POST OPTIONS PUT PATCH DELETE"`. Set `tx.max_file_size` and `SecRequestBodyLimit` to at least the [documented inbound limits](./reverse-proxy-contract#preserve-application-protocols).
+
+**Paranoia level.** The exclusions above were checked by replaying 22 request shapes (SSO callbacks, Next.js navigations and Server Actions, runbook steps, alert and provider payloads including a 900 KB body, status-page branding, MCP OAuth and JSON-RPC, Slack and GitHub webhooks) through CRS 4.30 on nginx, with 10 hostile requests alongside:
+
+| Paranoia level | Legitimate requests passed | Hostile requests blocked |
+|---|---|---|
+| 1, with these exclusions | 22 of 22 | 9 of 10 |
+| 2 or 3, with these exclusions and the paranoia override | 22 of 22 | 9 of 10 |
+| 2 or 3, without the override | 8 of 22 (level 2), 4 of 22 (level 3) | 9 of 10 |
+
+Levels 2 and 3 add the SQL, shell and HTML rule families (941xxx, 942xxx, 932xxx and 931130), which flag ordinary alert text, notes, runbook steps and OAuth parameters. So the last rule in the file keeps those free-text routes at level 1 and leaves the rest of the site at your level. Use it only if you run level 2 or 3; it is the one place the file widens what reaches OpsKnight beyond a single rule. The one hostile request that passed is an XML body with an external entity sent to `/api/integrations/custom`: the CRS does not block it at any level, and OpsKnight does not parse XML bodies.
+
+Runbook draft and import endpoints are Server Actions, which are POSTs to the page path. The file excludes the RCE and file-inclusion rules by path (`/runbooks/`) and method. In testing, a rule that waited for the `Next-Action` header did not match on CRS 4.30 with nginx, so do not rely on a header condition without trying it on your build.
 
 ## Run internal calls off the WAF
 

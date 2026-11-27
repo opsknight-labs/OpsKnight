@@ -1,0 +1,36 @@
+name: WAF replay
+# Replays legitimate OpsKnight request shapes and a small hostile set through the OWASP Core Rule Set
+# (ModSecurity on nginx) at paranoia levels 1 to 3, with the exclusions documented in
+# docs/v2.3.0/operate/deploy/waf-compatibility.md. Fails when a legitimate request is blocked, so a
+# new request shape or a rule update cannot quietly break installs that sit behind a WAF.
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'tests/waf/**'
+      - 'docs/v2.3.0/operate/deploy/waf-compatibility.md'
+      - '.github/workflows/waf-replay.yml'
+permissions:
+  contents: read
+concurrency:
+  group: waf-replay-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  replay:
+    name: OWASP CRS paranoia levels 1 to 3
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 22 }
+      - name: Replay
+        run: node tests/waf/run.mjs --levels=1,2,3 --out="$RUNNER_TEMP/waf-replay.json"
+      - name: Keep the result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waf-replay
+          path: ${{ runner.temp }}/waf-replay.json

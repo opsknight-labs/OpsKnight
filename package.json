@@ -85,6 +85,7 @@
     "docs:sync": "scripts/sync-docs-to-website.sh",
     "docs:discover": "node scripts/docs/discover-capabilities.mjs",
     "docs:discover:write": "node scripts/docs/discover-capabilities.mjs --output generated/docs-discovery/current.json",
+    "test:waf": "node tests/waf/run.mjs",
     "docs:test": "node --test tests/docs/tooling/*.test.mjs",
     "docs:journeys": "playwright test -c playwright.docs.config.ts",
     "docs:map": "node scripts/docs/build-doc-map.mjs",
