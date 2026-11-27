@@ -339,6 +339,11 @@ export function overallStatus(checks: AdminHealthCheck[]): HealthLevel {
   return calculateOperationalScore(checks).overall;
 }
 
+/** Higher is worse; a bar shows the worst status that applies to its hour. */
+function healthSeverity(level: HealthLevel): number {
+  return level === 'unhealthy' ? 3 : level === 'degraded' ? 2 : level === 'unknown' ? 1 : 0;
+}
+
 export async function generate24HourHistory(
   checks: AdminHealthCheck[],
   overall: HealthLevel,
@@ -398,6 +403,7 @@ export async function generate24HourHistory(
     let status: HealthLevel = 'healthy';
     let scorePercent = 100;
     let reason = 'All systems operating normally';
+    let failuresSeen = true;
     if (hourlyFailedJobs.length > 0) {
       status = 'degraded';
       scorePercent = Math.max(70, 100 - hourlyFailedJobs.length * 10);
@@ -407,20 +413,29 @@ export async function generate24HourHistory(
       const totalErrors = hourlyFailedDeliveries.length + hourlyFailedNotifications.length;
       scorePercent = Math.max(75, 100 - totalErrors * 5);
       reason = `${totalErrors} delivery error(s)`;
-    } else if (i === 0) {
-      status = overall;
-      scorePercent = liveScorePercent;
-      reason =
-        overall === 'healthy'
-          ? 'All diagnostic signals passing'
-          : topCriticalIssue ||
-            topWarningIssue ||
-            (overall === 'degraded' ? 'Operational with warnings' : 'Critical diagnostic error');
-    } else if (unavailableSources > 0) {
+    } else {
+      failuresSeen = false;
+    }
+    if (i === 0) {
+      // The hour in progress shows the worst of what failed this hour and what is true right now.
+      const liveStatus = overall;
+      if (!failuresSeen || healthSeverity(liveStatus) >= healthSeverity(status)) {
+        status = liveStatus;
+        scorePercent = failuresSeen ? Math.min(scorePercent, liveScorePercent) : liveScorePercent;
+        reason =
+          liveStatus === 'healthy'
+            ? 'All diagnostic signals passing'
+            : topCriticalIssue ||
+              topWarningIssue ||
+              (liveStatus === 'degraded'
+                ? 'Operational with warnings'
+                : 'Critical diagnostic error');
+      }
+    } else if (!failuresSeen && unavailableSources > 0) {
       status = 'unknown';
       scorePercent = 0;
       reason = `${unavailableSources} historical evidence source(s) unavailable`;
-    } else {
+    } else if (!failuresSeen) {
       reason = 'No durable job or delivery failures recorded';
     }
     samples.push({

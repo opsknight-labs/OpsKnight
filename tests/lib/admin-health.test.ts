@@ -357,6 +357,41 @@ describe('generate24HourHistory', () => {
     expect(query.where).not.toHaveProperty('createdAt');
   });
 
+  it('shows the worse of the live status and this hour failures in the current bar', async () => {
+    const prisma = (await import('@/lib/prisma')).default;
+    vi.mocked(prisma.backgroundJob.findMany).mockResolvedValueOnce([
+      { id: 'job-now', failedAt: new Date('2026-09-05T14:20:00.000Z') },
+    ] as unknown as never);
+    const criticalChecks: AdminHealthCheck[] = mockBaseChecks.map(check =>
+      check.id === 'encryption'
+        ? { ...check, status: 'unhealthy', summary: 'Encryption key is invalid.' }
+        : check
+    );
+    const now = new Date('2026-09-05T14:37:00.000Z');
+
+    const samples = await generate24HourHistory(criticalChecks, 'unhealthy', now);
+
+    expect(samples[23].status).toBe('unhealthy');
+    expect(samples[23].reason).toBe('Encryption key is invalid.');
+    expect(samples[23].scorePercent).toBeLessThanOrEqual(90);
+  });
+
+  it('keeps this hour failures when the live status is healthy', async () => {
+    const prisma = (await import('@/lib/prisma')).default;
+    vi.mocked(prisma.backgroundJob.findMany).mockResolvedValueOnce([
+      { id: 'job-now', failedAt: new Date('2026-09-05T14:20:00.000Z') },
+    ] as unknown as never);
+
+    const samples = await generate24HourHistory(
+      mockBaseChecks,
+      'healthy',
+      new Date('2026-09-05T14:37:00.000Z')
+    );
+
+    expect(samples[23].status).toBe('degraded');
+    expect(samples[23].reason).toBe('1 background job failure(s)');
+  });
+
   it('does not classify customer incidents as OpsKnight platform-health failures', async () => {
     const prisma = (await import('@/lib/prisma')).default;
     const now = new Date('2026-09-05T12:00:00.000Z');
