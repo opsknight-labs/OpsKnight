@@ -15,6 +15,7 @@ import { assertServiceNameAvailable, UniqueNameConflictError } from '@/lib/uniqu
 import { assertJiraIssueType, assertJiraProjectKey, parseLabels } from '@/lib/jira-validation';
 import { parseServiceNotificationChannels } from '@/lib/service-notification-settings';
 import { setServiceWarRoomPolicy } from '@/lib/incident-collaboration/policy';
+import { revokeSubscriptionsLosingLastSelection } from '@/lib/status-pages/subscriber-administration';
 import type {
   WarRoomProviderSet,
   IncidentMeetingProvider,
@@ -699,9 +700,11 @@ export async function deleteService(serviceId: string): Promise<{ error?: string
     };
   }
 
-  // Now delete the service
-  await prisma.service.delete({
-    where: { id: serviceId },
+  // Now delete the service; subscribers who only followed it are revoked, not widened to every service.
+  const unsubscribedSubscribers = await prisma.$transaction(async tx => {
+    const revoked = await revokeSubscriptionsLosingLastSelection(tx, { serviceId });
+    await tx.service.delete({ where: { id: serviceId } });
+    return revoked;
   });
 
   await logAudit({
@@ -709,7 +712,7 @@ export async function deleteService(serviceId: string): Promise<{ error?: string
     entityType: 'SERVICE',
     entityId: serviceId,
     actorId: currentUser.id,
-    details: { serviceId },
+    details: { serviceId, unsubscribedSubscribers },
   });
 
   revalidatePath('/services');

@@ -16,6 +16,7 @@ import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
 import { assertServicePolicyAssignableForApi } from '@/lib/automation/service-policy';
 import { withV2Observability } from '@/lib/api-v2/observability';
+import { revokeSubscriptionsLosingLastSelection } from '@/lib/status-pages/subscriber-administration';
 
 export const GET = withV2Observability(async function GET(
   req: NextRequest,
@@ -256,6 +257,10 @@ export const DELETE = withV2Observability(async function DELETE(
     await prisma.$transaction(async tx => {
       // MCP approval recheck inside the deletion's own transaction; a no-op for REST callers.
       await internalV2MutationGuard()?.(tx);
+      // Subscribers who only followed it are revoked, not widened to every service by the cascade.
+      const unsubscribedSubscribers = await revokeSubscriptionsLosingLastSelection(tx, {
+        serviceId: id,
+      });
       await tx.service.delete({ where: { id } });
       await logV2Audit({
         action: 'service.deleted',
@@ -263,7 +268,7 @@ export const DELETE = withV2Observability(async function DELETE(
         entityId: id,
         actorId: actor.id,
         apiKeyId: apiKey.id,
-        details: { name: service.name, teamId: service.teamId },
+        details: { name: service.name, teamId: service.teamId, unsubscribedSubscribers },
         tx,
       });
     });
