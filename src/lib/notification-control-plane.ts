@@ -39,7 +39,7 @@ import {
   releaseProviderConcurrency,
   type ProviderAdmissionScope,
 } from './provider-admission';
-import { notificationRetryDelayMs, NOTIFICATION_RETRY_POLICY } from './notification-delivery';
+import { defaultNotificationMaxAttempts, notificationRetryDelayMs } from './notification-delivery';
 import { logger } from './logger';
 import type { SlackLiveCardRequest } from './slack/live-card';
 import {
@@ -618,12 +618,12 @@ export async function createCentralNotificationIntent(
   }
   const payloadEncrypted = await encrypt(serializedPayload);
   const scheduledAt = input.scheduledAt ?? new Date();
-  const maxAttempts = Math.min(
-    Math.max(input.maxAttempts ?? NOTIFICATION_RETRY_POLICY.maxAttempts, 1),
-    20
-  );
   const policy = defaultNotificationPolicy(input.category, input.templateKey);
   const trafficClass = input.trafficClass ?? policy.trafficClass;
+  const maxAttempts = Math.min(
+    Math.max(input.maxAttempts ?? defaultNotificationMaxAttempts(trafficClass), 1),
+    20
+  );
   const priority = Math.min(
     Math.max(input.priority ?? policy.priority, notificationAgingFloor(trafficClass)),
     9
@@ -799,7 +799,7 @@ export async function createCentralNotificationIntentsBatch(
         scheduledAt: effectiveScheduledAt,
         nextAttemptAt: effectiveScheduledAt,
         maxAttempts: Math.min(
-          Math.max(input.maxAttempts ?? NOTIFICATION_RETRY_POLICY.maxAttempts, 1),
+          Math.max(input.maxAttempts ?? defaultNotificationMaxAttempts(trafficClass), 1),
           20
         ),
         expiresAt: input.expiresAt ?? resolveNotificationExpiry(input, scheduledAt),

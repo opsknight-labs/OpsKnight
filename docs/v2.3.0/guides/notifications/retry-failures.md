@@ -54,6 +54,8 @@ Correct permanent credential/endpoint/routing failures before any new attempt.
 
 Stable identity makes one logical intent retry-safe. Before retry, OpsKnight checks whether incident state or escalation generation superseded it. Provider rate-limit hints defer rather than convert immediately to permanent failure.
 
+Automatic retries back off from 10 seconds up to 5 minutes between attempts. Most notifications get three attempts. Critical pages (a triggered incident, a security alert) get eight, which keeps retrying for about 15 minutes before giving up, so a provider or network problem of a few minutes does not lose the page.
+
 ## Verify it worked
 
 Confirm the same logical intent reaches a terminal appropriate outcome without duplicate human delivery, queue oldest age recovers, and current incident projections remain correct.

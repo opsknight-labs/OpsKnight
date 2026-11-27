@@ -103,6 +103,16 @@ export const NOTIFICATION_RETRY_POLICY: Readonly<NotificationRetryPolicy> = Obje
   maximumDelayMs: 300_000,
   pendingTimeoutMs: 2 * 60_000,
 });
+/**
+ * CRITICAL pages (incident triggers, security alerts) keep retrying with the same backoff
+ * (10s, 20s, ... capped at 5 minutes), so seven waits cover about 15 minutes before giving up.
+ */
+export const CRITICAL_NOTIFICATION_MAX_ATTEMPTS = 8;
+export function defaultNotificationMaxAttempts(trafficClass?: NotificationTrafficClass): number {
+  return trafficClass === 'CRITICAL'
+    ? CRITICAL_NOTIFICATION_MAX_ATTEMPTS
+    : NOTIFICATION_RETRY_POLICY.maxAttempts;
+}
 export interface NotificationAttemptResult {
   success: boolean;
   outcome: NotificationDeliveryOutcome;

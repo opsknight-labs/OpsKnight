@@ -188,6 +188,24 @@ describe('central notification control plane', () => {
     );
   });
 
+  it.each([
+    ['CRITICAL', 8],
+    ['TRANSACTIONAL', 3],
+  ] as const)(
+    'gives a %s intent %i delivery attempts by default',
+    async (trafficClass, expected) => {
+      vi.mocked(prisma.notification.create).mockResolvedValue({
+        id: 'notification_budget',
+      } as never);
+
+      await createCentralNotificationIntent({ ...input, trafficClass });
+
+      expect(prisma.notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ maxAttempts: expected }) })
+      );
+    }
+  );
+
   it.each(['BOUNCED', 'INVALID', 'OPTED_OUT'] as const)(
     'persists a durable SKIPPED intent for a %s user endpoint',
     async status => {

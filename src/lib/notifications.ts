@@ -3,7 +3,6 @@ import prisma from './prisma';
 import { incidentNotificationPriority } from './notification-priority';
 import {
   NOTIFICATION_CHANNELS,
-  NOTIFICATION_RETRY_POLICY,
   type NotificationDeliveryOutcome,
   type NotificationEventType,
 } from './notification-delivery';
@@ -100,7 +99,7 @@ async function sendCentralIncidentNotification(input: {
   });
   const persisted = await prisma.notification.findUnique({
     where: { id: queued.id },
-    select: { id: true, status: true, attempts: true, errorMsg: true },
+    select: { id: true, status: true, attempts: true, maxAttempts: true, errorMsg: true },
   });
   if (!persisted) {
     if (queued.delivered) {
@@ -139,6 +138,7 @@ function existingIntentResult(notification: {
   id: string;
   status: string;
   attempts: number;
+  maxAttempts: number;
   errorMsg?: string | null;
 }): SendNotificationResult {
   if (notification.status === 'SENT' || notification.status === 'DELIVERED')
@@ -152,10 +152,7 @@ function existingIntentResult(notification: {
       terminal: true,
       deduped: true,
     };
-  if (
-    notification.status === 'FAILED' &&
-    notification.attempts >= NOTIFICATION_RETRY_POLICY.maxAttempts
-  )
+  if (notification.status === 'FAILED' && notification.attempts >= notification.maxAttempts)
     return {
       success: false,
       outcome: 'PERMANENT_FAILURE',
