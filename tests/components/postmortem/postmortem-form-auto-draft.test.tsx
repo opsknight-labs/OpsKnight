@@ -18,6 +18,8 @@ vi.mock('@/app/(app)/postmortems/actions', () => ({
 vi.mock('@/app/(app)/postmortems/ai-actions', () => ({ draftPostmortemWithAiAction: vi.fn() }));
 vi.mock('@/app/(app)/postmortems/intelligence-actions', () => ({
   getPostmortemAssistAction: vi.fn().mockResolvedValue(null),
+  // The action-item suggestions fire on a debounce timer that can outlive a test.
+  suggestForActionItemDraftAction: vi.fn().mockResolvedValue(null),
 }));
 
 const jiraCapability = deriveJiraCapability({

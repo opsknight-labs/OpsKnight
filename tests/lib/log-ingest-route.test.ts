@@ -235,11 +235,12 @@ describe('client log ingestion', () => {
     });
 
     it("accepts the app's own origin, whatever the port or scheme in front of it", async () => {
-      for (const headers of [
+      const accepted: Record<string, string>[] = [
         { origin: 'http://localhost', 'sec-fetch-site': 'same-origin' },
         { origin: 'https://localhost:3000' },
         { origin: 'http://localhost:3000', 'sec-fetch-site': 'same-site' },
-      ]) {
+      ];
+      for (const headers of accepted) {
         expect((await post(headers)).status).toBe(200);
       }
       expect(addOperationalMetric).not.toHaveBeenCalled();
