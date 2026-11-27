@@ -308,6 +308,21 @@ export async function publishDraftVersion(
   });
 }
 
+async function draftClonedFrom(
+  tx: Prisma.TransactionClient,
+  draftId: string,
+  sourceVersionId: string
+): Promise<boolean> {
+  const cloned = await tx.auditLog.findMany({
+    where: { action: 'runbook.version.cloned', entityType: 'RUNBOOK_VERSION', entityId: draftId },
+    select: { details: true },
+  });
+  return cloned.some(
+    entry =>
+      (entry.details as { sourceVersionId?: string } | null)?.sourceVersionId === sourceVersionId
+  );
+}
+
 /** Clones any immutable version into the next numbered editable draft. */
 export async function cloneVersionToDraft(
   versionId: string,
@@ -326,7 +341,18 @@ export async function cloneVersionToDraft(
       const existing = await tx.runbookVersion.findUnique({
         where: { id: source.runbook.draftVersionId },
       });
-      if (existing) return existing;
+      if (existing) {
+        // A runbook holds one draft. Repeating the clone that made it returns it; asking for a
+        // different source must not hand back an unrelated draft as if it were that source.
+        if (existing.id === source.id || (await draftClonedFrom(tx, existing.id, source.id))) {
+          return existing;
+        }
+        throw new AppError({
+          code: 'RESOURCE_CONFLICT',
+          userMessage: `This runbook already has an editable draft (v${existing.version}, id ${existing.id}) that was not created from v${source.version}. Edit or publish that draft first.`,
+          details: { draftVersionId: existing.id, draftVersion: existing.version },
+        });
+      }
     }
     const latest = await tx.runbookVersion.aggregate({
       where: { runbookId: source.runbookId },

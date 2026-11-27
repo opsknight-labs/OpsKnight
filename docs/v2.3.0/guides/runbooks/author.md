@@ -372,7 +372,7 @@ safely rejected.
 | Create Runbook         | `runbook.manage`    | Supports templates and JSON import            |
 | Save draft             | `runbook.manage`    | Optimistic locking via `draftRevision`        |
 | Publish draft          | `runbook.publish`   | Draft → PUBLISHED; immutable after            |
-| Clone version to draft | `runbook.manage`    | Creates new draft from any version            |
+| Clone version to draft | `runbook.manage`    | Creates new draft from any version; see below |
 | Retire version         | `runbook.publish`   | Only non-current published versions           |
 | Archive Runbook        | `runbook.manage`    | Soft-delete; preserves history                |
 | Restore Runbook        | `runbook.manage`    | Un-archives; bindings remain disabled         |
@@ -380,6 +380,13 @@ safely rejected.
 | Duplicate Runbook      | `runbook.manage`    | Creates a new draft copy                      |
 | Export                 | `runbook.read.all`  | JSON portable format, max 512 KiB             |
 | Import                 | `runbook.manage`    | Parse + slug deduplication (up to 5 attempts) |
+
+A Runbook holds one draft. Cloning a version while a draft exists returns that
+draft only when it was created from the same version (a repeated request is
+safe). Cloning a different version is refused with `409 RESOURCE_CONFLICT`, and
+the message names the existing draft (its version and id), so an API or MCP
+client never edits or publishes a draft built from the wrong base. Edit or
+publish the existing draft first, then clone again.
 
 ## Compare publication impact
 
