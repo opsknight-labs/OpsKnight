@@ -69,6 +69,26 @@ export interface RenderOptions {
 
 const trimSlash = (value: string) => value.replace(/\/+$/, '');
 
+/** A citation whose label is just the record id from its link reads as the record kind instead. */
+function citationLabel(citation: ChatSquireCitation): string {
+  const id = citation.href.split(/[?#]/)[0].replace(/\/+$/, '').split('/').pop();
+  if (!id || citation.label.trim() !== id || !citation.kind) return citation.label;
+  const kind = citation.kind.replace(/[_-]+/g, ' ').toLowerCase();
+  return kind.charAt(0).toUpperCase() + kind.slice(1);
+}
+
+// Linear: fixed-width digits and optional groups, no nested quantifiers.
+// eslint-disable-next-line security/detect-unsafe-regex -- bounded, see above
+const ISO_UTC = /\b(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?Z)\b/g;
+
+/** ISO timestamps in an answer shown in each reader's own time zone (Slack date token). */
+function localSlackDates(text: string): string {
+  return text.replace(ISO_UTC, iso => {
+    const unix = Math.floor(Date.parse(iso) / 1000);
+    return Number.isFinite(unix) ? `<!date^${unix}^{date_short_pretty} at {time}|${iso}>` : iso;
+  });
+}
+
 /** An in-app link made absolute; anything that does not point into OpsKnight returns null. */
 export function appLink(href: string, baseUrl: string): string | null {
   // These would end or split a Slack `<url|label>` link (or a Teams markdown link) and inject markup.
@@ -131,7 +151,9 @@ export function absolutizeAppPaths(text: string, baseUrl: string, slack = true):
 }
 
 function inlineSlack(text: string, lineStart: boolean, baseUrl?: string): string {
-  const escaped = baseUrl ? absolutizeAppPaths(escapeSlack(text), baseUrl) : escapeSlack(text);
+  const escaped = localSlackDates(
+    baseUrl ? absolutizeAppPaths(escapeSlack(text), baseUrl) : escapeSlack(text)
+  );
   const structured = lineStart
     ? escaped.replace(/^#{1,6}\s+(.+)$/, '*$1*').replace(/^(\s*)[-*]\s+/, '$1• ')
     : escaped;
@@ -240,7 +262,7 @@ export function renderSlackAnswer(
     .slice(0, MAX_CITATIONS)
     .map(citation => {
       const url = appLink(citation.href, options.baseUrl);
-      const label = escapeSlack(citation.label).replace(/\|/g, '/');
+      const label = escapeSlack(citationLabel(citation)).replace(/\|/g, '/');
       return url ? `<${url}|${label}>` : label;
     })
     .filter(Boolean);
@@ -343,7 +365,7 @@ export function renderTeamsAnswer(
       .slice(0, MAX_CITATIONS)
       .map(citation => {
         const url = appLink(citation.href, options.baseUrl);
-        const label = citation.label.replace(/[[\]]/g, '');
+        const label = citationLabel(citation).replace(/[[\]]/g, '');
         return url ? `[${label}](${url})` : label;
       })
       .filter(Boolean);

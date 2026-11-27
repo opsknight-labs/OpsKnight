@@ -1042,7 +1042,9 @@ export async function provisionSlackWarRoom(
   }).catch(err => logger.warn('[ChatOps] Failed to set channel topic', { error: err }));
   await slackApiCall('conversations.setPurpose', botToken, {
     channel: channelId,
-    purpose: marker,
+    // Readable first: Slack shows the purpose as the channel description. The marker stays verbatim
+    // at the end because recovery finds the channel by substring.
+    purpose: `Incident war room managed by OpsKnight. Ref ${marker}`,
   }).catch(() => {});
 
   const channelUrl = getSlackChannelUrl(channelId, slackWorkspaceId);
