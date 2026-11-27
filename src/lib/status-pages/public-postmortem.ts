@@ -42,6 +42,16 @@ function finiteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+/**
+ * Auto-drafts copy internal incident data into the timeline: responder notes, captured chat, and event
+ * messages that name the responder ("Incident acknowledged by <name>"). Only rows an author wrote
+ * (`event-<timestamp>` from the timeline editor, API-supplied ids) and the fixed `draft-start` and
+ * `draft-end` rows are public; every generated row is internal.
+ */
+function isGeneratedInternalRow(id: string): boolean {
+  return /^(draft-evt-|draft-note-|note-)/.test(id) || /^event-(?!\d+$)/.test(id);
+}
+
 function publicTimeline(value: unknown): PublicTimelineEvent[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const rows = value.flatMap((entry, index) => {
@@ -51,8 +61,7 @@ function publicTimeline(value: unknown): PublicTimelineEvent[] | undefined {
     const description = typeof entry.description === 'string' ? entry.description : undefined;
     const type = entry.type;
     if (!timestamp || !title || !description) return [];
-    // Auto-drafts copy internal responder notes ("Note by <name>") into the timeline; keep them internal.
-    if (/^(draft-)?note-/.test(String(entry.id ?? '')) || /^Note by /.test(title)) return [];
+    if (isGeneratedInternalRow(String(entry.id ?? '')) || /^Note by /.test(title)) return [];
     if (
       type !== 'DETECTION' &&
       type !== 'ESCALATION' &&

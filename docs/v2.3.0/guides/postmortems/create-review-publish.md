@@ -99,10 +99,14 @@ Change status to **Published** only after reviewers accept the learning record.
 The first publication records its publication time. Publishing does not complete
 action items. Use the public-status control separately when the postmortem is
 appropriate for a status-page audience; verify the public rendering contains no
-internal-only detail. The public page leaves out timeline entries that came from
-responder notes (titled **Note by …**), so internal notes that an Auto-Draft or
-ChatOps draft copied into the timeline are not shown to customers; still review
-the summary, root cause and lessons text yourself. The
+internal-only detail. The public page shows only the title, summary, root cause,
+resolution, lessons, impact numbers, the incident title and resolution time, and
+the timeline entries you wrote yourself plus the generated **Incident Started**
+and **Incident Resolved** rows. Everything else is left out: the Auto-Draft and
+ChatOps draft rows copied from responder notes (**Note by …**), captured chat and
+incident events (which can name the responder), author names and emails, action
+items and SLA counts. To show a drafted event publicly, add your own timeline
+entry for it. Still review the summary, root cause and lessons text yourself. The
 public page serves only **Published** postmortems. On
 a draft the control reads **Allow on Status Page** and the badge reads **Public
 once published**; customers see nothing until the status is **Published**. If
