@@ -60,6 +60,8 @@ If someone else changed the schedule or the layer after you opened the page, you
 
 Admins and Responders (the `operations.manage` capability) can edit rotations and schedule settings. Only an administrator can delete a schedule, in the console and through API v2 (`DELETE /api/v2/schedules/{id}`). Overrides follow the rule in [Add an on-call override](./overrides#who-can-add-or-end-an-override).
 
+Creating or renaming a schedule, adding, moving or removing a responder, and creating or deleting an override each write their audit entry (`schedule.created`, `schedule.updated`, `schedule.member.added`, `.reordered`, `.removed`, `schedule.override.created`, `.deleted`) in the same transaction as the change. If the audit write fails, the change is rolled back and the page reports it, so repeating the action is clean and a change is never saved without its audit entry.
+
 ## 3. Cover gaps deliberately
 
 Add another layer only for a genuinely different rotation, such as weekends. New layers are appended as fallback coverage, and priority determines which assignment wins during overlap. If a 24-hour handoff is active for only 12 hours, another layer must cover the other 12.
