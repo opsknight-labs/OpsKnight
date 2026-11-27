@@ -209,6 +209,12 @@ export async function GET(req: NextRequest) {
       .split(/\s+/)
       .filter(w => w.length > 1)
       .slice(0, 5);
+    // Every word must appear (in any of the fields): 'payment timeout' is not 'payment OR timeout'.
+    const queryWords = searchWords.length > 0 ? searchWords : [sanitizedTerm];
+    const has = (word: string) => ({ contains: word, mode: INSENSITIVE_MODE });
+    const everyWord = <Field>(fieldsFor: (word: string) => Field[]) => ({
+      AND: queryWords.map(word => ({ OR: fieldsFor(word) })),
+    });
     // Run all searches in parallel for better performance
     // Note: Postmortem search is wrapped to handle missing model gracefully
     const searchPromises = [
@@ -222,21 +228,7 @@ export async function GET(req: NextRequest) {
                 {
                   AND: [
                     unrestrictedSource,
-                    {
-                      OR: [
-                        { title: { equals: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                        { title: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                        { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                        ...(searchWords.length > 1
-                          ? searchWords.slice(0, 3).map(word => ({
-                              OR: [
-                                { title: { contains: word, mode: INSENSITIVE_MODE } },
-                                { description: { contains: word, mode: INSENSITIVE_MODE } },
-                              ],
-                            }))
-                          : []),
-                      ],
-                    },
+                    everyWord(word => [{ title: has(word) }, { description: has(word) }]),
                   ],
                 },
                 { id: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
@@ -254,12 +246,7 @@ export async function GET(req: NextRequest) {
         where: {
           AND: [
             serviceAccess,
-            {
-              OR: [
-                { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-              ],
-            },
+            everyWord(word => [{ name: has(word) }, { description: has(word) }]),
           ],
         },
         take: 5,
@@ -277,12 +264,7 @@ export async function GET(req: NextRequest) {
         where: {
           AND: [
             isPrivileged ? {} : { id: { in: teamIds } },
-            {
-              OR: [
-                { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-              ],
-            },
+            everyWord(word => [{ name: has(word) }, { description: has(word) }]),
           ],
         },
         take: 5,
@@ -307,12 +289,7 @@ export async function GET(req: NextRequest) {
                         { teamMemberships: { some: { teamId: { in: teamIds } } } },
                       ],
                     },
-                {
-                  OR: [
-                    { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                    { email: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                  ],
-                },
+                everyWord(word => [{ name: has(word) }, { email: has(word) }]),
               ],
             },
             take: 5,
@@ -333,12 +310,7 @@ export async function GET(req: NextRequest) {
             where: {
               AND: [
                 isPrivileged ? {} : { services: { some: { teamId: { in: teamIds } } } },
-                {
-                  OR: [
-                    { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                    { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                  ],
-                },
+                everyWord(word => [{ name: has(word) }, { description: has(word) }]),
               ],
             },
             take: 5,
@@ -363,14 +335,12 @@ export async function GET(req: NextRequest) {
               AND: [
                 // Same rule as every other postmortem read: drafts only for draft readers.
                 postmortemReadWhere(actor),
-                {
-                  OR: [
-                    { title: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                    { summary: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                    { rootCause: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                    { lessons: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                  ],
-                },
+                everyWord(word => [
+                  { title: has(word) },
+                  { summary: has(word) },
+                  { rootCause: has(word) },
+                  { lessons: has(word) },
+                ]),
               ],
               status: { not: 'ARCHIVED' }, // Don't show archived postmortems
             },
@@ -402,7 +372,7 @@ export async function GET(req: NextRequest) {
       scheduleAccess
         ? prisma.onCallSchedule.findMany({
             where: {
-              AND: [scheduleAccess, { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } }],
+              AND: [scheduleAccess, everyWord(word => [{ name: has(word) }])],
             },
             take: 5,
             orderBy: { name: 'asc' },
@@ -417,12 +387,7 @@ export async function GET(req: NextRequest) {
               AND: [
                 runbookAccess,
                 { archivedAt: null },
-                {
-                  OR: [
-                    { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                    { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                  ],
-                },
+                everyWord(word => [{ name: has(word) }, { description: has(word) }]),
               ],
             },
             take: 5,
@@ -437,12 +402,7 @@ export async function GET(req: NextRequest) {
             where: {
               AND: [
                 businessServiceAccess,
-                {
-                  OR: [
-                    { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                    { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                  ],
-                },
+                everyWord(word => [{ name: has(word) }, { description: has(word) }]),
               ],
             },
             take: 5,

@@ -183,6 +183,33 @@ describe('global search RBAC', () => {
     expect(results[0].id).toBe('old-exact');
   });
 
+  it('requires every word of a multi-word query instead of any of them', async () => {
+    mocks.userFindUnique.mockResolvedValue({
+      id: 'responder-1',
+      role: 'RESPONDER',
+      status: 'ACTIVE',
+      teamMemberships: [],
+    });
+
+    await GET(new NextRequest('http://localhost/api/search?q=payment%20timeout'));
+
+    const contains = (word: string) => ({ contains: word, mode: 'insensitive' });
+    const incidentWhere = mocks.findMany.mock.calls[0][0].where;
+    expect(incidentWhere.AND[1].OR[0].AND[1]).toEqual({
+      AND: [
+        { OR: [{ title: contains('payment') }, { description: contains('payment') }] },
+        { OR: [{ title: contains('timeout') }, { description: contains('timeout') }] },
+      ],
+    });
+    const serviceWhere = mocks.findMany.mock.calls[1][0].where;
+    expect(serviceWhere.AND[1]).toEqual({
+      AND: [
+        { OR: [{ name: contains('payment') }, { description: contains('payment') }] },
+        { OR: [{ name: contains('timeout') }, { description: contains('timeout') }] },
+      ],
+    });
+  });
+
   it.each([
     ['AUDITOR', true],
     ['USER', true],

@@ -36,6 +36,9 @@ notification drawer.
 ## Configure and use search
 
 1. Enter at least two meaningful characters. Queries are bounded and normalized.
+   A query of several words matches records that contain all of the words, in
+   any order (up to five words are used); `payment timeout` does not return a
+   record that has only `payment`.
 2. Review the result type before opening a match. Search can return authorized
    incidents, services, teams, users, escalation policies, and postmortems.
 3. Add a more specific title, identifier, service, or person fragment if results
