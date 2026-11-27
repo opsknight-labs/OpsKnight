@@ -286,6 +286,11 @@ change.
   selected rule (`P1`–`P5` or `BASE`), policy source, and version.
 - **A changed target did not update an incident:** expected; the incident contract
   is immutable. Create a controlled new incident to verify the new version.
+- **SLA breach warnings are missing for a tick:** the breach check runs on every scheduler
+  tick. If it throws (for example on a database error while queueing a Slack alert), the
+  scheduler logs `[Cron] SLA breach check failed; continuing the tick` and still runs
+  maintenance windows, daily rollups, drift detection and cleanup; the check runs again on
+  the next tick.
 - **LOW notification arrived later but SLA breached:** support hours can defer
   engagement and do not pause the clock.
 - **Deadline moved:** inspect snooze/suppression pause history and accumulated

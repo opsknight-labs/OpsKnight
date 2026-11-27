@@ -210,6 +210,8 @@ Confirm:
 
 **War room or meeting controls are missing:** if the incident's collaboration view cannot load, for example because of a Teams destination or policy error, the page still opens, the war-room and meeting controls stay hidden, and the cause is written to the server log. Check System Logs and the chat destination settings.
 
+**A meeting stays on Provisioning:** the scheduler checks every tick. A meeting that has been provisioning or closing for more than 15 minutes with no live background job is settled: a provision is marked failed so you can retry it, and a close is marked closed with its external cleanup retried automatically. A provisioning job that runs out of attempts fails its meeting immediately instead of leaving it on Provisioning.
+
 **Escalation or notification is delayed:** inspect lane/provider delivery state and oldest queue age; do not resolve only to stop paging.
 
 **Resolution is blocked:** complete required custom fields and verify the incident is in a resolvable state.
