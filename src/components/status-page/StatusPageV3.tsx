@@ -201,7 +201,12 @@ export default function StatusPageV3({
       timeZone={timeZone}
       historyDays={snapshot.retention?.requestedHistoryDays ?? snapshot.historyDays}
       permalinkHref={incidentHref}
-      historyHref={hasSlugRoutes ? `${statusPagePath}/history` : undefined}
+      // One link on the page: with both sections it belongs to the past one.
+      historyHref={
+        hasSlugRoutes && (mode === 'past' || !hasPastIncidents)
+          ? `${statusPagePath}/history`
+          : undefined
+      }
       postmortemHref={
         postmortemsEnabled
           ? id => `${statusPagePath}/postmortems/${encodeURIComponent(id)}`

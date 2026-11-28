@@ -503,6 +503,21 @@ describe('StatusPageV3', () => {
       expect(sectionsAround([incident('RESOLVED')])).toEqual({ active: null, past: false });
     });
 
+    it('renders the incident history link once when both sections are shown', () => {
+      render(
+        <StatusPageV3
+          snapshot={snapshotOf([service()], {
+            page: { ...snapshotOf([]).page, slug: 'acme', isDefault: false },
+            incidents: [
+              incident('OPEN'),
+              incident('RESOLVED'),
+            ] as unknown as PublicStatusPageSnapshot['incidents'],
+          })}
+        />
+      );
+      expect(document.querySelectorAll('a[href="/status/acme/history"]')).toHaveLength(1);
+    });
+
     it('shows only the active incident above and the resolved ones below', () => {
       expect(sectionsAround([incident('OPEN'), incident('RESOLVED')])).toEqual({
         active: true,
