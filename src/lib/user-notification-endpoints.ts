@@ -12,7 +12,6 @@ const UNUSABLE_ENDPOINT_STATUSES: readonly NotificationEndpointStatus[] = [
   'OPTED_OUT',
 ];
 
-const BLOCKED_ENDPOINT_STATUSES: readonly NotificationEndpointStatus[] = ['BOUNCED', 'OPTED_OUT'];
 const HASH_KEY_CONFIG = 'notification_endpoint_hash_key';
 
 function endpointHashKeyBytes(): Buffer {
@@ -112,9 +111,9 @@ export async function syncUserNotificationEndpoint(
         })));
   if (endpoint.addressHash !== addressHash) {
     // The hash key changed after this row was last written, so the mismatch is the rotation, not a
-    // new address: keep the provider's bounce or opt-out and only re-stamp the hash.
+    // new address: keep the provider's invalid, bounce or opt-out and only re-stamp the hash.
     if (
-      BLOCKED_ENDPOINT_STATUSES.includes(endpoint.status) &&
+      UNUSABLE_ENDPOINT_STATUSES.includes(endpoint.status) &&
       keyChangedAt &&
       endpoint.updatedAt < keyChangedAt
     ) {
@@ -164,11 +163,14 @@ export async function recordUserNotificationEndpointOutcome(
     if (existing.addressHash !== input.addressHash) return;
     await tx.userNotificationEndpoint.updateMany({
       // A late or out-of-order callback never revives (or re-labels) an INVALID, BOUNCED or OPTED_OUT
-      // endpoint; only a changed address or an explicit admin/user action clears those.
+      // endpoint; only a changed address or an explicit admin/user action clears those. A reset
+      // also fences off every outcome the provider observed before it, so a delayed callback for
+      // the old failure cannot put the endpoint straight back into the state that was reset.
       where: {
         id: existing.id,
         addressHash: input.addressHash,
         status: { notIn: [...UNUSABLE_ENDPOINT_STATUSES] },
+        OR: [{ lastResetAt: null }, { lastResetAt: { lte: input.occurredAt } }],
       },
       data: input.delivered
         ? {
@@ -226,7 +228,13 @@ export async function resetUserNotificationEndpoint(input: {
         channel: input.channel,
         status: { in: ['INVALID', 'BOUNCED'] },
       },
-      data: { status: 'UNVERIFIED', failureCount: 0, lastFailureAt: null, lastErrorCode: null },
+      data: {
+        status: 'UNVERIFIED',
+        failureCount: 0,
+        lastFailureAt: null,
+        lastErrorCode: null,
+        lastResetAt: new Date(),
+      },
     });
     if (reset.count === 0) return false;
     await logAudit(

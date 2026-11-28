@@ -91,4 +91,25 @@ describe('user notification endpoints', () => {
       expect(where.status.notIn).not.toContain('DEGRADED');
     }
   );
+
+  it('ignores a provider outcome observed before the operator reset the endpoint', async () => {
+    endpoint.findUnique.mockResolvedValue({ id: 'endpoint-1', addressHash: 'current-address' });
+    endpoint.updateMany.mockResolvedValue({ count: 0 });
+    const occurredAt = new Date('2026-09-20T00:00:00.000Z');
+
+    await recordUserNotificationEndpointOutcome({ userNotificationEndpoint: endpoint } as never, {
+      userId: 'user-1',
+      channel: 'EMAIL',
+      addressHash: 'current-address',
+      delivered: false,
+      terminalStatus: 'BOUNCED',
+      occurredAt,
+    });
+
+    // The fence is part of the same conditional write, so a reset that lands between the read and
+    // the write still wins: the row only updates when it was never reset, or reset at or before
+    // the moment the provider saw the outcome.
+    const { where } = endpoint.updateMany.mock.calls[0][0];
+    expect(where.OR).toEqual([{ lastResetAt: null }, { lastResetAt: { lte: occurredAt } }]);
+  });
 });

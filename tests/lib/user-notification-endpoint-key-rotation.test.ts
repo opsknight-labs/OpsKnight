@@ -57,6 +57,22 @@ describe('endpoint opt-out state across NEXTAUTH_SECRET rotation', () => {
     });
   });
 
+  it.each(['INVALID', 'BOUNCED'])(
+    'keeps an %s endpoint blocked and only re-stamps the hash when the key was rotated',
+    async status => {
+      systemConfig.findUnique.mockResolvedValue({ value: { keyId: 'previous-key-id' } });
+      const { store, update } = storeWith({ ...blocked(), status });
+
+      const result = await syncUserNotificationEndpoint(input, store);
+
+      expect(result).toEqual({ available: false, status });
+      expect(update).toHaveBeenCalledWith({
+        where: { id: 'endpoint-1' },
+        data: { addressHash: notificationEndpointAddressHash('SMS', input.address) },
+      });
+    }
+  );
+
   it('still re-verifies a genuinely changed address when the key did not change', async () => {
     const keyId = await currentKeyId();
     vi.clearAllMocks();

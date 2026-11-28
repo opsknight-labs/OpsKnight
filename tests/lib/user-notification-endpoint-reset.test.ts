@@ -29,7 +29,13 @@ describe('resetting a blocked notification endpoint', () => {
 
     expect(mocks.tx.userNotificationEndpoint.updateMany).toHaveBeenCalledWith({
       where: { userId: 'user-1', channel: 'EMAIL', status: { in: ['INVALID', 'BOUNCED'] } },
-      data: { status: 'UNVERIFIED', failureCount: 0, lastFailureAt: null, lastErrorCode: null },
+      data: {
+        status: 'UNVERIFIED',
+        failureCount: 0,
+        lastFailureAt: null,
+        lastErrorCode: null,
+        lastResetAt: expect.any(Date),
+      },
     });
     expect(mocks.logAudit).toHaveBeenCalledWith(
       expect.objectContaining({
