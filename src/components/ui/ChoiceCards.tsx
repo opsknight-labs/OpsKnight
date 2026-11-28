@@ -24,6 +24,7 @@ export default function ChoiceCards<T extends string>({
   defaultValue,
   onChange,
   columns = 3,
+  disabled = false,
   className,
 }: {
   name: string;
@@ -34,6 +35,8 @@ export default function ChoiceCards<T extends string>({
   defaultValue?: T;
   onChange?: (value: T) => void;
   columns?: 2 | 3;
+  /** Disables every choice (a read-only view). */
+  disabled?: boolean;
   className?: string;
 }) {
   const [internal, setInternal] = useState<T | undefined>(defaultValue ?? choices[0]?.value);
@@ -47,7 +50,7 @@ export default function ChoiceCards<T extends string>({
             key={choice.value}
             className={cn(
               'flex items-start gap-3 rounded-lg border border-border bg-card p-4 has-[input:checked]:border-primary has-[input:checked]:bg-primary/5 has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-ring',
-              choice.disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+              choice.disabled || disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
             )}
           >
             <input
@@ -55,7 +58,7 @@ export default function ChoiceCards<T extends string>({
               name={name}
               value={choice.value}
               checked={current === choice.value}
-              disabled={choice.disabled}
+              disabled={choice.disabled || disabled}
               onChange={() => {
                 setInternal(choice.value);
                 onChange?.(choice.value);

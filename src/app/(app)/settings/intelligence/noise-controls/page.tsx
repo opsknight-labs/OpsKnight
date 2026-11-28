@@ -53,6 +53,8 @@ async function safely<T>(label: string, load: () => Promise<T>): Promise<T | nul
   }
 }
 
+const MODE_WORD = { OFF: 'Off', SHADOW: 'Watch only', ON: 'On' } as const;
+
 export default async function NoiseControlsPage({
   searchParams,
 }: {
@@ -140,6 +142,7 @@ export default async function NoiseControlsPage({
     <div className="space-y-6">
       <IntelligenceGroupHeader
         group="noise"
+        visible={['policy', 'simulation', 'decisions']}
         badges={
           policy ? (
             <span className={pageHeaderBadgeClass}>
@@ -152,15 +155,16 @@ export default async function NoiseControlsPage({
                   ).solid
                 )}
               />
-              {`Mode ${policy.mode}`}
+              {`Noise controls: ${MODE_WORD[policy.mode]}`}
             </span>
           ) : undefined
         }
         about={
           <p>
-            Maintenance windows, suppression rules, orchestration, content dedup, flapping, storm
-            grouping and heartbeat monitors. Everything starts OFF, runs in SHADOW first, and every
-            decision is recorded and reversible. Highest urgency is never held.
+            Hides, merges and groups noisy alerts before anyone is paged: repeats, flapping alerts,
+            alert storms, planned maintenance and your own rules, plus heartbeat checks. It starts
+            off, you watch what it would do first, and every decision is recorded and can be
+            reversed. High-urgency alerts always page unless you allow otherwise.
           </p>
         }
       >
@@ -174,7 +178,7 @@ export default async function NoiseControlsPage({
 
       <SettingsSection
         id="policy"
-        title="Policy"
+        title="Controls"
         description="OFF ignores everything below, SHADOW records what would have happened, ON applies it."
       >
         <LearnMore className="pt-3">
@@ -224,7 +228,7 @@ export default async function NoiseControlsPage({
 
       <SettingsSection
         id="maintenance-windows"
-        title="Noise maintenance rules"
+        title="Maintenance windows"
         description="Alerts in a window are stored and visible but never page, or page at a lower urgency."
       >
         <LearnMore className="pt-3">
@@ -238,34 +242,6 @@ export default async function NoiseControlsPage({
           canManage={canManage}
           now={now}
         />
-      </SettingsSection>
-
-      <SettingsSection
-        id="policy-history"
-        title="Orchestration and policy versions"
-        description="Compare versions, see what changed and roll back. Every publish is an immutable version."
-      >
-        <LearnMore className="pt-3">
-          Orchestration rules are versioned too, and decisions record the version they were made
-          under. Rolling back publishes a copy of the chosen version as the newest one, so history
-          is never rewritten.
-        </LearnMore>
-        {policy ? (
-          <PolicyVersionHistory
-            versions={versions ?? []}
-            serviceId={serviceId}
-            revision={policy.revision}
-            currentMode={policy.mode}
-            canManage={canManage}
-          />
-        ) : (
-          <EmptyState
-            size="sm"
-            variant="simple"
-            title="Version history unavailable"
-            description="The noise-control policy could not be loaded. Refresh to try again."
-          />
-        )}
       </SettingsSection>
 
       <SettingsSection
@@ -308,6 +284,34 @@ export default async function NoiseControlsPage({
           decision marks it wrong and counts against readiness.
         </LearnMore>
         <DecisionList decisions={decisions ?? []} canManage={canManage} />
+      </SettingsSection>
+
+      <SettingsSection
+        id="policy-history"
+        title="Orchestration and policy versions"
+        description="Compare versions, see what changed and roll back. Every publish is an immutable version."
+      >
+        <LearnMore className="pt-3">
+          Orchestration rules are versioned too, and decisions record the version they were made
+          under. Rolling back publishes a copy of the chosen version as the newest one, so history
+          is never rewritten.
+        </LearnMore>
+        {policy ? (
+          <PolicyVersionHistory
+            versions={versions ?? []}
+            serviceId={serviceId}
+            revision={policy.revision}
+            currentMode={policy.mode}
+            canManage={canManage}
+          />
+        ) : (
+          <EmptyState
+            size="sm"
+            variant="simple"
+            title="Version history unavailable"
+            description="The noise-control policy could not be loaded. Refresh to try again."
+          />
+        )}
       </SettingsSection>
     </div>
   );

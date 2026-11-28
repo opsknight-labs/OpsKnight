@@ -13,6 +13,7 @@ import {
   createHeartbeatMonitor,
   createMaintenanceWindow,
   createSuppressionRule,
+  deleteMaintenanceWindow,
   endMaintenanceWindow,
   evaluatePrePagingControls,
   getNoiseControlPolicy,
@@ -206,6 +207,48 @@ describe('maintenance windows and suppression rules end to end', () => {
       active: false,
       endedAt: expect.any(Date),
     });
+  });
+});
+
+describe('deleting a maintenance window', () => {
+  it('refuses one that is in force, then deletes it once it is ended, and records the audit', async () => {
+    const { service, actor } = await setup();
+    const window = await createMaintenanceWindow(
+      {
+        name: 'Patching',
+        scope: 'SERVICE',
+        serviceId: service.id,
+        startsAt: new Date(Date.now() - 60_000).toISOString(),
+        endsAt: new Date(Date.now() + 3_600_000).toISOString(),
+        effect: 'SUPPRESS',
+      },
+      actor
+    );
+    expect(await deleteMaintenanceWindow(window.id, actor)).toBe('in-force');
+    expect(await listMaintenanceWindows({ includePast: true })).toHaveLength(1);
+    await endMaintenanceWindow(window.id, actor);
+    expect(await deleteMaintenanceWindow(window.id, actor)).toBe('deleted');
+    expect(await listMaintenanceWindows({ includePast: true })).toHaveLength(0);
+    expect(await deleteMaintenanceWindow(window.id, actor)).toBe('missing');
+    expect(
+      await db.auditLog.count({ where: { action: 'intelligence.noise.maintenance.deleted' } })
+    ).toBe(1);
+  });
+
+  it('lets a disabled or not-yet-started window go', async () => {
+    const { service, actor } = await setup();
+    const later = await createMaintenanceWindow(
+      {
+        name: 'Next week',
+        scope: 'SERVICE',
+        serviceId: service.id,
+        startsAt: new Date(Date.now() + 86_400_000).toISOString(),
+        endsAt: new Date(Date.now() + 90_000_000).toISOString(),
+        effect: 'SUPPRESS',
+      },
+      actor
+    );
+    expect(await deleteMaintenanceWindow(later.id, actor)).toBe('deleted');
   });
 });
 

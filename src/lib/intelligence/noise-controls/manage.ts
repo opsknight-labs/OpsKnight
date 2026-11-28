@@ -492,6 +492,47 @@ export async function endMaintenanceWindow(
   return 'ended';
 }
 
+/**
+ * Deletes a maintenance window that is not in force: disabled, ended, finished or not started yet. One that
+ * is in force (or a repeating one that is enabled) must be ended or disabled first, so a delete can never
+ * be the thing that suddenly lets held alerts page.
+ */
+export async function deleteMaintenanceWindow(
+  id: string,
+  actor: IntelligenceActor
+): Promise<'deleted' | 'missing' | 'in-force'> {
+  const row = await prisma.noiseMaintenanceWindow.findUnique({
+    where: { id },
+    select: {
+      name: true,
+      enabled: true,
+      endedAt: true,
+      recurrence: true,
+      startsAt: true,
+      endsAt: true,
+    },
+  });
+  if (!row) return 'missing';
+  const now = new Date();
+  const inForce =
+    row.enabled &&
+    row.endedAt === null &&
+    (row.recurrence !== null || (row.startsAt <= now && now < row.endsAt));
+  if (inForce) return 'in-force';
+  const result = await prisma.noiseMaintenanceWindow.deleteMany({ where: { id } });
+  if (result.count !== 1) return 'missing';
+  await logAudit({
+    action: 'intelligence.noise.maintenance.deleted',
+    entityType: 'SYSTEM_CONFIG',
+    entityId: `maintenance-window:${id}`,
+    actorId: actor.actorId,
+    source: actor.source,
+    oldValue: { name: row.name },
+  });
+  refreshSoon();
+  return 'deleted';
+}
+
 export async function setMaintenanceWindowEnabled(
   id: string,
   enabled: boolean,

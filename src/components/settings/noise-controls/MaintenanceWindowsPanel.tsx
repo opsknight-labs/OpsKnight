@@ -3,6 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState, useTransition } from 'react';
 import {
   createWindowAction,
+  deleteWindowAction,
   endWindowAction,
   toggleWindowAction,
 } from '@/app/(app)/settings/intelligence/noise-controls/actions';
@@ -747,6 +748,21 @@ export default function MaintenanceWindowsPanel({
                       accessibleLabel={`${window.enabled ? 'Disable' : 'Enable'} ${window.name}`}
                       variant="ghost"
                     />
+                    {!window.active && (
+                      <RowAction
+                        action={deleteWindowAction}
+                        fields={{ id: window.id }}
+                        label="Delete"
+                        accessibleLabel={`Delete ${window.name}`}
+                        variant="ghost"
+                        confirm={{
+                          title: `Delete “${window.name}”?`,
+                          description:
+                            'The window is removed for good. Alerts that matched it will page normally.',
+                          confirmLabel: 'Delete window',
+                        }}
+                      />
+                    )}
                   </div>
                 )}
               </li>

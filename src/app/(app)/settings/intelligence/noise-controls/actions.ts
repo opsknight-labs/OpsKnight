@@ -12,6 +12,7 @@ import {
   createSuppressionRule,
   deleteHeartbeatMonitor,
   deleteSuppressionRule,
+  deleteMaintenanceWindow,
   endMaintenanceWindow,
   noiseControlDefinitionSchema,
   orchestrationRuleSchema,
@@ -207,6 +208,29 @@ export async function endWindowAction(
     return result === 'ended'
       ? { message: 'Maintenance ended; alerts page normally from now.', ok: true }
       : { message: 'That window has already ended.', ok: false };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function deleteWindowAction(
+  _state: NoiseActionState,
+  form: FormData
+): Promise<NoiseActionState> {
+  try {
+    const user = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
+    const id = text(form, 'id');
+    if (!ID.test(id)) return { message: 'Invalid window.', ok: false };
+    const result = await deleteMaintenanceWindow(id, actorOf(user));
+    revalidatePath(PATH);
+    if (result === 'in-force')
+      return {
+        message: 'This window is in force. End it or disable it first, then delete it.',
+        ok: false,
+      };
+    return result === 'deleted'
+      ? { message: 'Window deleted.', ok: true }
+      : { message: 'That window no longer exists.', ok: false };
   } catch (error) {
     return failure(error);
   }

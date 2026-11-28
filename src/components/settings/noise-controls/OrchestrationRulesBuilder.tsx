@@ -25,12 +25,12 @@ import { fieldClass, ReplaySummary, touchButton, type Option } from './shared';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 
 export const ACTION_TYPES = [
-  { type: 'DROP', label: 'Drop (store nothing, never page)' },
-  { type: 'SUPPRESS', label: 'Suppress (store, never page)' },
-  { type: 'SET_URGENCY', label: 'Set urgency' },
-  { type: 'SET_SEVERITY', label: 'Set severity' },
-  { type: 'SET_LABEL', label: 'Set a label' },
-  { type: 'REROUTE_SERVICE', label: 'Route to another service' },
+  { type: 'DROP', label: 'Ignore completely (not stored, never pages)' },
+  { type: 'SUPPRESS', label: 'Hold quietly (stored, never pages)' },
+  { type: 'SET_URGENCY', label: 'Change urgency' },
+  { type: 'SET_SEVERITY', label: 'Change severity' },
+  { type: 'SET_LABEL', label: 'Add a label' },
+  { type: 'REROUTE_SERVICE', label: 'Send to another service' },
   { type: 'ATTACH_RUNBOOK', label: 'Attach a runbook' },
   { type: 'ADD_NOTE', label: 'Add a note' },
 ] as const;
@@ -494,7 +494,11 @@ export default function OrchestrationRulesBuilder({
                   </div>
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Rule id <code>{rule.id}</code>
+                  <span title={`Rule id ${rule.id}`}>
+                    {rule.name
+                      ? 'Matches alerts that meet all the conditions below.'
+                      : 'Give the rule a name.'}
+                  </span>
                   {replay && (
                     <>
                       {' '}

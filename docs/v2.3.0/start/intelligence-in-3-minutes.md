@@ -80,7 +80,7 @@ controls on. Until then noise controls stay in Watch only.
 
 ## Change or undo
 
-Every change is a versioned policy. Open **Orchestration versions** (noise controls) or **Policy history**
+Every change is a versioned policy. Open **Version history** (noise controls) or **Policy history**
 (Engine) and select **Roll back**. To stop everything, turn off the Intelligence master switch under
 **Engine → General**.
 

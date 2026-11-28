@@ -391,7 +391,7 @@ test.describe.serial('intelligence responder workflows', () => {
 
     // The settings page reflects what was configured and never offers AUTO.
     await page.goto('/settings/intelligence');
-    await expect(page.getByRole('option', { name: /Automatic/ })).toBeDisabled();
+    await expect(page.getByRole('radio', { name: /Automatic/ })).toBeDisabled();
     await page.goto('/settings/intelligence/ai');
     await expect(page.getByRole('textbox', { name: 'Assistant name', exact: true })).toHaveValue(
       'Pip'
