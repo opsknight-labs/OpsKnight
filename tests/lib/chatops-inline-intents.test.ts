@@ -76,6 +76,18 @@ describe('inline ChatOps intent durability', () => {
     expect(state.status).toBe('COMPLETED');
   });
 
+  it('answers a redelivery that arrives while the first attempt is still running with a retryable conflict, not a failure', async () => {
+    state.status = 'PROCESSING';
+    state.leaseToken = 'held-by-another-worker';
+    const { processInlineChatOpsIntent } = await import('@/lib/chatops/intents');
+    const execute = vi.fn(async () => ({ statusCode: 200 }));
+
+    const error = await processInlineChatOpsIntent('intent-1', execute).catch(e => e);
+
+    expect(error).toMatchObject({ code: 'TRANSIENT_CONFLICT', status: 409, retryable: true });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it('deduplicates a legacy Slack hash before attempting a new-format insert', async () => {
     chatOpsIntent.findUnique.mockResolvedValueOnce({ id: 'legacy-intent', payloadDigest: null } as never);
     const { enqueueChatOpsIntent } = await import('@/lib/chatops/intents');

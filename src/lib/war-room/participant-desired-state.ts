@@ -82,7 +82,7 @@ async function replaceDesiredParticipants(
       where: {
         warRoomId,
         ...(userIds.length ? { userId: { notIn: userIds } } : {}),
-        state: { in: ['DESIRED', 'PROCESSING', 'PENDING', 'PRESENT', 'FAILED'] },
+        state: { in: ['DESIRED', 'PROCESSING', 'PENDING', 'PRESENT', 'FAILED', 'SKIPPED'] },
       },
       data: {
         state: 'REMOVED',
@@ -118,9 +118,19 @@ async function replaceDesiredParticipants(
         existing.providerObjectId !== providerObjectId ||
         existing.state === 'REMOVED' ||
         existing.state === 'SKIPPED';
+      // A person who is already in (or being added to) the room keeps that state when nothing about
+      // them changed; resetting it to DESIRED made every sync re-add them and rewrite addedAt.
+      const inProgress =
+        !changed &&
+        desiredState === 'DESIRED' &&
+        ['PROCESSING', 'PENDING', 'PRESENT'].includes(existing.state);
       await tx.warRoomParticipant.update({
         where: { id: existing.id },
-        data: { ...data, ...(changed ? { desiredVersion: { increment: 1 } } : {}) },
+        data: {
+          ...data,
+          ...(inProgress ? { state: existing.state } : {}),
+          ...(changed ? { desiredVersion: { increment: 1 } } : {}),
+        },
       });
     }
   });

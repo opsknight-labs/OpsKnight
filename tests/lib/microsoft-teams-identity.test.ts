@@ -125,6 +125,27 @@ describe('Microsoft Teams explicit identity linking', () => {
     );
   });
 
+  it('does not silently re-link a user who explicitly unlinked, even when the directory matches', async () => {
+    linkFindUnique.mockResolvedValue({
+      id: 'link-revoked',
+      providerUserId: 'teams-user-scim',
+      revokedAt: new Date('2026-11-01T00:00:00Z'),
+      user: { id: 'user-scim', name: 'Scim Bob', status: 'ACTIVE' },
+    });
+    directoryFindMany.mockResolvedValue([
+      { user: { id: 'user-scim', name: 'Scim Bob', email: 'bob@example.com' } },
+    ]);
+    const { resolveMicrosoftTeamsUser } = await import('@/lib/microsoft-teams/identity');
+    await expect(
+      resolveMicrosoftTeamsUser({
+        tenantId: 'tenant-1',
+        providerUserId: 'teams-user-scim',
+        aadObjectId: 'aad-scim-1',
+      })
+    ).resolves.toBeNull();
+    expect(linkUpsert).not.toHaveBeenCalled();
+  });
+
   it('requires explicit approval for email-only matches, including historical case duplicates', async () => {
     linkFindUnique.mockResolvedValue(null);
     directoryFindMany.mockResolvedValue([]);
