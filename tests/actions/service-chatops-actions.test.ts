@@ -61,7 +61,7 @@ describe('updateServiceChatOpsSettings', () => {
 
     const result = await updateServiceChatOpsSettings('svc-1', formData);
 
-    expect(result).toEqual({ success: true, error: null, userIds: ['a'] });
+    expect(result).toEqual({ success: true, error: null });
     expect(mocks.serviceUpdate).toHaveBeenCalledWith({
       where: { id: 'svc-1' },
       data: {
@@ -91,7 +91,7 @@ describe('updateServiceChatOpsSettings', () => {
 
     const result = await updateServiceChatOpsSettings({ success: false }, formData);
 
-    expect(result).toEqual({ success: true, error: null, userIds: ['a'] });
+    expect(result).toEqual({ success: true, error: null });
     expect(mocks.serviceUpdate).toHaveBeenCalledWith({
       where: { id: 'svc-2' },
       data: {
@@ -111,7 +111,7 @@ describe('updateServiceChatOpsSettings', () => {
 
     const result = await updateServiceChatOpsSettings('svc-1', formData);
 
-    expect(result).toEqual({ success: true, error: null, userIds: ['a'] });
+    expect(result).toEqual({ success: true, error: null });
     expect(mocks.serviceUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -201,7 +201,7 @@ describe('updateServiceChatOpsSettings', () => {
 
     const result = await updateServiceChatOpsSettings('svc-1', formData);
 
-    expect(result).toEqual({ success: true, error: null, userIds: ['a'] });
+    expect(result).toEqual({ success: true, error: null });
     expect(mocks.setServiceWarRoomPolicy).toHaveBeenCalledWith(
       'svc-1',
       {
