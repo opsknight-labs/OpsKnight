@@ -283,6 +283,12 @@ export default function HeartbeatPanel({
                       action={deleteHeartbeatAction}
                       fields={{ id: monitor.id }}
                       label="Delete"
+                      confirm={{
+                        title: 'Delete this heartbeat monitor?',
+                        description:
+                          'Its ping address stops working and you will no longer be told if the job goes quiet.',
+                        confirmLabel: 'Delete monitor',
+                      }}
                       accessibleLabel={`Delete ${monitor.name}`}
                       variant="ghost"
                     />

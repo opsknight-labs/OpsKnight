@@ -666,6 +666,12 @@ export default function MaintenanceWindowsPanel({
                           action={endWindowAction}
                           fields={{ id: entry.windowId }}
                           label="End now"
+                          confirm={{
+                            title: 'End this maintenance window now?',
+                            description:
+                              'Alerts for these services page normally again straight away.',
+                            confirmLabel: 'End now',
+                          }}
                           accessibleLabel={`End ${entry.name} now`}
                         />
                       )}
@@ -725,6 +731,12 @@ export default function MaintenanceWindowsPanel({
                         action={endWindowAction}
                         fields={{ id: window.id }}
                         label="End now"
+                        confirm={{
+                          title: 'End this maintenance window now?',
+                          description:
+                            'Alerts for these services page normally again straight away.',
+                          confirmLabel: 'End now',
+                        }}
                         accessibleLabel={`End ${window.name} now`}
                       />
                     )}

@@ -8,6 +8,7 @@ import { addAiModelAction } from '@/app/(app)/settings/intelligence/setup-action
 import RecommendedPresetButton from '@/components/settings/RecommendedPresetButton';
 import { ActionMessage, fieldClass, labelClass } from '@/components/settings/form-kit';
 import { toneClasses } from '@/components/patterns/status-tone';
+import ChoiceCards, { type Choice } from '@/components/ui/ChoiceCards';
 import { Button } from '@/components/ui/shadcn/button';
 import { cn } from '@/lib/utils';
 import {
@@ -30,14 +31,24 @@ const STEPS = [
 ] as const;
 type StepId = (typeof STEPS)[number]['id'];
 
-const PROVIDERS = [
-  { value: 'ANTHROPIC', title: 'Anthropic', hint: 'Claude models' },
-  { value: 'OPENAI', title: 'OpenAI', hint: 'GPT models' },
-  { value: 'GOOGLE', title: 'Google', hint: 'Gemini models' },
-] as const;
+const PROVIDERS: ReadonlyArray<Choice<'ANTHROPIC' | 'OPENAI' | 'GOOGLE'>> = [
+  { value: 'ANTHROPIC', title: 'Anthropic', body: 'Claude models' },
+  { value: 'OPENAI', title: 'OpenAI', body: 'GPT models' },
+  { value: 'GOOGLE', title: 'Google', body: 'Gemini models' },
+];
 
-const cardClass =
-  'flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-card p-4 has-[input:checked]:border-primary has-[input:checked]:bg-primary/5 has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-ring';
+const READ_CHOICES: ReadonlyArray<Choice<'text' | 'titles'>> = [
+  {
+    value: 'text',
+    title: 'Incident text and names',
+    body: 'Titles, notes and who wrote them. Needed for summaries and drafts.',
+  },
+  {
+    value: 'titles',
+    title: 'Titles and service names only',
+    body: 'More private. Summaries and drafts will not be available.',
+  },
+];
 
 /**
  * The guided start: four short steps, each skippable, in the order that gets a newcomer to value without
@@ -256,30 +267,16 @@ const initial: IntelligenceActionState = { message: '', ok: true };
 
 function AiModelForm() {
   const [state, action, pending] = useActionState(addAiModelAction, initial);
-  const [kind, setKind] = useState<(typeof PROVIDERS)[number]['value']>('ANTHROPIC');
+  const [kind, setKind] = useState<'ANTHROPIC' | 'OPENAI' | 'GOOGLE'>('ANTHROPIC');
   return (
     <form action={action} className="space-y-5">
-      <fieldset className="space-y-2">
-        <legend className={labelClass}>Provider</legend>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {PROVIDERS.map(provider => (
-            <label key={provider.value} className={cardClass}>
-              <input
-                type="radio"
-                name="kind"
-                value={provider.value}
-                checked={kind === provider.value}
-                onChange={() => setKind(provider.value)}
-                className="mt-1"
-              />
-              <span>
-                <span className="block text-sm font-semibold">{provider.title}</span>
-                <span className="block text-sm text-muted-foreground">{provider.hint}</span>
-              </span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      <ChoiceCards
+        name="kind"
+        legend="Provider"
+        choices={PROVIDERS}
+        value={kind}
+        onChange={setKind}
+      />
       <div className="max-w-md space-y-1">
         <label htmlFor="setup-api-key" className={labelClass}>
           API key
@@ -297,29 +294,13 @@ function AiModelForm() {
           set for you.
         </p>
       </div>
-      <fieldset className="space-y-2">
-        <legend className={labelClass}>What may the model read?</legend>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className={cardClass}>
-            <input type="radio" name="incidentText" value="text" defaultChecked className="mt-1" />
-            <span>
-              <span className="block text-sm font-semibold">Incident text and names</span>
-              <span className="block text-sm text-muted-foreground">
-                Titles, notes and who wrote them. Needed for summaries and drafts.
-              </span>
-            </span>
-          </label>
-          <label className={cardClass}>
-            <input type="radio" name="incidentText" value="titles" className="mt-1" />
-            <span>
-              <span className="block text-sm font-semibold">Titles and service names only</span>
-              <span className="block text-sm text-muted-foreground">
-                More private. Summaries and drafts will not be available.
-              </span>
-            </span>
-          </label>
-        </div>
-      </fieldset>
+      <ChoiceCards
+        name="incidentText"
+        legend="What may the model read?"
+        columns={2}
+        choices={READ_CHOICES}
+        defaultValue="text"
+      />
       <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" disabled={pending} className="min-h-11 sm:min-h-10">
           {pending ? 'Testing…' : 'Add and test'}

@@ -37,6 +37,7 @@ import {
 } from '@/lib/intelligence/noise-controls';
 import { currentLookupHealth } from '@/lib/intelligence/noise-controls/health';
 import { requirePageAccess } from '@/lib/access/server';
+import { ViewOnlyNotice } from '@/components/settings/form-kit';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -165,6 +166,7 @@ export default async function NoiseControlsPage({
       >
         Decide what happens to an alert before anyone is paged.
       </IntelligenceGroupHeader>
+      {!canManage && <ViewOnlyNotice what="Intelligence settings" />}
 
       <LookupDeadlineNotice health={currentLookupHealth()} />
 

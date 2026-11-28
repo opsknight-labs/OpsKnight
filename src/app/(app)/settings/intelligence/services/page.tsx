@@ -15,6 +15,7 @@ import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
 import { serviceReadWhere } from '@/lib/authorization-filters';
 import { listServicePolicyOverview } from '@/lib/intelligence/settings/service';
 import { requirePageAccess } from '@/lib/access/server';
+import { ViewOnlyNotice } from '@/components/settings/form-kit';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -63,6 +64,7 @@ export default async function IntelligenceServicesPage({
       >
         Per-service policies and the inputs probable-cause suggestions rely on.
       </IntelligenceGroupHeader>
+      {!canManage && <ViewOnlyNotice what="Intelligence settings" />}
 
       <SettingsSection
         id="service-policies"

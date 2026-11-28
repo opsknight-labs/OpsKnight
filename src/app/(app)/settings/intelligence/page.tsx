@@ -36,6 +36,7 @@ import { assessNoiseReadiness } from '@/lib/intelligence/noise-controls/manage';
 import { detectCapabilities } from '@/lib/intelligence/similarity/capabilities';
 import { getOpsKnightProcessRole } from '@/lib/runtime-role';
 import { requirePageAccess } from '@/lib/access/server';
+import { ViewOnlyNotice } from '@/components/settings/form-kit';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -161,6 +162,7 @@ export default async function IntelligenceSettingsPage() {
       >
         Suggestions from your incident history, kept off the paging path.
       </IntelligenceGroupHeader>
+      {!canManage && <ViewOnlyNotice what="Intelligence settings" />}
 
       {setup && (
         <IntelligenceSetupChecklist state={setup} canManage={canManage} readiness={readiness} />

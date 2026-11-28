@@ -1,8 +1,19 @@
 'use client';
 
-import { useActionState, type ReactNode } from 'react';
+import { useActionState, useRef, type ReactNode } from 'react';
 import type { NoiseActionState } from '@/app/(app)/settings/intelligence/noise-controls/actions';
 import { Button } from '@/components/ui/shadcn/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/shadcn/alert-dialog';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 import type { SimulationOutcome } from '@/lib/intelligence/noise-controls/simulation';
@@ -47,36 +58,73 @@ export function fromLocalInput(value: string): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-/** One-click server action button for list rows (end, disable, delete). */
+export interface RowConfirm {
+  title: string;
+  description: string;
+  /** Label of the button that does it; defaults to the row button's own label. */
+  confirmLabel?: string;
+}
+
+/**
+ * Server action button for list rows (end, disable, delete). With `confirm`, the button first asks, in plain
+ * words, what will happen; only the dialog's confirm button submits the form.
+ */
 export function RowAction({
   action,
   fields,
   label,
   accessibleLabel,
   variant = 'outline',
+  confirm,
 }: {
   action: (state: NoiseActionState, form: FormData) => Promise<NoiseActionState>;
   fields: Record<string, string>;
   label: string;
   accessibleLabel?: string;
   variant?: 'outline' | 'ghost' | 'destructive';
+  confirm?: RowConfirm;
 }) {
   const [state, formAction, pending] = useActionState(action, initialActionState);
+  const formRef = useRef<HTMLFormElement>(null);
+  const button = (
+    <Button
+      type={confirm ? 'button' : 'submit'}
+      size="sm"
+      variant={variant}
+      disabled={pending}
+      aria-label={accessibleLabel}
+      className={touchButton}
+    >
+      {label}
+    </Button>
+  );
   return (
-    <form action={formAction} className="inline-flex items-center gap-2">
+    <form ref={formRef} action={formAction} className="inline-flex items-center gap-2">
       {Object.entries(fields).map(([name, value]) => (
         <input key={name} type="hidden" name={name} value={value} />
       ))}
-      <Button
-        type="submit"
-        size="sm"
-        variant={variant}
-        disabled={pending}
-        aria-label={accessibleLabel}
-        className={touchButton}
-      >
-        {label}
-      </Button>
+      {confirm ? (
+        <AlertDialog>
+          <AlertDialogTrigger asChild>{button}</AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{confirm.title}</AlertDialogTitle>
+              <AlertDialogDescription>{confirm.description}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className={touchButton}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className={touchButton}
+                onClick={() => formRef.current?.requestSubmit()}
+              >
+                {confirm.confirmLabel ?? label}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      ) : (
+        button
+      )}
       {state.message && !state.ok && (
         <span role="alert" className="text-xs text-destructive">
           {state.message}

@@ -38,6 +38,7 @@ import {
 import ConnectionsSection from '../_sections/ConnectionsSection';
 import KnowledgeMemorySection from '../_sections/KnowledgeMemorySection';
 import { requirePageAccess } from '@/lib/access/server';
+import { ViewOnlyNotice } from '@/components/settings/form-kit';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -123,6 +124,7 @@ export default async function IntelligenceAssistantPage({
       >
         {`Configure ${settings.squireName}, the in-app assistant, and the models behind it.`}
       </IntelligenceGroupHeader>
+      {!canManage && <ViewOnlyNotice what="Intelligence settings" />}
 
       <SettingsSection
         id="assistant"
