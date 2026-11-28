@@ -90,7 +90,7 @@ layer is not enabled, no badges appear and the filter returns nothing.
 
 ## Wallboard noise tile
 
-The wallboard (`/wallboard`) shows a **Noise reduction** tile with the last 24 hours: pages avoided
+The wallboard (`/wallboard`) shows a **Noise reduction** tile with the last 24 hours: pages prevented
 (or, when every policy is in shadow mode, what would be avoided), alerts per incident, grouped alerts
 and how many were ungrouped, and missing heartbeats. It is shown to roles that may read intelligence.
 When noise controls are off the tile says so, and administrators get a link to turn them on. The tile

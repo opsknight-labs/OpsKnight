@@ -320,8 +320,8 @@ test.describe.serial('intelligence responder workflows', () => {
       ],
       [
         '/settings/intelligence/evaluation',
-        'Evaluation & spend',
-        /^Evaluation & spend$/,
+        'Results & spend',
+        /^Results & spend$/,
         ['grouping-quality', 'answer-feedback', 'insights', 'learned-weights', 'usage'],
       ],
     ];
@@ -431,7 +431,7 @@ test.describe.serial('intelligence responder workflows', () => {
         .toBe(percent);
       await page.reload();
       await expect(allocation).toHaveValue(String(percent));
-      // Usage lives on Evaluation & spend since the settings regroup (Workstream I3).
+      // Usage lives on Results & spend since the settings regroup (Workstream I3).
       await page.goto('/settings/intelligence/evaluation#usage');
       await expect(page.locator('#main-content').getByText(/Background embedding:/)).toContainText(
         `${percent}% of the total allowance`

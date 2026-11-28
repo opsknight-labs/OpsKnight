@@ -40,7 +40,7 @@ describe('IntelligenceSubNav', () => {
       ['Noise controls', '/settings/intelligence/noise-controls'],
       ['Services & changes', '/settings/intelligence/services'],
       ['Assistant', '/settings/intelligence/ai'],
-      ['Evaluation & spend', '/settings/intelligence/evaluation'],
+      ['Results & spend', '/settings/intelligence/evaluation'],
     ]);
     for (const link of links) expect(link.className).toMatch(/\bmin-h-11\b/);
   });

@@ -38,6 +38,7 @@ import {
 import { currentLookupHealth } from '@/lib/intelligence/noise-controls/health';
 import { requirePageAccess } from '@/lib/access/server';
 import { ViewOnlyNotice } from '@/components/settings/form-kit';
+import { noiseModeWord } from '@/lib/intelligence/copy';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -52,8 +53,6 @@ async function safely<T>(label: string, load: () => Promise<T>): Promise<T | nul
     return null;
   }
 }
-
-const MODE_WORD = { OFF: 'Off', SHADOW: 'Watch only', ON: 'On' } as const;
 
 export default async function NoiseControlsPage({
   searchParams,
@@ -155,7 +154,7 @@ export default async function NoiseControlsPage({
                   ).solid
                 )}
               />
-              {`Noise controls: ${MODE_WORD[policy.mode]}`}
+              {`Noise controls: ${noiseModeWord(policy.mode)}`}
             </span>
           ) : undefined
         }

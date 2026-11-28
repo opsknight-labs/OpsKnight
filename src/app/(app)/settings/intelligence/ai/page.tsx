@@ -61,7 +61,7 @@ export default async function IntelligenceAssistantPage({
 }) {
   await requirePageAccess('/settings/intelligence/ai');
   const user = await assertCapability(CAPABILITIES.INTELLIGENCE_READ);
-  // Usage, spend and budgets moved to Evaluation & spend; links carrying the spend period follow.
+  // Usage, spend and budgets moved to Results & spend; links carrying the spend period follow.
   const params = await searchParams;
   if (params?.spend !== undefined) {
     redirect(`${intelligenceSettingsPath('evaluation')}${serializeSearchParams(params)}#ai-spend`);
@@ -90,6 +90,13 @@ export default async function IntelligenceAssistantPage({
       </InlineNotice>
     ) : null;
 
+  // "On" means something can answer: AI is switched on and at least one model is enabled.
+  const hasModel = Boolean(providers?.some(provider => provider.enabled));
+  const aiBadge = !settings.enabled
+    ? 'AI off'
+    : hasModel
+      ? 'AI model connected'
+      : 'AI on, no model yet';
   return (
     <div className="space-y-6">
       <IntelligenceGroupHeader
@@ -104,7 +111,7 @@ export default async function IntelligenceAssistantPage({
                 toneClasses(settings.enabled ? 'ok' : 'neutral').solid
               )}
             />
-            {settings.enabled ? 'AI on' : 'AI off'}
+            {aiBadge}
           </span>
         }
         about={
@@ -116,7 +123,7 @@ export default async function IntelligenceAssistantPage({
               href={intelligenceSettingsHref('evaluation', 'usage')}
               className="font-medium text-foreground underline underline-offset-4"
             >
-              Evaluation &amp; spend
+              Results &amp; spend
             </Link>
             .
           </p>
@@ -127,18 +134,9 @@ export default async function IntelligenceAssistantPage({
       {!canManage && <ViewOnlyNotice what="Intelligence settings" />}
 
       <SettingsSection
-        id="assistant"
-        title="General"
-        description="Both switches are off by default."
-      >
-        {personalNotice}
-        <AiSettingsForm settings={settings} canManage={canManage} />
-      </SettingsSection>
-
-      <SettingsSection
         id="providers"
         title="Providers"
-        description="Tried in priority order. Each provider has its own limit on the data it may receive."
+        description="The AI models Squire can use, tried in order. Add one to turn on summaries and written answers. Each has its own limit on what it may read."
       >
         {personalNotice}
         {providers && providers.length > 0 ? (
@@ -206,6 +204,15 @@ export default async function IntelligenceAssistantPage({
             <ProviderForm canManage={canManage} />
           </details>
         )}
+      </SettingsSection>
+
+      <SettingsSection
+        id="assistant"
+        title="Assistant"
+        description="Squire is shown by default and answers from your incident data. Turn on AI, with a model added above, to let it write summaries and answer in full sentences."
+      >
+        {personalNotice}
+        <AiSettingsForm settings={settings} canManage={canManage} />
       </SettingsSection>
 
       <SettingsSection

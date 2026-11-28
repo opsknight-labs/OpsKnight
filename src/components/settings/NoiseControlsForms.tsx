@@ -85,7 +85,7 @@ export function KpiTiles({ kpis }: { kpis: NoiseControlKpis }) {
   const tiles = [
     { label: `Alerts per incident (${kpis.days}d)`, value: kpis.compressionRatio.toFixed(2) },
     {
-      label: 'Pages avoided',
+      label: 'Pages prevented',
       value: String(kpis.pagesAvoided),
       hint: `${kpis.shadowWouldAvoid} more in shadow`,
     },

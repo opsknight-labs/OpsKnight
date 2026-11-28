@@ -181,7 +181,7 @@ async function seedTwoTeams(now: number) {
   return { admin, scoped, responder, myService, otherService, my, other };
 }
 
-describe('AIOps overview data', () => {
+describe('Intelligence overview data', () => {
   it('scopes every section to what a team-scoped reader may see, while an admin sees all', async () => {
     const now = Date.now();
     const seeded = await seedTwoTeams(now);

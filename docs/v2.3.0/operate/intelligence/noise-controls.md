@@ -128,7 +128,7 @@ grouping enabled, so shadow mode records decisions from the start.
 
 ## KPIs and alerts
 
-The page shows alerts per incident (compression), pages avoided (applied) and what SHADOW would have
+The page shows alerts per incident (compression), pages prevented (applied) and what SHADOW would have
 avoided, downgrades and holds, the false-group rate (reversed over applied groupings) and heartbeat
 state. Metrics: `opsknight_prepaging_decisions_total{control,action,mode}`,
 `opsknight_prepaging_fail_open_total{reason}`, `opsknight_prepaging_lookups_total{route,outcome}`

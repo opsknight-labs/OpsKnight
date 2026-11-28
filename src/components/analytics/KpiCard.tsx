@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 /**
- * The KPI tile shared by Analytics and the AIOps overview, so both pages' headline numbers have the same
+ * The KPI tile shared by Analytics and the Intelligence overview, so both pages' headline numbers have the same
  * grid, size and type. Callers render `<ul className={KPI_GRID}>` of `<li className={KPI_CARD}>` holding a
  * `<KpiBody>`, and may add their own overlay or footer inside the `li`.
  */

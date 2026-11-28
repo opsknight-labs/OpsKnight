@@ -45,7 +45,9 @@ const teams = [{ id: 'team-1', name: 'SRE' }];
 /** Chooses an option in one of the searchable dropdowns by what the person sees. */
 function pick(label: string, option: string) {
   fireEvent.click(screen.getByRole('combobox', { name: label }));
-  fireEvent.click(screen.getByRole('option', { name: new RegExp(`^${option}`) }));
+  fireEvent.click(
+    screen.getAllByRole('option').find(row => row.textContent?.startsWith(option)) as HTMLElement
+  );
 }
 
 function outcome(overrides: Partial<SimulationOutcome> = {}): SimulationOutcome {

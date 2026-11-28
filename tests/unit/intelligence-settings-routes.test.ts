@@ -55,7 +55,7 @@ describe('intelligence settings groups', () => {
       'Noise controls',
       'Services & changes',
       'Assistant',
-      'Evaluation & spend',
+      'Results & spend',
     ]);
   });
 

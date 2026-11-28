@@ -49,14 +49,22 @@ export type DraftFailure =
   | 'UNAVAILABLE';
 
 export const DRAFT_FAILURE_MESSAGES: Record<DraftFailure, string> = {
-  AI_OFF: 'AI is turned off. An administrator can enable it in Settings, Intelligence, Assistant.',
-  NOT_ALLOWED: 'You do not have permission to do this.',
+  AI_OFF:
+    'AI is turned off. An administrator can turn it on, and add an AI model, under Settings → Intelligence → Assistant.',
+  NOT_ALLOWED: 'You do not have permission to do this. Ask an administrator.',
   NOT_FOUND: 'Incident not found.',
   NO_PROVIDER_FOR_DATA:
-    'No AI provider is allowed to receive incident notes and timelines. An administrator can raise a provider’s data limit to Personal.',
-  LIMITED: 'AI usage limits have been reached. Try again later.',
+    'The AI model is not allowed to read incident notes and names. An administrator can allow it under Settings → Intelligence → Assistant → Providers (data limit: Personal).',
+  LIMITED: 'Too many AI requests right now. Wait a minute, then try again.',
   BUDGET_EXHAUSTED:
     "Today's AI budget is used up, so AI drafting is paused until 00:00 UTC. You can still write it yourself.",
-  INVALID_OUTPUT: 'The AI response was not in the expected format, so nothing was used. Try again.',
-  UNAVAILABLE: 'AI is unavailable right now. Try again later.',
+  INVALID_OUTPUT: 'The AI answer was not usable, so nothing was used. Try again.',
+  UNAVAILABLE: 'AI is unavailable right now. Try again in a moment.',
 };
+
+/** Failures that a second try can fix; the others need a person with access to change something first. */
+export const RETRYABLE_DRAFT_FAILURES: ReadonlySet<DraftFailure> = new Set([
+  'LIMITED',
+  'INVALID_OUTPUT',
+  'UNAVAILABLE',
+]);

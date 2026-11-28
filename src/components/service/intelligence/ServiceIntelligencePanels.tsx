@@ -276,7 +276,7 @@ export function AlertQualityPanel({
     >
       <StatGrid label="Alert quality">
         <StatTile
-          label="Noise score"
+          label="Noisiness"
           value={formatPercent(quality.noiseScore)}
           hint={
             quality.flagged
@@ -444,7 +444,7 @@ export function NoiseStatusPanel({
         {status.mode !== 'OFF' && (
           <>
             <StatTile
-              label={status.mode === 'SHADOW' ? 'Would avoid (shadow)' : 'Pages avoided'}
+              label={status.mode === 'SHADOW' ? 'Would prevent (watching)' : 'Pages prevented'}
               value={count(
                 status.mode === 'SHADOW' ? status.shadowWouldAvoid : status.pagesAvoided
               )}

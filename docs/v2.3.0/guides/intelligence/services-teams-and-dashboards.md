@@ -29,14 +29,14 @@ has nothing to say, so a quiet service or team looks exactly as it did before.
 
 ## Who sees what
 
-| Surface                                 | Who sees it                                                             |
-| --------------------------------------- | ----------------------------------------------------------------------- |
-| Service **Intelligence** tab            | Administrators, responders and auditors                                 |
-| Approve or reject a suggested link      | Administrators                                                          |
-| Badges on the service list              | Anyone who can see suggestions, for the services they can open          |
-| Team tiles                              | Administrators, responders and auditors                                 |
-| **AIOps pulse** on the home dashboard   | Administrators, responders and auditors; quarantined work is admin only |
-| **Largest open group** on the wallboard | Administrators, responders and auditors                                 |
+| Surface                                      | Who sees it                                                             |
+| -------------------------------------------- | ----------------------------------------------------------------------- |
+| Service **Intelligence** tab                 | Administrators, responders and auditors                                 |
+| Approve or reject a suggested link           | Administrators                                                          |
+| Badges on the service list                   | Anyone who can see suggestions, for the services they can open          |
+| Team tiles                                   | Administrators, responders and auditors                                 |
+| **Intelligence pulse** on the home dashboard | Administrators, responders and auditors; quarantined work is admin only |
+| **Largest open group** on the wallboard      | Administrators, responders and auditors                                 |
 
 A responder or auditor does not get the Intelligence tab on a service where both Intelligence and noise
 controls are off. An administrator still gets it, with links to turn them on.
@@ -65,12 +65,12 @@ appear. Sections without data are left out; if none has data the tab says "Nothi
 - **Alert quality**: the service's noise score over the last 30 days, with the share of incidents
   resolved within five minutes, never acknowledged, or opened as suppressed by the flapping detector. It
   appears once the service has at least five incidents in that period. For a flagged or flapping
-  service, administrators get the same fixes as on the AIOps overview: **Create suppression rule**,
+  service, administrators get the same fixes as on the Intelligence overview: **Create suppression rule**,
   **Lower severity**, and **Open Jira issue** when Jira is connected.
 - **Recent changes**: the latest eight changes in the last 14 days, each linking to the change, with its
   risk band (**High**, **Medium** or **Low** risk and the score). Risk ranks changes; it is not a verdict.
 - **Noise controls**: the mode that applies to this service (**On**, **Shadow** or **Off**, and whether
-  it is set for the service or inherited), pages avoided and alerts against incidents over the last seven
+  it is set for the service or inherited), pages prevented and alerts against incidents over the last seven
   days, maintenance windows active right now for the service, its team or all services, and heartbeat
   monitors that are missing. Label-based maintenance windows match individual alerts and are not listed.
 - **Recurring problems**: incident shapes that came back at least three times on two or more days in
@@ -100,21 +100,21 @@ A team's overview shows up to two tiles:
   tokens. When the team has a daily budget, the tile shows how much of it is used and says when it is
   close to (80%) or at the limit. Administrators get a link to **Spend and budgets**.
 - **Noise load**: alerts received against incidents created for the team's services over the last seven
-  days, the alerts-per-incident ratio, and pages avoided by noise controls (or what shadow mode would
+  days, the alerts-per-incident ratio, and pages prevented by noise controls (or what shadow mode would
   have avoided).
 
 A tile is left out when there is nothing to report: no AI usage and no budget, or no alerts and no
 incidents.
 
-## AIOps pulse on the home dashboard
+## Intelligence pulse on the home dashboard
 
-The **Ops Pulse** panel ends with an **AIOps pulse** row when at least one of these is above zero:
+The **Ops Pulse** panel ends with an **Intelligence pulse** row when at least one of these is above zero:
 
-- **Pages avoided** in the last 24 hours by noise controls in **On** mode (reversed decisions excluded).
+- **Pages prevented** in the last 24 hours by noise controls in **On** mode (reversed decisions excluded).
 - **Open groups**: open or acknowledged incidents that have other incidents grouped under them.
 - **Triage to review**: triage suggestions (urgency, owner, duplicate) from the last seven days on open
   incidents that nobody has accepted or dismissed yet.
-- **Quarantined work** (administrators only): intelligence work that failed repeatedly and waits for an
+- **Stuck jobs** (administrators only): intelligence work that failed repeatedly and waits for an
   operator.
 
 Zero values are not listed, and the row disappears when all are zero. Select it to open the AIOps
@@ -128,7 +128,7 @@ open. Like the noise tile, it is read when the wallboard loads.
 
 ## Related
 
-- [Read the AIOps overview](./aiops-overview.md)
+- [Read the Intelligence overview](./aiops-overview.md)
 - [Intelligence on incidents and lists](./incidents-and-lists.md)
 - [Noise controls](../../operate/intelligence/noise-controls.md)
 - [AI cost and budgets](../../operate/intelligence/ai-cost.md)

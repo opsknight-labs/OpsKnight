@@ -64,9 +64,19 @@ export default function IncidentAiSummary({
       </div>
       <div aria-live="polite" aria-busy={pending}>
         {state.status === 'error' && (
-          <p role="alert" className="text-sm text-destructive">
-            {state.message}
-          </p>
+          <div role="alert" className="flex flex-wrap items-center gap-3">
+            <p className="text-sm text-destructive">{state.message}</p>
+            {state.retryable && (
+              <button
+                type="button"
+                onClick={generate}
+                disabled={pending}
+                className="min-h-11 rounded-md border border-border px-3 text-xs font-medium hover:bg-accent disabled:opacity-50 sm:min-h-9"
+              >
+                Try again
+              </button>
+            )}
+          </div>
         )}
         {state.status === 'ok' && (
           <div className="space-y-3">

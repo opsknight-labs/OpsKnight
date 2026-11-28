@@ -3,17 +3,7 @@
 import { useActionState, useRef, type ReactNode } from 'react';
 import type { NoiseActionState } from '@/app/(app)/settings/intelligence/noise-controls/actions';
 import { Button } from '@/components/ui/shadcn/button';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/shadcn/alert-dialog';
+import ConfirmButton from '@/components/ui/ConfirmButton';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 import type { SimulationOutcome } from '@/lib/intelligence/noise-controls/simulation';
@@ -86,44 +76,32 @@ export function RowAction({
 }) {
   const [state, formAction, pending] = useActionState(action, initialActionState);
   const formRef = useRef<HTMLFormElement>(null);
-  const button = (
-    <Button
-      type={confirm ? 'button' : 'submit'}
-      size="sm"
-      variant={variant}
-      disabled={pending}
-      aria-label={accessibleLabel}
-      className={touchButton}
-    >
-      {label}
-    </Button>
-  );
+  const buttonProps = {
+    size: 'sm' as const,
+    variant,
+    disabled: pending,
+    'aria-label': accessibleLabel,
+    className: touchButton,
+  };
   return (
     <form ref={formRef} action={formAction} className="inline-flex items-center gap-2">
       {Object.entries(fields).map(([name, value]) => (
         <input key={name} type="hidden" name={name} value={value} />
       ))}
       {confirm ? (
-        <AlertDialog>
-          <AlertDialogTrigger asChild>{button}</AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>{confirm.title}</AlertDialogTitle>
-              <AlertDialogDescription>{confirm.description}</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel className={touchButton}>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                className={touchButton}
-                onClick={() => formRef.current?.requestSubmit()}
-              >
-                {confirm.confirmLabel ?? label}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <ConfirmButton
+          {...buttonProps}
+          title={confirm.title}
+          description={confirm.description}
+          confirmLabel={confirm.confirmLabel ?? label}
+          onConfirm={() => formRef.current?.requestSubmit()}
+        >
+          {label}
+        </ConfirmButton>
       ) : (
-        button
+        <Button type="submit" {...buttonProps}>
+          {label}
+        </Button>
       )}
       {state.message && !state.ok && (
         <span role="alert" className="text-xs text-destructive">

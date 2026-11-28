@@ -7,7 +7,11 @@ import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { revokeFeedback, submitFeedback } from '@/lib/intelligence/feedback/service';
 import { decideRelationship, linkIncidents } from '@/lib/intelligence/correlation/commands';
 import { summarizeIncident } from '@/lib/intelligence/drafts/service';
-import { DRAFT_FAILURE_MESSAGES, type IncidentSummary } from '@/lib/intelligence/drafts/schemas';
+import {
+  DRAFT_FAILURE_MESSAGES,
+  RETRYABLE_DRAFT_FAILURES,
+  type IncidentSummary,
+} from '@/lib/intelligence/drafts/schemas';
 import { formatSummaryAsNote } from '@/lib/intelligence/incident-ux/summary-note';
 
 export type SimilarFeedbackState = {
@@ -124,7 +128,7 @@ export type IncidentSummaryState =
       promptVersion: number;
       degraded?: boolean;
     }
-  | { status: 'error'; message: string };
+  | { status: 'error'; message: string; /** A second try can fix it. */ retryable?: boolean };
 
 /** Generates a read-only summary for the person who asked. Nothing is stored. */
 export async function summarizeIncidentAction(incidentId: string): Promise<IncidentSummaryState> {
@@ -139,12 +143,16 @@ export async function summarizeIncidentAction(incidentId: string): Promise<Incid
           promptVersion: result.promptVersion,
           ...(result.degraded ? { degraded: true } : {}),
         }
-      : { status: 'error', message: DRAFT_FAILURE_MESSAGES[result.reason] };
+      : {
+          status: 'error',
+          message: DRAFT_FAILURE_MESSAGES[result.reason],
+          retryable: RETRYABLE_DRAFT_FAILURES.has(result.reason),
+        };
   } catch (error) {
     logger.warn('[Intelligence] Incident summary failed', {
       error: error instanceof Error ? error.name : 'error',
     });
-    return { status: 'error', message: DRAFT_FAILURE_MESSAGES.UNAVAILABLE };
+    return { status: 'error', message: DRAFT_FAILURE_MESSAGES.UNAVAILABLE, retryable: true };
   }
 }
 

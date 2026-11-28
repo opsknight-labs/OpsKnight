@@ -126,19 +126,19 @@ describe('AiopsPulseTile', () => {
 
   it('lists only non-zero numbers and links to the overview', () => {
     render(<AiopsPulseTile pulse={pulse} />);
-    const link = screen.getByRole('link', { name: /AIOps pulse/ });
+    const link = screen.getByRole('link', { name: /Intelligence pulse/ });
     expect(link).toHaveAttribute('href', '/intelligence');
-    expect(within(link).getByText('Pages avoided · 24 h')).toBeInTheDocument();
+    expect(within(link).getByText('Pages prevented · 24 h')).toBeInTheDocument();
     expect(within(link).getByText('999+')).toBeInTheDocument();
     expect(within(link).getByText('Open groups')).toBeInTheDocument();
     expect(within(link).queryByText('Triage to review')).not.toBeInTheDocument();
-    expect(within(link).queryByText('Quarantined work')).not.toBeInTheDocument();
+    expect(within(link).queryByText('Stuck jobs')).not.toBeInTheDocument();
   });
 
   it('shows quarantined work when the server sent it', () => {
     render(<AiopsPulseTile pulse={{ ...pulse, triageAwaitingReview: 4, quarantinedWork: 3 }} />);
     expect(screen.getByText('Triage to review')).toBeInTheDocument();
-    expect(screen.getByText('Quarantined work')).toBeInTheDocument();
+    expect(screen.getByText('Stuck jobs')).toBeInTheDocument();
   });
 });
 

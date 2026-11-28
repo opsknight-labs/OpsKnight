@@ -69,7 +69,9 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
   return (
     <div className="min-w-0">
       <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-      <dd className="wrap-break-word text-xl font-semibold tabular-nums text-foreground">{value}</dd>
+      <dd className="wrap-break-word text-xl font-semibold tabular-nums text-foreground">
+        {value}
+      </dd>
       {hint && <dd className="text-xs text-muted-foreground">{hint}</dd>}
     </div>
   );
@@ -134,7 +136,7 @@ function NoiseLoad({ tile }: { tile: TeamNoiseLoadTile }) {
       title="Noise load"
       period={`last ${tile.days} days`}
       href="/intelligence#overview-noise"
-      linkLabel="AIOps overview"
+      linkLabel="Intelligence overview"
     >
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
         <Stat
@@ -149,7 +151,7 @@ function NoiseLoad({ tile }: { tile: TeamNoiseLoadTile }) {
         />
         {(tile.pagesAvoided > 0 || tile.shadowWouldAvoid > 0) && (
           <Stat
-            label={tile.pagesAvoided > 0 ? 'Pages avoided' : 'Would avoid (shadow)'}
+            label={tile.pagesAvoided > 0 ? 'Pages prevented' : 'Would prevent (watching)'}
             value={formatCount(tile.pagesAvoided > 0 ? tile.pagesAvoided : tile.shadowWouldAvoid)}
             hint={
               tile.pagesAvoided > 0 && tile.shadowWouldAvoid > 0
