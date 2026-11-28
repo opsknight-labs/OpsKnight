@@ -35,3 +35,33 @@ describe('validateCustomFieldValue length limit', () => {
     expect(validateCustomFieldValue(field('URL'), url).valid).toBe(false);
   });
 });
+
+describe('validateCustomFieldValue EMAIL', () => {
+  it.each(['a@b.co', 'first.last+tag@sub.example.org', 'X@Y.Z'])('accepts %s', value => {
+    expect(validateCustomFieldValue(field('EMAIL'), value).valid).toBe(true);
+  });
+
+  it.each([
+    'plain',
+    'no-at.example.com',
+    '@example.com',
+    'a@@b.co',
+    'a@b',
+    'a@b.',
+    'a@.co',
+    'a.b@c',
+    'a b@c.co',
+  ])('rejects %s', value => {
+    expect(validateCustomFieldValue(field('EMAIL'), value).valid).toBe(false);
+  });
+
+  it('lower-cases a valid address and refuses a pathological one quickly', () => {
+    expect(validateCustomFieldValue(field('EMAIL'), 'Ada@Example.COM').normalizedValue).toBe(
+      'ada@example.com'
+    );
+    const started = Date.now();
+    const hostile = `${'!@!.'.repeat(400)}!`;
+    expect(validateCustomFieldValue(field('EMAIL'), hostile).valid).toBe(false);
+    expect(Date.now() - started).toBeLessThan(200);
+  });
+});
