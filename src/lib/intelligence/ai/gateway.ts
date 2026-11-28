@@ -403,9 +403,13 @@ export const toMessages = (
  * the history's markers at most four are live per request, Anthropic's limit.
  */
 export function withRollingCacheBreakpoint(
-  messages: ModelMessage[],
-  kind: GatewayProvider['kind']
+  initialMessages: ModelMessage[],
+  kind: GatewayProvider['kind'],
+  responseMessages: ModelMessage[] = []
 ): ModelMessage[] {
+  const messages = responseMessages.length
+    ? [...initialMessages, ...responseMessages]
+    : initialMessages;
   // eslint-disable-next-line security/detect-object-injection -- kind is a member of the closed provider-kind union
   const hint = CACHE_HINTS[kind];
   const last = messages.at(-1);
@@ -732,8 +736,18 @@ class GatewayPort implements LanguageModelPort {
   /** Per-step options for a tool loop: the rolling cache breakpoint. */
   private stepper(provider: GatewayProvider, request: AiGenerateRequest, loop: LoopState) {
     const last = clampSteps(request.maxSteps) - 1;
-    return ({ messages, stepNumber }: { messages: ModelMessage[]; stepNumber: number }) => ({
-      messages: withRollingCacheBreakpoint(messages, provider.kind),
+    return ({
+      initialMessages,
+      responseMessages,
+      stepNumber,
+    }: {
+      initialMessages: ModelMessage[];
+      responseMessages: ModelMessage[];
+      stepNumber: number;
+    }) => ({
+      // SDK 7 carries message overrides forward. Rebuild the transcript so the previous
+      // step's temporary marker never accumulates alongside the stable prefix markers.
+      messages: withRollingCacheBreakpoint(initialMessages, provider.kind, responseMessages),
       // The last allowed step (or the one the budget leaves) must answer from what was read: a tool loop never
       // ends without a word.
       ...((last > 0 && stepNumber >= last) || loop.budgetLimited
