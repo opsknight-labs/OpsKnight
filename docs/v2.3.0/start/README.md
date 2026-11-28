@@ -21,5 +21,6 @@ Use this path when evaluating or installing OpsKnight for the first time.
 4. [Configure on-call](./configure-on-call)
 5. [Receive your first alert](./receive-first-alert)
 6. [Respond to your first incident](./respond-first-incident)
-7. [Plan a production installation](./production-install)
-8. [Migrate from a 1.x release](./migrate-from-v1)
+7. [Set up Intelligence in three minutes](./intelligence-in-3-minutes)
+8. [Plan a production installation](./production-install)
+9. [Migrate from a 1.x release](./migrate-from-v1)

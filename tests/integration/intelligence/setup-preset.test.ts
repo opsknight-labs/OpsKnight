@@ -6,7 +6,9 @@ import {
   getIntelligenceSettings,
   resolveEffectivePolicy,
 } from '@/lib/intelligence/settings/service';
+import { listAiProviders } from '@/lib/intelligence/ai/settings';
 import {
+  addAiModel,
   applyRecommendedPreset,
   getSetupState,
   switchOnSuggestions,
@@ -182,5 +184,44 @@ describe('Switch on', () => {
       code: 'PRECONDITION_FAILED',
     });
     expect((await resolveEffectivePolicy(null)).mode).toBe('SHADOW');
+  });
+});
+
+describe('Add an AI model', () => {
+  it('stores one provider, switches AI on, reports the AI row honestly and updates on a retry', async () => {
+    const actor = await setup();
+    await applyRecommendedPreset(setupRevisions(await getSetupState()), actor);
+    const before = await getSetupState();
+    // Squire is on by default, but nothing can answer with a model yet.
+    expect(before.squireEnabled).toBe(true);
+    expect(before.aiConfigured).toBe(false);
+
+    const id = await addAiModel(
+      { kind: 'ANTHROPIC', apiKey: 'sk-ant-test-key-1234567890', incidentText: true },
+      actor
+    );
+    const after = await getSetupState();
+    expect(after.aiConfigured).toBe(true);
+    expect(setupChecklist(after).find(item => item.id === 'assistant')!.on).toBe(true);
+    const [provider] = await listAiProviders();
+    expect(provider).toMatchObject({
+      id,
+      kind: 'ANTHROPIC',
+      enabled: true,
+      isExternal: true,
+      maxDataClass: 'PERSONAL',
+      hasApiKey: true,
+    });
+    expect(JSON.stringify(provider)).not.toContain('sk-ant-test-key');
+
+    // A second try (a wrong key fixed, a different choice about incident text) updates the same provider.
+    const again = await addAiModel(
+      { kind: 'ANTHROPIC', apiKey: 'sk-ant-test-key-abcdefghij', incidentText: false },
+      actor
+    );
+    expect(again).toBe(id);
+    const providers = await listAiProviders();
+    expect(providers).toHaveLength(1);
+    expect(providers[0]!.maxDataClass).toBe('INTERNAL');
   });
 });

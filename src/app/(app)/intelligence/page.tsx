@@ -94,8 +94,10 @@ export default async function IntelligenceOverviewPage({
         <FeatureOff
           variant="banner"
           title="Intelligence is off"
-          adminHint="Turn it on to find similar and related incidents, possible causes, runbooks and triage suggestions. Noise controls and response metrics below work either way."
-          href="/settings/intelligence"
+          adminHint="Turn it on to find similar and related incidents, possible causes, runbooks and triage suggestions. It starts by only watching: nothing changes for your team until you decide. Noise controls and response metrics below work either way."
+          href="/settings/intelligence/setup"
+          actionLabel="Get started"
+
           canManage={canManage}
           icon={<Brain aria-hidden="true" />}
         />

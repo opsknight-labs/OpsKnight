@@ -181,6 +181,8 @@ describe('links into intelligence settings', () => {
         path === `${INTELLIGENCE_SETTINGS_ROOT}/ai/docs`
       )
         continue;
+      // The guided start is a page of its own, not a sixth group: it is where a first-time admin begins.
+      else if (path === `${INTELLIGENCE_SETTINGS_ROOT}/setup`) continue;
       else if (!groupPaths.has(path)) problems.push(`${file}: ${link} is not a settings page`);
       else if (
         fragment &&

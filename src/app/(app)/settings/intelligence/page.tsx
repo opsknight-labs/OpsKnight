@@ -32,7 +32,7 @@ import {
   resolveEffectivePolicy,
 } from '@/lib/intelligence/settings/service';
 import { getSetupState } from '@/lib/intelligence/settings/setup';
-import { setupChecklist } from '@/lib/intelligence/settings/setup-contract';
+import { assessNoiseReadiness } from '@/lib/intelligence/noise-controls/manage';
 import { detectCapabilities } from '@/lib/intelligence/similarity/capabilities';
 import { getOpsKnightProcessRole } from '@/lib/runtime-role';
 import { requirePageAccess } from '@/lib/access/server';
@@ -87,22 +87,33 @@ export default async function IntelligenceSettingsPage() {
   const user = await assertCapability(CAPABILITIES.INTELLIGENCE_READ);
   const canManage = hasCapability(user.role as AppRole, CAPABILITIES.INTELLIGENCE_MANAGE);
 
-  const [settings, policy, versions, backlog, capabilities, criticalLagMs, deadLetters, setup] =
-    await Promise.all([
-      getIntelligenceSettings(),
-      safely('policy', () => resolveEffectivePolicy(null)),
-      safely('policy history', () => listPolicyVersions({}, { limit: 10 })),
-      safely('queue backlog', () => getWorkBacklog()),
-      safely('capabilities', () => detectCapabilities()),
-      safely('paging lag', () => getCriticalBacklogLagMs()),
-      safely('dead letters', () => listDeadLetters({ limit: 10 })),
-      safely('setup checklist', () => getSetupState()),
-    ]);
+  const [
+    settings,
+    policy,
+    versions,
+    backlog,
+    capabilities,
+    criticalLagMs,
+    deadLetters,
+    setup,
+    readiness,
+  ] = await Promise.all([
+    getIntelligenceSettings(),
+    safely('policy', () => resolveEffectivePolicy(null)),
+    safely('policy history', () => listPolicyVersions({}, { limit: 10 })),
+    safely('queue backlog', () => getWorkBacklog()),
+    safely('capabilities', () => detectCapabilities()),
+    safely('paging lag', () => getCriticalBacklogLagMs()),
+    safely('dead letters', () => listDeadLetters({ limit: 10 })),
+    safely('setup status', () => getSetupState()),
+    safely('watching evidence', () => assessNoiseReadiness(null)),
+  ]);
 
   const headVersion = versions?.headVersion ?? 0;
   const hasFailedWork = Boolean(deadLetters && deadLetters.length > 0);
   const triageEnabled = policy?.definition.triage.enabled ?? false;
-  const showSetup = Boolean(setup && setupChecklist(setup).some(item => !item.on));
+  // The status stays for everyone, finished or not: it says where Intelligence is and what to do next.
+  const showSetup = Boolean(setup);
 
   const sharedProcess =
     ['integrated', 'worker', 'general-worker'].includes(getOpsKnightProcessRole()) &&
@@ -151,7 +162,9 @@ export default async function IntelligenceSettingsPage() {
         Suggestions from your incident history, kept off the paging path.
       </IntelligenceGroupHeader>
 
-      {setup && <IntelligenceSetupChecklist state={setup} canManage={canManage} />}
+      {setup && (
+        <IntelligenceSetupChecklist state={setup} canManage={canManage} readiness={readiness} />
+      )}
 
       <SettingsSection
         id="lane-health"
@@ -380,7 +393,9 @@ export default async function IntelligenceSettingsPage() {
                       </span>
                     )}
                   </div>
-                  <p className="wrap-break-word text-xs text-muted-foreground">{item.failureSummary}</p>
+                  <p className="wrap-break-word text-xs text-muted-foreground">
+                    {item.failureSummary}
+                  </p>
                 </div>
                 {canManage && <ReplayForm id={item.id} />}
               </li>
