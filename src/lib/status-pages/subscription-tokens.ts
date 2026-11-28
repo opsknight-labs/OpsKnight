@@ -1,5 +1,6 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, createHmac, randomBytes } from 'node:crypto';
 import prisma from '@/lib/prisma';
+import { getEncryptionKey } from '@/lib/encryption';
 
 export function hashSubscriptionToken(token: string) {
   return `sha256:${createHash('sha256').update(token).digest('hex')}`;
@@ -16,9 +17,21 @@ export async function issueUnsubscribeToken(subscriptionId: string) {
   return token;
 }
 
-export async function issueUnsubscribeTokensBatch(subscriptionIds: readonly string[]) {
+/**
+ * With a `scope` (the fan-out's event), a subscriber's token is derived from it, so a retried
+ * fan-out issues the same link and adds no row. Without one, or without a server key, it is random.
+ */
+export async function issueUnsubscribeTokensBatch(
+  subscriptionIds: readonly string[],
+  scope?: string
+) {
+  const key = scope ? getEncryptionKey() : null;
   const issued = subscriptionIds.map(subscriptionId => {
-    const token = randomBytes(32).toString('hex');
+    const token = key
+      ? createHmac('sha256', key)
+          .update(`opsknight:status-unsubscribe:v1:${subscriptionId}:${scope}`)
+          .digest('hex')
+      : randomBytes(32).toString('hex');
     return { subscriptionId, token, tokenHash: hashSubscriptionToken(token) };
   });
   if (issued.length > 0) {

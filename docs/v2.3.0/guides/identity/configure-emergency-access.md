@@ -249,6 +249,9 @@ For rotation or a method change, use the identity's control in Emergency Access 
 confirm that its existing sessions and readiness will be revoked. Switching to hardware
 requires new enrollment and a drill; switching to password displays a newly generated
 secret once and requires a new password drill. Both preserve the emergency identity ID.
+An emergency identity cannot switch itself to hardware: the switch revokes its keys and its
+session, leaving it no key to sign in with. Sign in as an administrator or as another
+recovery identity to make that switch, then enroll the key.
 Under SSO Required, first establish two ready alternatives before voluntarily removing
 a ready identity's credential. If actually compromised, explicitly confirm compromise;
 the old credential/session is revoked immediately, the policy remains enforced and a

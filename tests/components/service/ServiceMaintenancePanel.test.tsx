@@ -194,6 +194,24 @@ describe('ServiceMaintenancePanel', () => {
     expect(input.endsAt.toISOString()).toBe('2030-01-15T11:00:00.000Z');
   });
 
+  it('sends only a duration for Start now so the server clock sets the start', async () => {
+    renderPanel();
+    fireEvent.click(screen.getByRole('button', { name: 'Schedule maintenance' }));
+    await screen.findByText('Schedule maintenance', { selector: 'h2' });
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Reboot' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Start maintenance' }));
+    });
+
+    await waitFor(() => expect(actions.createMaintenanceWindowAction).toHaveBeenCalledTimes(1));
+    const [, input] = actions.createMaintenanceWindowAction.mock.calls[0] as unknown as [
+      string,
+      { startsAt?: Date; startNowForMinutes?: number },
+    ];
+    expect(input.startsAt).toBeUndefined();
+    expect(input.startNowForMinutes).toBe(60);
+  });
+
   it('names only visible services and counts the hidden ones', () => {
     renderPanel({
       windows: [{ ...activeWindow, hiddenServiceCount: 2 }],

@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { assertAdmin } from '@/lib/rbac';
+import { logAudit } from '@/lib/audit';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { isStatusPageSlug } from '@/lib/validation';
 import {
@@ -32,15 +33,28 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await assertAdmin();
+    const admin = await assertAdmin();
     const parsed = CreatePageSchema.safeParse(await req.json());
     if (!parsed.success)
       return jsonError('Invalid status page.', 400, { issues: parsed.error.issues });
-    const page = await createStatusPage({
-      name: parsed.data.name,
-      slug: parsed.data.slug,
-      makeDefault: parsed.data.isDefault,
-    });
+    const page = await createStatusPage(
+      {
+        name: parsed.data.name,
+        slug: parsed.data.slug,
+        makeDefault: parsed.data.isDefault,
+      },
+      (tx, created) =>
+        logAudit(
+          {
+            action: 'status_page.created',
+            entityType: 'STATUS_PAGE',
+            entityId: created.id,
+            actorId: admin.id,
+            details: { name: created.name, slug: created.slug, isDefault: created.isDefault },
+          },
+          tx
+        )
+    );
     return jsonOk({ page }, 201);
   } catch (error) {
     if (error instanceof StatusPageAdminError && error.code === 'STATUS_PAGE_LIMIT_REACHED') {

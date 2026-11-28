@@ -107,6 +107,12 @@ allowance. Pending-work samples can be truncated lower bounds. Overlapping
 route/priority/suppression/error counters must not be added as independent events.
 
 Let workers drain a backlog above policy; acknowledgement does not bypass it.
+The block says how many observations are pending or running ("at least", because
+the count stops once it passes the limit), what the policy allows, and where to
+change it: **Settings → System → Automation → Shadow readiness → Maximum pending
+observations**. The default is 0, so a service that keeps receiving incidents can
+stay blocked until it quiets down; raise the limit there if you accept activating
+with some observations still queued.
 Repair an invalid global policy. If the expected active/candidate ID or policy
 revision changed, reload and review again. Review material differences before
 acknowledging them. Discard an incorrect candidate to leave active routing alone.

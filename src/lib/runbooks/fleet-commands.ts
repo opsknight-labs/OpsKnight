@@ -1,6 +1,6 @@
 import 'server-only';
 import { AppError } from '@/lib/errors';
-import { synchronizeAgentLabelMemberships, lockFleetConfiguration } from './pool-labels';
+import { lockFleetConfiguration } from './pool-labels';
 import {
   runRunbookCommand,
   logRunbookCommandAudit,
@@ -31,7 +31,9 @@ export async function revokeRunbookAgent(
       },
     });
     if (changed.count) {
-      await synchronizeAgentLabelMemberships(tx, id);
+      // Explicit memberships too: a revoked host still counted toward its LOCAL_HOSTS pool's size,
+      // so the surviving host was never eligible to claim writes.
+      await tx.runbookAgentPoolMember.deleteMany({ where: { agentId: id } });
       await logRunbookCommandAudit(
         actor,
         {

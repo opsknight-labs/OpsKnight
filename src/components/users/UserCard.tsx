@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { Skeleton } from '@/components/ui/shadcn/skeleton';
 import { errorFromResponse } from '@/lib/client-error';
+import type { RotationImpact } from '@/lib/schedules/rotation-change-preview';
 import { toUserFacingError } from '@/lib/user-facing-error';
 import {
   DropdownMenu,
@@ -92,6 +93,8 @@ type UserCardProps = {
   teams: Team[];
   onActivate?: () => void;
   onDeactivate?: () => void;
+  /** Who would be on call instead, shown in the deactivate dialog. */
+  onPreviewRotationImpact?: () => Promise<RotationImpact>;
   onDelete?: () => void;
   onGetDependencies?: () => Promise<{ report?: UserDependencyReport; error?: string }>;
   onGenerateInvite?: () => void;
@@ -152,6 +155,7 @@ export function UserActionsMenu({
   teams,
   onActivate,
   onDeactivate,
+  onPreviewRotationImpact,
   onDelete,
   onGetDependencies,
   onUpdateRole,
@@ -160,6 +164,7 @@ export function UserActionsMenu({
 }: UserActionsMenuProps) {
   const router = useRouter();
   const [showDeactivateDialog, setShowDeactivateDialog] = useState(false);
+  const [rotationImpact, setRotationImpact] = useState<RotationImpact | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [dependencyReport, setDependencyReport] = useState<UserDependencyReport | null>(null);
   const [dependencyError, setDependencyError] = useState<string | null>(null);
@@ -210,6 +215,19 @@ export function UserActionsMenu({
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2000);
     }
+  };
+
+  const openDeactivateDialog = () => {
+    setRotationImpact(null);
+    setShowDeactivateDialog(true);
+    void onPreviewRotationImpact?.()
+      .then(setRotationImpact)
+      .catch(() =>
+        setRotationImpact({
+          changed: true,
+          message: 'The change to the on-call schedules could not be previewed.',
+        })
+      );
   };
 
   const handleDeactivate = () => {
@@ -325,7 +343,7 @@ export function UserActionsMenu({
           )}
 
           {user.status === 'ACTIVE' && onDeactivate && (
-            <DropdownMenuItem variant="destructive" onClick={() => setShowDeactivateDialog(true)}>
+            <DropdownMenuItem variant="destructive" onClick={openDeactivateDialog}>
               <UserX />
               <span>Deactivate User</span>
             </DropdownMenuItem>
@@ -353,6 +371,9 @@ export function UserActionsMenu({
             <AlertDialogDescription>
               Are you sure you want to deactivate <strong>{user.name}</strong>? They will lose
               access to the system but their data will be preserved.
+              {rotationImpact?.changed && (
+                <span className="mt-3 block whitespace-pre-line">{rotationImpact.message}</span>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

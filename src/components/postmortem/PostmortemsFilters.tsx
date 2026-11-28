@@ -16,6 +16,8 @@ import { Download } from 'lucide-react';
 
 export type PostmortemsFiltersProps = {
   currentStatus?: string;
+  /** Draft and archived postmortems are offered only to people allowed to read them. */
+  canViewDrafts?: boolean;
   currentSearch?: string;
   currentServiceId?: string;
   services: Array<{ id: string; name: string }>;
@@ -35,6 +37,7 @@ export type PostmortemsFiltersProps = {
 
 export default function PostmortemsFilters({
   currentStatus = 'ALL',
+  canViewDrafts = true,
   currentSearch = '',
   currentServiceId = 'ALL',
   services = [],
@@ -108,8 +111,8 @@ export default function PostmortemsFilters({
             <SelectContent>
               <SelectItem value="ALL">All Statuses</SelectItem>
               <SelectItem value="PUBLISHED">Published</SelectItem>
-              <SelectItem value="DRAFT">Drafts</SelectItem>
-              <SelectItem value="ARCHIVED">Archived</SelectItem>
+              {canViewDrafts && <SelectItem value="DRAFT">Drafts</SelectItem>}
+              {canViewDrafts && <SelectItem value="ARCHIVED">Archived</SelectItem>}
             </SelectContent>
           </Select>
 

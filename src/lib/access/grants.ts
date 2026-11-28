@@ -234,16 +234,18 @@ export async function activateBreakGlass(input: {
     });
     if (!incident) throw new AppError({ code: 'INCIDENT_NOT_FOUND' });
   }
-  const recent = await prisma.accessGrant.count({
-    where: { userId: input.userId, source: 'BREAK_GLASS', createdAt: { gte: since } },
-  });
-  if (recent >= MAX_BREAK_GLASS_PER_DAY) {
-    throw new AppError({
-      code: 'ACCESS_REQUEST_LIMITED',
-      userMessage: 'You have used emergency access too often today. Ask an administrator.',
-    });
-  }
   const grant = await prisma.$transaction(async tx => {
+    // Lock the user row so parallel activations count and create one at a time.
+    await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${input.userId} FOR UPDATE`;
+    const recent = await tx.accessGrant.count({
+      where: { userId: input.userId, source: 'BREAK_GLASS', createdAt: { gte: since } },
+    });
+    if (recent >= MAX_BREAK_GLASS_PER_DAY) {
+      throw new AppError({
+        code: 'ACCESS_REQUEST_LIMITED',
+        userMessage: 'You have used emergency access too often today. Ask an administrator.',
+      });
+    }
     const created = await createRoleGrant(tx, {
       userId: input.userId,
       role: 'RESPONDER',
@@ -276,7 +278,8 @@ export async function activateBreakGlass(input: {
 
 /**
  * Reverts side effects of grants that expired or were revoked, then notifies the holder.
- * Enforcement never depends on this sweep: every check compares `expiresAt` at request time.
+ * Role and capability grants never depend on this sweep: every check compares `expiresAt` at request
+ * time. Team grants do, because they are real TeamMember rows that only this sweep removes.
  */
 export async function processEndedAccessGrants(now: Date = new Date(), onlyGrantId?: string) {
   const ended = await prisma.accessGrant.findMany({

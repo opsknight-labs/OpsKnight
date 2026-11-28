@@ -32,6 +32,7 @@ import {
   sessionDisplaySuffix,
   touchSessionActivity,
   cleanupExpiredSessions,
+  SESSION_CLEANUP_BATCH,
 } from '@/lib/session-registry';
 
 // ─── In-memory store shared across all mocked prisma calls ────────────────────
@@ -310,6 +311,15 @@ beforeEach(() => {
           if (notClause.platform?.startsWith && platform.startsWith(notClause.platform.startsWith))
             continue;
         }
+
+        // createdAt cutoff (stale-session cleanup)
+        if (
+          where.createdAt &&
+          typeof where.createdAt === 'object' &&
+          'lt' in (where.createdAt as object) &&
+          !((row.createdAt as Date) < (where.createdAt as { lt: Date }).lt)
+        )
+          continue;
 
         // Keyset pagination OR condition:
         if (where.OR && Array.isArray(where.OR)) {
@@ -786,6 +796,24 @@ describe('session-registry', () => {
       expect(presented).toBe('denied');
 
       dateSpy.mockRestore();
+    });
+
+    it('deletes stale sessions one bounded batch per call', async () => {
+      const userId = 'user-cleanup-batches';
+      const day = 24 * 60 * 60 * 1000;
+      for (let index = 0; index < SESSION_CLEANUP_BATCH + 5; index++) {
+        seedSession(userId, makeJti(`stale-${index}`), {
+          createdAt: new Date(Date.now() - 200 * day - index),
+        });
+      }
+
+      const first = await cleanupExpiredSessions(userId);
+      expect(first).toBe(SESSION_CLEANUP_BATCH);
+      expect(storeRows(userId)).toHaveLength(5);
+
+      const second = await cleanupExpiredSessions(userId);
+      expect(second).toBe(5);
+      expect(storeRows(userId)).toHaveLength(0);
     });
 
     it('safely deletes revoked tombstones once token expiry + 24h safety buffer has passed', async () => {

@@ -1,11 +1,13 @@
 import type { IncidentStatus, IncidentUrgency } from '@prisma/client';
-import type { IncidentListFilter } from './incidents-query';
+import type { IncidentListFilter, IncidentListSort } from './incidents-query';
 
 type IncidentListHrefOptions = {
   basePath?: '/incidents' | '/m/incidents';
   filter?: IncidentListFilter;
   status?: IncidentStatus;
   urgency?: IncidentUrgency;
+  priority?: string;
+  sort?: IncidentListSort;
   assignee?: string | 'unassigned';
   serviceId?: string;
   teamId?: string;
@@ -19,6 +21,8 @@ export function buildIncidentListHref({
   filter,
   status,
   urgency,
+  priority,
+  sort,
   assignee,
   serviceId,
   teamId,
@@ -30,6 +34,8 @@ export function buildIncidentListHref({
   if (filter && filter !== 'all') params.set('filter', filter);
   if (status) params.set('status', status);
   if (urgency) params.set('urgency', urgency);
+  if (priority && priority !== 'all') params.set('priority', priority);
+  if (sort && sort !== 'newest') params.set('sort', sort);
   if (assignee) params.set('assignee', assignee);
   if (serviceId) params.set('serviceId', serviceId);
   if (teamId) params.set('teamId', teamId);

@@ -99,11 +99,11 @@ type IncidentCommandBarProps = {
   canTakeCommand?: boolean;
   onTakeCommand?: () => Promise<unknown>;
   snoozedUntil: Date | null;
-  onAcknowledge: () => void;
-  onUnacknowledge: () => void;
-  onUnsnooze: () => void;
-  onSuppress: () => void;
-  onUnsuppress: () => void;
+  onAcknowledge: () => void | Promise<void>;
+  onUnacknowledge: () => void | Promise<void>;
+  onUnsnooze: () => void | Promise<void>;
+  onSuppress: () => void | Promise<void>;
+  onUnsuppress: () => void | Promise<void>;
   resolvingIncident: ResolvingIncidentData;
   postmortemHref: string;
   postmortemExists: boolean;
@@ -120,6 +120,18 @@ type IncidentCommandBarProps = {
   /** Null unless the viewer may publish and the incident has a status page to post on. */
   statusUpdate?: IncidentStatusUpdateView | null;
 };
+
+// Lifecycle server actions can reject (a transition conflict, access denied). Show the failure as a
+// toast: a throw from a form action or menu handler would replace the whole page with the error screen.
+function guarded(action: () => void | Promise<void>) {
+  return async () => {
+    try {
+      await action();
+    } catch (error) {
+      notify.error(error);
+    }
+  };
+}
 
 function formatResumeIn(snoozedUntil: Date | null): string | null {
   if (!snoozedUntil) return null;
@@ -267,7 +279,7 @@ export default function IncidentCommandBar({
       label: string;
       icon: React.ReactNode;
       isSnoozeTrigger?: boolean;
-      run?: () => void;
+      run?: () => void | Promise<void>;
     }> = [];
     if (!canManage) return items;
     if (isAcknowledged) {
@@ -275,7 +287,7 @@ export default function IncidentCommandBar({
         key: 'unacknowledge',
         label: 'Unacknowledge',
         icon: <X className="h-4 w-4" />,
-        run: onUnacknowledge,
+        run: guarded(onUnacknowledge),
       });
     }
     if (!isSnoozed && !isSuppressed) {
@@ -291,14 +303,14 @@ export default function IncidentCommandBar({
         key: 'unsuppress',
         label: 'Unsuppress',
         icon: <Volume2 className="h-4 w-4" />,
-        run: onUnsuppress,
+        run: guarded(onUnsuppress),
       });
     } else if (!isSnoozed) {
       items.push({
         key: 'suppress',
         label: 'Suppress',
         icon: <BellOff className="h-4 w-4" />,
-        run: onSuppress,
+        run: guarded(onSuppress),
       });
     }
     return items;
@@ -540,7 +552,7 @@ export default function IncidentCommandBar({
             ) : (
               <>
                 {showAcknowledge && (
-                  <form action={onAcknowledge}>
+                  <form action={guarded(onAcknowledge)}>
                     <Button
                       type="submit"
                       size="sm"
@@ -553,7 +565,7 @@ export default function IncidentCommandBar({
                   </form>
                 )}
                 {showUnsnooze && (
-                  <form action={onUnsnooze}>
+                  <form action={guarded(onUnsnooze)}>
                     <Button
                       type="submit"
                       variant="outline"
@@ -616,7 +628,7 @@ export default function IncidentCommandBar({
           ) : (
             <>
               {showAcknowledge && (
-                <form action={onAcknowledge} className="flex-1 min-w-0">
+                <form action={guarded(onAcknowledge)} className="flex-1 min-w-0">
                   <Button
                     type="submit"
                     className="w-full h-11 gap-2 bg-linear-to-r from-emerald-600 to-emerald-600 text-white text-sm font-semibold truncate"
@@ -715,7 +727,7 @@ export default function IncidentCommandBar({
               </Button>
             )}
             {showUnsnooze && (
-              <form action={onUnsnooze}>
+              <form action={guarded(onUnsnooze)}>
                 <Button
                   type="submit"
                   variant="outline"

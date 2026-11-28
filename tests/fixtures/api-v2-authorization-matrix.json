@@ -194,7 +194,7 @@
   "POST /dashboards/{id}/duplicate [reports:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
-    "AUDITOR": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "allow:global"
   },
   "GET /dashboards/{id}/export [reports:read]": {
@@ -212,13 +212,13 @@
   "PATCH /dashboards/{id} [reports:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
-    "AUDITOR": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "allow:global"
   },
   "DELETE /dashboards/{id} [reports:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
-    "AUDITOR": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "allow:global"
   },
   "GET /dashboards/{id}/widgets [reports:read]": {
@@ -230,7 +230,7 @@
   "PUT /dashboards/{id}/widgets [reports:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
-    "AUDITOR": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "allow:global"
   },
   "GET /dashboards [reports:read]": {
@@ -242,7 +242,7 @@
   "POST /dashboards [reports:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
-    "AUDITOR": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "allow:global"
   },
   "GET /dependency-graph/at [services:read]": {
@@ -992,13 +992,13 @@
   "PATCH /reports/saved/{id} [reports:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
-    "AUDITOR": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "allow:global"
   },
   "DELETE /reports/saved/{id} [reports:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
-    "AUDITOR": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "allow:global"
   },
   "GET /reports/saved [reports:read]": {
@@ -1010,7 +1010,7 @@
   "POST /reports/saved [reports:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
-    "AUDITOR": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "allow:global"
   },
   "POST /runbooks/{id}/archive [runbooks:write]": {
@@ -1495,7 +1495,7 @@
   },
   "DELETE /schedules/{id} [schedules:write]": {
     "ADMIN": "allow:global",
-    "RESPONDER": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
@@ -1992,6 +1992,12 @@
     "USER": "deny:MISSING_CAPABILITY"
   },
   "PUT /settings/service-reviews [services:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "POST /status-pages/{id}/announcements/{announcementId}/end [status-pages:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "deny:MISSING_CAPABILITY",
     "AUDITOR": "deny:MISSING_CAPABILITY",

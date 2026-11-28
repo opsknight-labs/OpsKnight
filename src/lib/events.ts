@@ -45,6 +45,8 @@ import {
 } from './event-outbox';
 import { applyIncidentLifecycleCommand } from './incidents/lifecycle';
 import { checkAlertFlapping } from './flapping';
+import { withSavepoint } from './db-savepoint';
+import { findStaleProviderEvent } from './incidents/provider-event-time';
 import { readPublishedIncidentPolicies } from './incident-policies/published';
 import { resolveNewIncidentSlaContract } from './incident-sla/contract';
 import { resolveIncidentClassification } from './incidents/classification';
@@ -287,6 +289,28 @@ async function applyEvent(
         dedupKey: dedup_key,
       });
       throw new Error(`Service not found: ${serviceId}. Integration may be misconfigured.`);
+    }
+
+    // A late retry or out-of-order delivery (provider time older than the last accepted event for
+    // this key) must not reopen or re-close an incident. Providers without a time are untouched.
+    if (event_action === 'trigger' || event_action === 'resolve') {
+      const stale = await findStaleProviderEvent(tx, {
+        serviceId,
+        dedupKeys: candidateDedupKeys,
+        integrationType: envelope.integrationType,
+        action: event_action,
+        details: eventData.custom_details,
+      });
+      if (stale) {
+        const reason = `Stale delivery: provider time ${new Date(stale.incomingMs).toISOString()} is older than the last accepted event (${new Date(stale.lastAcceptedMs).toISOString()}) for this alert`;
+        logger.info('event.stale_provider_delivery', {
+          dedupKey: dedup_key,
+          serviceId,
+          integrationId,
+          eventAction: event_action,
+        });
+        return { action: 'ignored', reason, dedupKey: dedup_key };
+      }
     }
 
     // 2. Find existing open incident with this dedup_key BEFORE creating alert
@@ -1135,7 +1159,10 @@ async function applyEvent(
         }
         if (!inMemoryRouting && service.escalationPolicyId) {
           try {
-            const snapshot = await captureResponderSnapshot(tx, service.escalationPolicyId);
+            // Optional: a failed snapshot read rolls back to the savepoint instead of aborting this transaction.
+            const snapshot = await withSavepoint(tx, 'opsknight_responder_snapshot', () =>
+              captureResponderSnapshot(tx, service.escalationPolicyId!)
+            );
             if (snapshot) {
               inMemoryRouting = {
                 type: 'DEFAULT_POLICY',

@@ -93,6 +93,13 @@ export default function RecoveryAccounts() {
       message:
         'Create and independently verify a third identity before routine rotation or removal. Confirm compromise only for an exposed credential.',
     },
+    operation?.kind === 'WEBAUTHN' &&
+      data.actor.kind === 'emergency' &&
+      data.actor.id === account?.id && {
+        code: 'self',
+        message:
+          'You are signed in as this identity. Switching it to a hardware key would leave you no way back in; ask an administrator or another recovery identity to do it.',
+      },
     operation?.kind === 'enroll' &&
       !keyName.trim() && {
         code: 'name',

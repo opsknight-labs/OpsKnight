@@ -20,6 +20,8 @@ export interface CreateServiceAccountInput {
   actorId: string;
   /** Join an existing transaction (e.g. the idempotency transaction). */
   tx?: Prisma.TransactionClient;
+  /** A signed-in administrator in the console. API keys (and MCP) must never set this. */
+  consoleSession?: boolean;
 }
 
 export interface IssueServiceAccountTokenInput {
@@ -30,6 +32,8 @@ export interface IssueServiceAccountTokenInput {
   /** Explicit administrative decision to issue a token that never expires. */
   neverExpires?: boolean;
   actorId: string;
+  /** A signed-in administrator in the console. API keys (and MCP) must never set this. */
+  consoleSession?: boolean;
 }
 
 /**
@@ -268,6 +272,15 @@ export async function createServiceAccount(input: CreateServiceAccountInput) {
     });
   }
 
+  // A leaked admin key must not be able to mint more administrator identities.
+  if (input.role === 'ADMIN' && !input.consoleSession) {
+    throw new AppError({
+      code: 'INVALID_SERVICE_ACCOUNT_ROLE',
+      userMessage:
+        'ADMIN service accounts can only be created by an administrator signed in to the OpsKnight console.',
+    });
+  }
+
   const safeName = input.name.trim();
   const email = generateServiceAccountEmail(safeName);
 
@@ -405,6 +418,15 @@ export async function issueServiceAccountToken(input: IssueServiceAccountTokenIn
   // be rejected at authentication, so refuse before generating anything.
   assertServiceAccountActive(account.status, input.serviceAccountId);
 
+  // Likewise it must not be able to mint a permanent token for an administrator account.
+  if (input.neverExpires && account.role === 'ADMIN' && !input.consoleSession) {
+    throw new AppError({
+      code: 'INVALID_TOKEN_EXPIRY',
+      userMessage:
+        'Non-expiring tokens for ADMIN service accounts can only be issued from the OpsKnight console. Provide expiresInDays.',
+    });
+  }
+
   if (!input.name || input.name.trim().length === 0) {
     throw new AppError({
       code: 'INVALID_TOKEN_NAME',
@@ -510,10 +532,13 @@ export async function revokeServiceAccountToken(
     });
   }
 
+  // Revoking twice is a no-op: keep the original revocation time and write no second audit row.
+  if (apiKey.revokedAt) return { success: true };
+
   await runV2AuditedMutation(
     tx =>
-      tx.apiKey.update({
-        where: { id: tokenId },
+      tx.apiKey.updateMany({
+        where: { id: tokenId, revokedAt: null },
         data: { revokedAt: new Date() },
       }),
     () => ({

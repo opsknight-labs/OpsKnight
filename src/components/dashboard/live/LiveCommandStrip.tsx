@@ -177,6 +177,11 @@ export function buildInsight(summary: LiveSummary | null): { text: string; tone:
     };
   if (summary.slaAtRisk > 0)
     return { text: `${summary.slaAtRisk} incidents at SLA risk`, tone: 'amber' };
+  if (summary.slaBreached > 0)
+    return {
+      text: `${summary.slaBreached} active incident${summary.slaBreached === 1 ? ' has' : 's have'} breached SLA`,
+      tone: 'rose',
+    };
   if (summary.unassigned > 0)
     return { text: `${summary.unassigned} active incidents are unassigned`, tone: 'amber' };
   if (summary.active > 0)
@@ -200,7 +205,8 @@ export default function LiveCommandStrip({
   const router = useRouter();
   const { snapshot, query, setQuery } = useLiveDashboard();
   const summary = snapshot?.summary ?? null;
-  const trend = snapshot?.trend ?? null;
+  const trendUnavailable = snapshot?.unavailable?.includes('trend') ?? false;
+  const trend = trendUnavailable ? null : (snapshot?.trend ?? null);
   const narrative = buildNarrative(snapshot);
 
   const isFocused = (patch: Partial<LiveIncidentQuery>) =>
@@ -209,7 +215,13 @@ export default function LiveCommandStrip({
   const focus = (patch: Partial<LiveIncidentQuery>) =>
     setQuery(isFocused(patch) ? reset : { ...reset, ...patch });
   const lastHour = (count: number | undefined, verb: string) =>
-    trend ? (count ? `+${count} ${verb} · last hour` : `None ${verb} · last hour`) : '\u00a0';
+    trend
+      ? count
+        ? `+${count} ${verb} · last hour`
+        : `None ${verb} · last hour`
+      : trendUnavailable
+        ? 'Unavailable'
+        : '\u00a0';
 
   const trendCreated = trend?.created;
   const trendCreatedCritical = trend?.createdCritical;
@@ -457,7 +469,9 @@ export default function LiveCommandStrip({
           context={
             trend
               ? `MTTA ${formatMinutes(trend.mtta24h)} · MTTR ${formatMinutes(trend.mttr24h)}`
-              : '\u00a0'
+              : trendUnavailable
+                ? 'Unavailable'
+                : '\u00a0'
           }
           emphasis="none"
           variant="secondary"

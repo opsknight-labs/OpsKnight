@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { auditRowsOutsideHeldUsers, getHeldUserIds } from '@/lib/retention/lifecycle';
 
 export type ErasureVerificationClient = Prisma.TransactionClient | typeof prisma;
 
@@ -26,6 +27,8 @@ export async function verifySubjectErasure(
 ): Promise<ErasureVerificationResult> {
   const issues: string[] = [];
   const originalEmail = options.originalEmail?.toLowerCase() ?? null;
+  // Rows a legal hold protects keep their email (erasure leaves them as they are).
+  const unprotected = auditRowsOutsideHeldUsers(await getHeldUserIds(client));
 
   const [
     stillExists,
@@ -58,10 +61,10 @@ export async function verifySubjectErasure(
     client.slackIntegration.count({ where: { installedBy: subjectId } }),
     client.auditLog.count({ where: { actorId: subjectId } }),
     originalEmail
-      ? client.auditLog.count({ where: { actorEmail: originalEmail } })
+      ? client.auditLog.count({ where: { actorEmail: originalEmail, ...unprotected } })
       : Promise.resolve(0),
     originalEmail
-      ? client.auditLog.count({ where: { targetEmail: originalEmail } })
+      ? client.auditLog.count({ where: { targetEmail: originalEmail, ...unprotected } })
       : Promise.resolve(0),
   ]);
 

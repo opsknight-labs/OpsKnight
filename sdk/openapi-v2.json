@@ -3229,7 +3229,7 @@
           },
           "dataState": {
             "type": "string",
-            "enum": ["AVAILABLE", "NO_DATA", "UNAVAILABLE"]
+            "enum": ["AVAILABLE", "NO_DATA", "UNAVAILABLE", "PARTIAL"]
           },
           "definitionVersion": {
             "type": "integer",
@@ -9646,6 +9646,88 @@
             },
             "required": ["added", "removed"]
           },
+          "defaults": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "before": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "timeoutSeconds": {
+                    "type": ["integer", "null"]
+                  },
+                  "maxRetries": {
+                    "type": ["integer", "null"]
+                  }
+                },
+                "required": ["timeoutSeconds", "maxRetries"]
+              },
+              "after": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "timeoutSeconds": {
+                    "type": ["integer", "null"]
+                  },
+                  "maxRetries": {
+                    "type": ["integer", "null"]
+                  }
+                },
+                "required": ["timeoutSeconds", "maxRetries"]
+              },
+              "changed": {
+                "type": "boolean"
+              }
+            },
+            "required": ["before", "after", "changed"]
+          },
+          "inputChanges": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "changes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": ["type", "required", "default", "options"]
+                  }
+                },
+                "type": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "before": {
+                      "type": "string"
+                    },
+                    "after": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["before", "after"]
+                },
+                "required": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "before": {
+                      "type": "boolean"
+                    },
+                    "after": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": ["before", "after"]
+                }
+              },
+              "required": ["key", "changes", "type", "required"]
+            }
+          },
           "inputDetails": {
             "type": "object",
             "additionalProperties": false,
@@ -9783,7 +9865,9 @@
           "base",
           "next",
           "steps",
+          "defaults",
           "inputKeys",
+          "inputChanges",
           "inputDetails",
           "rules",
           "rulesTruncated",
@@ -13767,6 +13851,7 @@
           },
           "serviceNotificationChannels": {
             "type": "array",
+            "description": "Stored channels. Only SLACK, WEBHOOK and MICROSOFT_TEAMS are delivered; a legacy EMAIL, SMS, PUSH or WHATSAPP value is ignored and cannot be written back.",
             "items": {
               "type": "string",
               "enum": ["SLACK", "WEBHOOK", "EMAIL", "SMS", "PUSH", "WHATSAPP", "MICROSOFT_TEAMS"]
@@ -16266,18 +16351,11 @@
                   "serviceNotificationChannels": {
                     "type": "array",
                     "uniqueItems": true,
-                    "maxItems": 7,
+                    "maxItems": 3,
+                    "description": "Service-level channels support Slack, Teams and webhooks only; use escalation policies or user preferences for email, SMS, push and WhatsApp. A legacy EMAIL, SMS, PUSH or WHATSAPP value read from the service must be removed from the list before it is sent back.",
                     "items": {
                       "type": "string",
-                      "enum": [
-                        "SLACK",
-                        "WEBHOOK",
-                        "EMAIL",
-                        "SMS",
-                        "PUSH",
-                        "WHATSAPP",
-                        "MICROSOFT_TEAMS"
-                      ]
+                      "enum": ["SLACK", "WEBHOOK", "MICROSOFT_TEAMS"]
                     }
                   },
                   "serviceNotifyOnTriggered": {
@@ -19646,7 +19724,7 @@
                         "delayMinutes": {
                           "type": "integer",
                           "minimum": 0,
-                          "maximum": 1440
+                          "maximum": 10080
                         },
                         "targetType": {
                           "type": "string",
@@ -21390,6 +21468,109 @@
         "operationId": "createStatusPageAnnouncement",
         "x-required-scope": "status-pages:write",
         "description": "Requires API scope `status-pages:write` (Status pages manage).",
+        "x-idempotency": "supported",
+        "x-concurrency": "none"
+      }
+    },
+    "/status-pages/{id}/announcements/{announcementId}/end": {
+      "post": {
+        "tags": ["Status Pages"],
+        "summary": "End a status page announcement now",
+        "description": "Sets the announcement inactive so the status page stops showing it, and cancels subscriber notices that have not been sent. Ending an announcement that is already ended answers the same success. Requires the same permission as creating an announcement.\n\nRequires API scope `status-pages:write` (Status pages manage).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "announcementId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Announcement ended",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StatusPageAnnouncement"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "endStatusPageAnnouncement",
+        "x-required-scope": "status-pages:write",
         "x-idempotency": "supported",
         "x-concurrency": "none"
       }
@@ -24378,8 +24559,8 @@
       },
       "delete": {
         "tags": ["Incidents"],
-        "summary": "Delete an unused custom-field definition",
-        "description": "Rejects deletion while incident values still depend on the field. Requires exact If-Match and Idempotency-Key.\n\nRequires API scope `custom-fields:write` (Custom-field administration).",
+        "summary": "Delete a custom-field definition",
+        "description": "Rejects deletion with 409 while incident values still depend on the field. With cascade=true the stored values are deleted with the field in one transaction and the audit event records valuesDeleted, as the settings page does. Requires exact If-Match and Idempotency-Key.\n\nRequires API scope `custom-fields:write` (Custom-field administration).",
         "parameters": [
           {
             "name": "id",
@@ -24388,6 +24569,16 @@
             "schema": {
               "type": "string",
               "minLength": 1
+            }
+          },
+          {
+            "name": "cascade",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["true", "false"],
+              "default": "false"
             }
           },
           {

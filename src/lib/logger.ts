@@ -110,6 +110,10 @@ const parsedMax = Number.parseInt(process.env.LOG_BUFFER_MAX || '500', 10);
 const LOG_BUFFER_MAX =
   Number.isFinite(parsedMax) && parsedMax >= 0 ? Math.min(parsedMax, 5000) : 500;
 const logBuffer: LogEntry[] = [];
+// Entries that came in through the unauthenticated /api/logs/ingest route live in their own small
+// ring, so a flood of forged client logs can never push real server entries out of the buffer.
+export const CLIENT_LOG_BUFFER_MAX = Math.min(100, LOG_BUFFER_MAX);
+const clientLogBuffer: LogEntry[] = [];
 
 function getBufferLimit(limit?: number) {
   const safeLimit = Number.isFinite(limit) ? Math.floor(limit as number) : LOG_BUFFER_MAX;
@@ -142,10 +146,11 @@ const SENSITIVE_KEYS = [
   /\bdsn\b/i,
 ];
 
-const SECRET_PATTERNS = [
-  // Labels are separated by a literal dot the label class excludes, so the repetition is linear.
-  // eslint-disable-next-line security/detect-unsafe-regex
-  /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+\b/g, // Email (strictly disjoint domain labels)
+// Labels are separated by a literal dot the label class excludes, so the repetition is linear.
+// eslint-disable-next-line security/detect-unsafe-regex
+const EMAIL_PATTERN = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+\b/g; // strictly disjoint domain labels
+
+const CREDENTIAL_PATTERNS = [
   /Bearer\s+[A-Za-z0-9\-_.]+/gi, // Bearer tokens
   /Basic\s+[A-Za-z0-9+/=]{16,}/gi, // Basic Auth tokens
   /\bok_[A-Za-z0-9_-]{20,}\b/g, // OpsKnight API Keys
@@ -153,13 +158,58 @@ const SECRET_PATTERNS = [
   /AKIA[0-9A-Z]{16}/g, // AWS Access Keys
   /(?:[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^\s?#]+\?[^\s#]*(?:token|secret|key|sig|signature|api_key|password|pwd)=)[^&\s]+/gi, // URL query tokens (bounded by ? and #)
 ];
+const SECRET_PATTERNS = [EMAIL_PATTERN, ...CREDENTIAL_PATTERNS];
+
+// What a redaction pass removes. Logs hide personal data as well as credentials; audit records
+// must keep who and what changed readable (emails, session ids), so they hide credentials only.
+type RedactionProfile = { keys: RegExp[]; patterns: RegExp[] };
+const LOG_PROFILE: RedactionProfile = { keys: SENSITIVE_KEYS, patterns: SECRET_PATTERNS };
+const AUDIT_PROFILE: RedactionProfile = {
+  keys: [
+    /pass(word|wd|phrase|code)/i,
+    /^pass$/i,
+    /token/i,
+    /secret/i,
+    /(api|private|secret|access|signing|encryption|master|license|client|ssh)[_-]?key/i,
+    /^key$/i,
+    /authorization/i,
+    /^auth$/i,
+    /^auth_?header$/i,
+    /credential/i,
+    /signature/i,
+    /phone/i,
+    /mobile/i,
+    /^tel(ephone)?$/i,
+    /cookie/i,
+    /jwt/i,
+    /bearer/i,
+    /ssn/i,
+    /credit_?card|cvv|cvc/i,
+    /webhook_?url/i,
+    /database_?url/i,
+    /connection_?string/i,
+    /\bdsn\b/i,
+  ],
+  patterns: CREDENTIAL_PATTERNS,
+};
 
 // Connection URI credential patterns (e.g. postgresql://user:secret@host:port/db)
 // Supports internal hostnames without domain suffixes (e.g. db, localhost, pg-internal)
 const URI_USER_PASSWORD_PATTERN = /([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)([^:\s/@]+):([^@\s/]+)@/g;
 const URI_PASSWORD_ONLY_PATTERN = /([a-zA-Z][a-zA-Z0-9+.-]*:\/\/):([^@\s/]+)@/g;
 
-export function sanitizeString(val: string): string {
+// Routing keys travel in query strings (`?integrationKey=...`) for senders that cannot set a header.
+// The pattern above only sees absolute URLs; this one also covers a relative `/path?x=1&key=...`
+// and a bare query string, so no log line, audit row or error message keeps the value.
+const ROUTING_KEY_QUERY_PARAM =
+  /([?&](?:integration[_-]?key|routing[_-]?key|api[_-]?key|key|token|secret)=)[^&\s#"']*/gi;
+
+/** Replace the value of every routing-key style query parameter, keeping the parameter name. */
+export function redactRoutingKeyParams(value: string): string {
+  return value.replace(ROUTING_KEY_QUERY_PARAM, '$1[REDACTED]');
+}
+
+export function sanitizeString(val: string, profile: RedactionProfile = LOG_PROFILE): string {
   if (typeof val !== 'string' || val.length === 0) return val;
   // Bound string length to prevent ReDoS on huge uncontrolled inputs
   const input = val.length > 50000 ? val.slice(0, 50000) : val;
@@ -167,13 +217,17 @@ export function sanitizeString(val: string): string {
   // Redact credentials in connection URIs
   result = result.replace(URI_USER_PASSWORD_PATTERN, '$1$2:[REDACTED]@');
   result = result.replace(URI_PASSWORD_ONLY_PATTERN, '$1:[REDACTED]@');
-  for (const pattern of SECRET_PATTERNS) {
+  for (const pattern of profile.patterns) {
     result = result.replace(pattern, '[REDACTED]');
   }
-  return result;
+  return redactRoutingKeyParams(result);
 }
 
-export function sanitizeContext(context: unknown, seen = new WeakSet<object>()): unknown {
+export function sanitizeContext(
+  context: unknown,
+  seen = new WeakSet<object>(),
+  profile: RedactionProfile = LOG_PROFILE
+): unknown {
   // JSON.stringify throws on bigint values. Logging must never turn a valid
   // application operation (database ids, advisory lock keys, counters) into
   // an application failure.
@@ -182,7 +236,7 @@ export function sanitizeContext(context: unknown, seen = new WeakSet<object>()):
   }
   if (!context || typeof context !== 'object') {
     if (typeof context === 'string') {
-      return sanitizeString(context);
+      return sanitizeString(context, profile);
     }
     return context;
   }
@@ -190,8 +244,8 @@ export function sanitizeContext(context: unknown, seen = new WeakSet<object>()):
   if (context instanceof Error) {
     return {
       name: context.name,
-      message: sanitizeString(context.message),
-      stack: context.stack ? sanitizeString(context.stack) : undefined,
+      message: sanitizeString(context.message, profile),
+      stack: context.stack ? sanitizeString(context.stack, profile) : undefined,
     };
   }
 
@@ -202,28 +256,37 @@ export function sanitizeContext(context: unknown, seen = new WeakSet<object>()):
   }
   seen.add(context);
   try {
-    return sanitizeObject(context, seen);
+    return sanitizeObject(context, seen, profile);
   } finally {
     seen.delete(context);
   }
 }
 
-function sanitizeObject(context: object, seen: WeakSet<object>): unknown {
+/** Redacts credentials only, so audit records keep emails and session ids readable. */
+export function sanitizeAuditContext(context: unknown): unknown {
+  return sanitizeContext(context, new WeakSet<object>(), AUDIT_PROFILE);
+}
+
+function sanitizeObject(
+  context: object,
+  seen: WeakSet<object>,
+  profile: RedactionProfile
+): unknown {
   if (Array.isArray(context)) {
-    return context.map(item => sanitizeContext(item, seen));
+    return context.map(item => sanitizeContext(item, seen, profile));
   }
 
   return Object.fromEntries(
     Object.entries(context as Record<string, unknown>).map(([key, value]) => {
       let sanitizedValue: unknown;
-      if (SENSITIVE_KEYS.some(regex => regex.test(key))) {
+      if (profile.keys.some(regex => regex.test(key))) {
         sanitizedValue = '[REDACTED]';
       } else if (typeof value === 'bigint') {
         sanitizedValue = value.toString();
       } else if (typeof value === 'object' && value !== null) {
-        sanitizedValue = sanitizeContext(value, seen);
+        sanitizedValue = sanitizeContext(value, seen, profile);
       } else if (typeof value === 'string') {
-        sanitizedValue = sanitizeString(value);
+        sanitizedValue = sanitizeString(value, profile);
       } else {
         sanitizedValue = value;
       }
@@ -236,18 +299,28 @@ function addToBuffer(entry: LogEntry) {
   if (LOG_BUFFER_MAX <= 0) {
     return;
   }
-  logBuffer.push(entry);
-  if (logBuffer.length > LOG_BUFFER_MAX) {
-    logBuffer.splice(0, logBuffer.length - LOG_BUFFER_MAX);
+  // The ingest route is the only writer of source: 'client' and sets it after the caller's fields.
+  const fromClient = entry.context?.source === 'client';
+  const buffer = fromClient ? clientLogBuffer : logBuffer;
+  const max = fromClient ? CLIENT_LOG_BUFFER_MAX : LOG_BUFFER_MAX;
+  buffer.push(entry);
+  if (buffer.length > max) {
+    buffer.splice(0, buffer.length - max);
   }
 }
 
+/**
+ * The last `limit` server entries plus whatever the bounded client ring holds, oldest first.
+ * `limit` counts server entries only, so client entries never displace them from the result.
+ */
 export function getLogBuffer(limit?: number) {
   const sliceLimit = getBufferLimit(limit);
   if (sliceLimit === 0) {
     return [];
   }
-  return logBuffer.slice(-sliceLimit);
+  const server = logBuffer.slice(-sliceLimit);
+  if (clientLogBuffer.length === 0) return server;
+  return [...server, ...clientLogBuffer].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 }
 
 class Logger {

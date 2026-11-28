@@ -76,6 +76,26 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
     expect(spoofed.status).toBe(421);
   });
 
+  it('lets the recovery console read diagnostics on the pinned recovery origin only', async () => {
+    setupStatusServingMocks();
+    vi.stubEnv('AUTH_RECOVERY_ORIGIN', 'https://recovery.example.test');
+    const { default: middleware } = await import('@/middleware');
+
+    const onRecoveryOrigin = await middleware(
+      new NextRequest('https://recovery.example.test/api/auth/control/diagnostics?kind=sign-ins', {
+        headers: { host: 'recovery.example.test' },
+      })
+    );
+    expect(onRecoveryOrigin.status).toBe(200);
+
+    const elsewhere = await middleware(
+      new NextRequest('https://attacker.example.test/api/auth/control/diagnostics', {
+        headers: { host: 'attacker.example.test', 'x-forwarded-host': 'recovery.example.test' },
+      })
+    );
+    expect(elsewhere.status).toBe(421);
+  });
+
   describe('Direct Host Requests (no proxy)', () => {
     it('allows GET https://www.opsnite.com/login => 200', async () => {
       setupStatusServingMocks();

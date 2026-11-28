@@ -10,6 +10,10 @@ export type QuietHoursPreferences = {
 
 type IncidentUrgency = 'LOW' | 'MEDIUM' | 'HIGH' | string | null | undefined;
 
+/** Recorded on the SKIPPED notification of each channel a quiet-hours window held back. */
+export const QUIET_HOURS_SUPPRESSION_REASON =
+  "Not sent: held by the recipient's quiet hours (low-urgency incident)";
+
 const DISRUPTIVE_CHANNELS = new Set<NotificationChannel>(['PUSH', 'SMS', 'VOICE', 'WHATSAPP']);
 const WEEKEND_DAYS = new Set(['Sat', 'Sun']);
 

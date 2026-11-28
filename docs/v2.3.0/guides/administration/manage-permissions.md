@@ -48,9 +48,9 @@ Use the narrowest stable role that supports the person's normal work:
 | Role | Choose it for | Do not choose it merely for |
 | --- | --- | --- |
 | `ADMIN` | Organization configuration, identity/security administration, user management, retention/privacy/encryption operations | Responding to incidents or viewing all incidents |
-| `RESPONDER` | Organization-wide incident operations, sensitive incident context, service/schedule visibility, report export | Changing system settings, users, audit access, or compliance controls |
-| `AUDITOR` | Organization-wide read access, Audit Log, compliance evidence, privacy/retention/encryption status | Incident response or any mutation workflow |
-| `USER` | Read-only team-scoped services, schedules, metrics, reports, and eligible incidents | Organization-wide visibility or response actions |
+| `RESPONDER` | Organization-wide incident operations, sensitive incident context, service/schedule visibility, creating and sharing reports and dashboards (`report.manage`), report export | Changing system settings, users, audit access, or compliance controls |
+| `AUDITOR` | Organization-wide read access (reports and dashboards are read-only, without `report.manage`), Audit Log, compliance evidence, privacy/retention/encryption status | Incident response or any mutation workflow |
+| `USER` | Read-only team-scoped services, schedules, metrics, and eligible incidents; reports and their own saved dashboards (`report.manage`) | Organization-wide visibility or response actions |
 
 `ADMIN` contains all application capabilities. `RESPONDER` is an operational
 role, not a limited administrator. `AUDITOR` can read sensitive governance state

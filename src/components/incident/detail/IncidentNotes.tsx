@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { loadOlderIncidentNotes } from './actions';
 import { NoteMarkdown } from './NoteMarkdown';
+import { mergeLatestWithOlder } from './merge-loaded';
 import { cn } from '@/lib/utils';
 
 type Note = {
@@ -72,7 +73,8 @@ export default function IncidentNotes({
 
   if (notes !== prevNotes) {
     setPrevNotes(notes);
-    setLoadedNotes(notes);
+    // Posting a note re-sends the newest page; keep the older notes already paged in below it.
+    setLoadedNotes(mergeLatestWithOlder(notes, loadedNotes));
   }
 
   const hasMoreNotes = incidentId && totalNotesCount ? totalNotesCount > loadedNotes.length : false;

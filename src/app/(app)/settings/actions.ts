@@ -4,9 +4,14 @@ import { assertPasswordOperationAllowed } from '@/lib/authentication-policy';
 
 import prisma from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import { randomUUID } from 'crypto';
+import { z } from 'zod/v3';
+import { assertRecentAuthentication } from '@/lib/access/step-up';
+import { sendPasswordChangedNotice } from '@/lib/password-reset';
 import { revalidatePath } from 'next/cache';
 import { generateApiKey } from '@/lib/api-keys';
-import { disallowedScopesForRole } from '@/lib/api-scope-registry';
+import { assertApiKeyCapacity } from '@/lib/api-key-capacity';
+import { adminOnlyScopes, disallowedScopesForRole } from '@/lib/api-scope-registry';
 import { validatePasswordStrength } from '@/lib/passwords';
 import { getPushConfig } from '@/lib/notification-providers';
 import { logger } from '@/lib/logger';
@@ -14,8 +19,8 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { getDefaultAvatar } from '@/lib/avatar';
 import { logAudit } from '@/lib/audit';
 import { isValidTimeZone } from '@/lib/timezone';
-import { CAPABILITIES, isApiScope, capabilitiesOf } from '@/lib/authorization';
-import { getCurrentUser } from '@/lib/rbac';
+import { CAPABILITIES, isApiScope, capabilitiesOf, isAdministratorRole } from '@/lib/authorization';
+import { assertPermanentAdminForAdminTargets, getCurrentUser } from '@/lib/rbac';
 import {
   createServiceAccount,
   issueServiceAccountToken,
@@ -24,6 +29,13 @@ import {
 } from '@/lib/api-v2/service-accounts';
 import { invalidateV2AuthCache } from '@/lib/api-v2/auth';
 import { updateNotificationPreferences as updateSharedNotificationPreferences } from '@/lib/notifications/preferences';
+import { resetUserNotificationEndpoint } from '@/lib/user-notification-endpoints';
+
+const passwordChangeSchema = z.object({
+  currentPassword: z.string().max(1024),
+  newPassword: z.string().max(1024),
+  confirmPassword: z.string().max(1024),
+});
 
 type ActionState = {
   error?: string | null;
@@ -290,6 +302,30 @@ export async function updateNotificationPreferences(
   }
 }
 
+const resettableChannelInput = z.enum(['EMAIL', 'SMS', 'VOICE', 'WHATSAPP', 'PUSH']);
+
+/** Lets the signed-in person try a bounced or invalid contact again. */
+export async function resetNotificationEndpoint(
+  channel: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const parsed = resettableChannelInput.safeParse(channel);
+    if (!parsed.success) return { success: false, error: 'Choose a valid channel.' };
+    const user = await getCurrentUser();
+    const reset = await resetUserNotificationEndpoint({
+      userId: user.id,
+      channel: parsed.data,
+      actorId: user.id,
+    });
+    if (!reset) return { success: false, error: 'This contact is not blocked.' };
+    revalidatePath('/settings/profile');
+    return { success: true };
+  } catch (error) {
+    logger.error('Error resetting notification endpoint', { component: 'settings-actions', error });
+    return { success: false, error: 'Unable to reset this contact. Please try again.' };
+  }
+}
+
 export async function sendTestNotification(
   channel: 'EMAIL' | 'SMS' | 'VOICE' | 'WHATSAPP' | 'PUSH'
 ): Promise<{ success: boolean; error?: string }> {
@@ -508,9 +544,19 @@ export async function updatePassword(
   try {
     const user = await getCurrentUser();
     await assertPasswordOperationAllowed();
-    const currentPassword = (formData.get('currentPassword') as string | null) ?? '';
-    const newPassword = (formData.get('newPassword') as string | null) ?? '';
-    const confirmPassword = (formData.get('confirmPassword') as string | null) ?? '';
+    const fields = passwordChangeSchema.safeParse({
+      currentPassword: formData.get('currentPassword') ?? '',
+      newPassword: formData.get('newPassword') ?? '',
+      confirmPassword: formData.get('confirmPassword') ?? '',
+    });
+    if (!fields.success) return { error: 'Invalid password change request.' };
+    const { currentPassword, newPassword, confirmPassword } = fields.data;
+
+    // Every attempt counts, so the current password cannot be guessed from a stolen session.
+    const rate = await checkRateLimit(`settings:password-change:${user.id}`, 10, 15 * 60_000);
+    if (!rate.allowed) {
+      return { error: 'Too many password change attempts. Try again in a few minutes.' };
+    }
 
     const passwordError = validatePasswordStrength(newPassword);
     if (passwordError) {
@@ -523,7 +569,13 @@ export async function updatePassword(
 
     const credentials = await prisma.user.findUnique({
       where: { id: user.id },
-      select: { passwordHash: true },
+      select: {
+        passwordHash: true,
+        name: true,
+        email: true,
+        phoneNumber: true,
+        smsNotificationsEnabled: true,
+      },
     });
     if (!credentials) return { error: 'User not found.' };
 
@@ -532,6 +584,9 @@ export async function updatePassword(
       if (!valid) {
         return { error: 'Current password is incorrect.' };
       }
+    } else {
+      // An SSO-only account has no current password to prove, so require a fresh sign-in instead.
+      await assertRecentAuthentication(undefined, 'setting a local password');
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 12);
@@ -573,6 +628,12 @@ export async function updatePassword(
       await import('@/lib/session-security-projection');
     invalidateSessionSecurityProjection(user.id);
 
+    await sendPasswordChangedNotice(
+      { ...credentials, id: user.id },
+      `settings:${user.id}:${randomUUID()}`,
+      new Date()
+    );
+
     revalidatePath('/settings/security');
     return { success: true };
   } catch (error) {
@@ -607,11 +668,16 @@ export async function createApiKey(
     if (!Number.isInteger(expirationDays) || expirationDays < 1 || expirationDays > 365) {
       return { error: 'API keys must expire between 1 and 365 days.' };
     }
+    // A key with administrator scopes is a long-lived admin credential: ask for a recent sign-in, as MCP tokens do.
+    if (adminOnlyScopes(finalScopes).length > 0) {
+      await assertRecentAuthentication(undefined, 'creating an API key with administrator scopes');
+    }
 
     const expiresAt = new Date(Date.now() + expirationDays * 24 * 60 * 60 * 1000);
     const { token, prefix, tokenHash } = generateApiKey();
 
     await prisma.$transaction(async tx => {
+      await assertApiKeyCapacity(tx, user.id);
       const key = await tx.apiKey.create({
         data: {
           name,
@@ -710,6 +776,11 @@ export async function createServiceAccountAction(
     if (!name) {
       return { error: 'Service account name is required.' };
     }
+    // An ADMIN identity outlives a time-boxed grant, so only an assigned admin with a fresh sign-in mints one.
+    if (isAdministratorRole(role)) {
+      await assertPermanentAdminForAdminTargets(user, [], role);
+      await assertRecentAuthentication(undefined, 'creating an administrator service account');
+    }
 
     await createServiceAccount({
       name,
@@ -718,6 +789,7 @@ export async function createServiceAccountAction(
       description,
       teamIds: teamIds.length > 0 ? teamIds : undefined,
       actorId: user.id,
+      consoleSession: user.baseRole === 'ADMIN',
     });
 
     revalidatePath('/settings/api-keys');
@@ -755,6 +827,18 @@ export async function issueServiceAccountTokenAction(
     if (scopes.length === 0) {
       return { error: 'At least one scope must be selected.' };
     }
+    // A token for an ADMIN service account is an admin credential: same rule as creating the account.
+    const account = await prisma.user.findUnique({
+      where: { id: serviceAccountId },
+      select: { role: true },
+    });
+    if (isAdministratorRole(account?.role)) {
+      await assertPermanentAdminForAdminTargets(user, [serviceAccountId]);
+      await assertRecentAuthentication(
+        undefined,
+        'issuing a token for an administrator service account'
+      );
+    }
 
     const result = await issueServiceAccountToken({
       serviceAccountId,
@@ -763,6 +847,7 @@ export async function issueServiceAccountTokenAction(
       expiresInDays: expiresInDays && expiresInDays > 0 ? expiresInDays : undefined,
       neverExpires,
       actorId: user.id,
+      consoleSession: user.baseRole === 'ADMIN',
     });
 
     revalidatePath('/settings/api-keys');

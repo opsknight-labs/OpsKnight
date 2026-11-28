@@ -34,13 +34,20 @@ const mocks = vi.hoisted(() => {
       updateMany: txPrivacyErasureUpdateMany,
       update: txPrivacyErasureUpdate,
     },
-    auditLog: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    auditLog: {
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      findMany: vi.fn().mockResolvedValue([] as unknown[]),
+    },
+    $executeRaw: vi.fn().mockResolvedValue(0),
     teamMember: {
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       findMany: txTeamMemberFindMany,
       groupBy: txTeamMemberGroupBy,
     },
-    incidentWatcher: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    incidentWatcher: {
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     onCallShift: {
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       count: txOnCallShiftCount,
@@ -63,15 +70,27 @@ const mocks = vi.hoisted(() => {
     microsoftTeamsInstallation: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     microsoftTeamsDestination: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     team: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    incidentNote: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    incidentNote: {
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      findMany: vi.fn().mockResolvedValue([]),
+      groupBy: vi.fn().mockResolvedValue([]),
+    },
+    incidentEvent: { findMany: vi.fn().mockResolvedValue([]) },
+    incidentRoleAssignment: { findMany: vi.fn().mockResolvedValue([]) },
+    warRoomParticipant: { findMany: vi.fn().mockResolvedValue([]) },
     postmortem: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     incidentTemplate: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     actionItem: { count: txActionItemCount, updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     notification: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    incident: { count: txIncidentCount, updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    incident: {
+      count: txIncidentCount,
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     userToken: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     user: {
       findUnique: txUserFindUnique,
+      findFirst: vi.fn().mockResolvedValue({ id: 'cfirstadmin01' }),
       count: txUserCount,
       deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
@@ -107,6 +126,8 @@ const mocks = vi.hoisted(() => {
     callback(tx)
   );
   const transitionPrivacyRequest = vi.fn().mockResolvedValue({});
+  const resolveUserActor = vi.fn();
+  const getHeldUserIds = vi.fn().mockResolvedValue([] as string[]);
   const emitAuditEvent = vi.fn().mockResolvedValue(undefined);
 
   return {
@@ -140,6 +161,8 @@ const mocks = vi.hoisted(() => {
     acquireAdvisoryLock,
     runSerializableTransaction,
     transitionPrivacyRequest,
+    resolveUserActor,
+    getHeldUserIds,
     emitAuditEvent,
   };
 });
@@ -162,6 +185,11 @@ vi.mock('@/lib/privacy/erasure/verify', () => ({
 vi.mock('@/lib/privacy/requests', () => ({
   transitionPrivacyRequest: mocks.transitionPrivacyRequest,
 }));
+vi.mock('@/lib/retention/lifecycle', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/lib/retention/lifecycle')>()),
+  getHeldUserIds: mocks.getHeldUserIds,
+}));
+vi.mock('@/lib/authorization-actors', () => ({ resolveUserActor: mocks.resolveUserActor }));
 vi.mock('@/lib/audit', () => ({
   emitAuditEvent: mocks.emitAuditEvent,
 }));
@@ -227,6 +255,13 @@ describe('executeErasure', () => {
       })
     );
     mocks.transitionPrivacyRequest.mockResolvedValue({});
+    mocks.getHeldUserIds.mockResolvedValue([]);
+    mocks.resolveUserActor.mockResolvedValue({
+      id: 'cactor0000001',
+      role: 'ADMIN',
+      status: 'ACTIVE',
+      teamIds: [],
+    });
     // In-tx authoritative blocker revalidation defaults to "no blockers" so the
     // happy-path tests stay green. Individual regression tests override these
     // to inject a stale-plan race.
@@ -246,6 +281,9 @@ describe('executeErasure', () => {
     // Only the deleteMany/updateMany leaves are reset here; count/findMany
     // leaves for the in-tx revalidation are controlled above.
     mocks.tx.auditLog.updateMany.mockResolvedValue({ count: 0 } as never);
+    mocks.tx.auditLog.findMany.mockResolvedValue([] as never);
+    mocks.tx.$executeRaw.mockResolvedValue(0 as never);
+    delete (mocks.tx as Record<string, unknown>).dataRetentionHold;
     mocks.tx.teamMember.deleteMany.mockResolvedValue({ count: 0 } as never);
     mocks.tx.incidentWatcher.deleteMany.mockResolvedValue({ count: 0 } as never);
     mocks.tx.onCallShift.deleteMany.mockResolvedValue({ count: 0 } as never);
@@ -260,6 +298,9 @@ describe('executeErasure', () => {
     mocks.tx.microsoftTeamsDestination.updateMany.mockResolvedValue({ count: 0 } as never);
     mocks.tx.team.updateMany.mockResolvedValue({ count: 0 } as never);
     mocks.tx.incidentNote.updateMany.mockResolvedValue({ count: 0 } as never);
+    mocks.tx.incidentNote.findMany.mockResolvedValue([] as never);
+    mocks.tx.incidentEvent.findMany.mockResolvedValue([] as never);
+    mocks.tx.user.findFirst.mockResolvedValue({ id: 'cfirstadmin01' } as never);
     mocks.tx.postmortem.updateMany.mockResolvedValue({ count: 0 } as never);
     mocks.tx.incidentTemplate.updateMany.mockResolvedValue({ count: 0 } as never);
     mocks.tx.actionItem.updateMany.mockResolvedValue({ count: 0 } as never);
@@ -395,13 +436,18 @@ describe('executeErasure', () => {
 
     expect(mocks.tx.auditLog.updateMany).toHaveBeenCalledWith({
       where: {
-        OR: [{ actorId: SUBJECT_ID }, { actorEmail: 'alice@example.com' }],
+        AND: [{ OR: [{ actorId: SUBJECT_ID }, { actorEmail: 'alice@example.com' }] }, {}],
       },
       data: { actorEmail: null, actorName: null },
     });
     expect(mocks.tx.auditLog.updateMany).toHaveBeenCalledWith({
-      where: { targetEmail: 'alice@example.com' },
+      where: { AND: [{ targetEmail: 'alice@example.com' }, {}] },
       data: { targetEmail: null },
+    });
+    // Email-keyed rows (failed sign-ins) must not keep the address in entityId either.
+    expect(mocks.tx.auditLog.updateMany).toHaveBeenCalledWith({
+      where: { AND: [{ entityId: { equals: 'alice@example.com', mode: 'insensitive' } }, {}] },
+      data: { entityId: null },
     });
     for (const call of mocks.tx.auditLog.updateMany.mock.calls) {
       const data = call[0].data as Record<string, unknown>;
@@ -409,6 +455,96 @@ describe('executeErasure', () => {
       expect(data).not.toHaveProperty('entityType');
       expect(data).not.toHaveProperty('createdAt');
     }
+  });
+
+  it("pseudonymises the subject's own audit rows (IP cleared, identifiers erased from details) before the identifier columns are nulled", async () => {
+    mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
+    mocks.userFindUnique.mockResolvedValue({
+      email: 'Alice@Example.com',
+      name: 'Alice Smith',
+      phoneNumber: '+15550100',
+    });
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);
+    mocks.buildSubjectErasurePlan.mockResolvedValue(eligiblePlan());
+    mocks.verifySubjectErasure.mockResolvedValue({ verified: true, issues: [] });
+    mocks.tx.auditLog.findMany.mockImplementation((async (args: {
+      where: { id?: unknown };
+      select: Record<string, boolean>;
+    }) => {
+      if (args.where.id) {
+        return [
+          { id: 'audit-1', details: { note: 'Alice Smith from 198.51.100.4', n: 1 } },
+          { id: 'audit-2', details: { note: 'unrelated' } },
+        ];
+      }
+      if (args.select.ip) return [{ ip: '198.51.100.4' }];
+      return [{ id: 'audit-1' }, { id: 'audit-2' }];
+    }) as never);
+    mocks.tx.auditLog.updateMany.mockResolvedValue({ count: 2 } as never);
+
+    await executeErasure(REQUEST_ID, ACTOR);
+
+    expect(mocks.tx.$executeRaw).toHaveBeenCalledTimes(1);
+    const [, ids, docs] = mocks.tx.$executeRaw.mock.calls[0] as unknown as [unknown, string[], string[]];
+    expect(ids).toEqual(['audit-1']);
+    expect(docs.map(doc => JSON.parse(doc))).toEqual([{ note: '[erased] from [erased]', n: 1 }]);
+
+    const calls = mocks.tx.auditLog.updateMany.mock.calls.map(call => call[0]);
+    const clearIp = calls.findIndex(call => 'ip' in call.data);
+    const clearEmail = calls.findIndex(call => 'actorEmail' in call.data);
+    expect(calls.at(clearIp)?.data).toEqual({ ip: null });
+    // The rows are found through actorEmail/targetEmail/entityId, so the IP goes first.
+    expect(clearIp).toBeGreaterThanOrEqual(0);
+    expect(clearIp).toBeLessThan(clearEmail);
+    expect(mocks.tx.$executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.tx.auditLog.updateMany.mock.invocationCallOrder.at(clearEmail) ?? 0
+    );
+  });
+
+  it('touches no audit row when the subject is under a legal hold', async () => {
+    mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);
+    mocks.buildSubjectErasurePlan.mockResolvedValue(eligiblePlan());
+    (mocks.tx as Record<string, unknown>).dataRetentionHold = {
+      findMany: vi.fn().mockResolvedValue([{ id: 'hold-1' }]),
+    };
+
+    await expect(executeErasure(REQUEST_ID, ACTOR)).rejects.toMatchObject({
+      code: 'PRIVACY_ERASURE_BLOCKED',
+    });
+
+    expect(mocks.tx.auditLog.findMany).not.toHaveBeenCalled();
+    expect(mocks.tx.auditLog.updateMany).not.toHaveBeenCalled();
+    expect(mocks.tx.$executeRaw).not.toHaveBeenCalled();
+    expect(mocks.tx.user.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('keeps the rows a legal hold on another user protects out of all three identifier updates', async () => {
+    mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);
+    mocks.buildSubjectErasurePlan.mockResolvedValue(eligiblePlan());
+    mocks.verifySubjectErasure.mockResolvedValue({ verified: true, issues: [] });
+    mocks.getHeldUserIds.mockResolvedValue(['cheld0000001']);
+
+    await executeErasure(REQUEST_ID, ACTOR);
+
+    const outsideHold = {
+      AND: [
+        { OR: [{ actorId: null }, { actorId: { notIn: ['cheld0000001'] } }] },
+        {
+          OR: [
+            { entityType: { not: 'USER' } },
+            { entityId: null },
+            { entityId: { notIn: ['cheld0000001'] } },
+          ],
+        },
+      ],
+    };
+    const identifierUpdates = mocks.tx.auditLog.updateMany.mock.calls
+      .map(call => call[0] as { where: { AND?: unknown[] }; data: Record<string, unknown> })
+      .filter(call => !('ip' in call.data));
+    expect(identifierUpdates).toHaveLength(3);
+    for (const call of identifierUpdates) expect(call.where.AND?.at(-1)).toEqual(outsideHold);
   });
 
   it('deletes the User row and transitions the request to COMPLETED on success', async () => {
@@ -439,6 +575,65 @@ describe('executeErasure', () => {
     expect(actions).toEqual(
       expect.arrayContaining(['privacy.erasure.started', 'privacy.erasure.completed'])
     );
+    const completed = mocks.emitAuditEvent.mock.calls.find(
+      call => call[0].action === 'privacy.erasure.completed'
+    );
+    expect(completed?.[0].metadata).toMatchObject({ incidentTextTruncated: false });
+  });
+
+  it('hands the erased user\'s incident templates to the erasing admin instead of orphaning them', async () => {
+    mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);
+    mocks.buildSubjectErasurePlan.mockResolvedValue(eligiblePlan());
+    mocks.verifySubjectErasure.mockResolvedValue({ verified: true, issues: [] });
+
+    await executeErasure(REQUEST_ID, ACTOR);
+
+    expect(mocks.tx.incidentTemplate.updateMany).toHaveBeenCalledWith({
+      where: { createdById: SUBJECT_ID },
+      data: { createdById: ACTOR.id },
+    });
+  });
+
+  it('gives the templates to the first active administrator when the operator lacks ADMIN_MANAGE', async () => {
+    mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);
+    mocks.buildSubjectErasurePlan.mockResolvedValue(eligiblePlan());
+    mocks.verifySubjectErasure.mockResolvedValue({ verified: true, issues: [] });
+    // A privacy operator with a custom role: PRIVACY_ERASURE but no ADMIN_MANAGE.
+    mocks.resolveUserActor.mockResolvedValue({
+      id: ACTOR.id,
+      role: 'RESPONDER',
+      status: 'ACTIVE',
+      teamIds: [],
+      capabilities: new Set(['privacy.erasure']),
+    });
+
+    await executeErasure(REQUEST_ID, ACTOR);
+
+    expect(mocks.tx.user.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { role: 'ADMIN', status: 'ACTIVE', id: { not: SUBJECT_ID } },
+      })
+    );
+    expect(mocks.tx.incidentTemplate.updateMany).toHaveBeenCalledWith({
+      where: { createdById: SUBJECT_ID },
+      data: { createdById: 'cfirstadmin01' },
+    });
+  });
+
+  it('does not hand templates to the subject when an administrator erases themselves', async () => {
+    mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);
+    mocks.buildSubjectErasurePlan.mockResolvedValue(eligiblePlan());
+    mocks.verifySubjectErasure.mockResolvedValue({ verified: true, issues: [] });
+
+    await executeErasure(REQUEST_ID, { id: SUBJECT_ID });
+
+    expect(mocks.tx.incidentTemplate.updateMany).toHaveBeenCalledWith({
+      where: { createdById: SUBJECT_ID },
+      data: { createdById: 'cfirstadmin01' },
+    });
   });
 
   it('rolls back and reports FAILED/BLOCKED when in-transaction verification fails', async () => {

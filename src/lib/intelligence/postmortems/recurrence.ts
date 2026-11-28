@@ -4,6 +4,8 @@
  * client-safe: the loaders in `./loaders` read the rows, everything here only shapes them.
  */
 
+import { actionItemOverdueBefore } from '@/lib/action-item-due-dates';
+
 export const RECURRENCE_WINDOW_DAYS = 90;
 export const RECURRENCE_LIMITS = {
   /** Earlier occurrences read per incident; a longer history is reported as "N+". */
@@ -52,4 +54,4 @@ export function recurrenceHeadline(
 }
 
 export const isOverdue = (item: { dueDate: Date | null; status: string }, now: Date): boolean =>
-  item.status !== 'COMPLETED' && item.dueDate !== null && item.dueDate.getTime() < now.getTime();
+  item.status !== 'COMPLETED' && item.dueDate !== null && item.dueDate.getTime() < actionItemOverdueBefore(now).getTime();

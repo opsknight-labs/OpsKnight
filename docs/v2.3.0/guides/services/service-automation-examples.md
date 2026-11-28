@@ -86,9 +86,11 @@ using a number type changes comparison behavior and can discard leading zeroes.
 Map PROVIDER `AWSAccountId` only if that is the actual provider's path; other AWS
 integrations can use different envelopes.
 
-Discovery excludes phone-shaped values, which can also exclude a numeric account
-identifier. Use the known sender schema to configure the field explicitly; an
-absent discovery suggestion is not proof the account is absent from the alert.
+Discovery excludes phone-shaped values: a leading `+`, or digits grouped with spaces,
+hyphens, parentheses or dots, such as `555-123-4567`. Plain digit runs (an account ID,
+a tenant ID, an epoch), IP addresses and dates are not excluded. A grouped account
+identifier can still be hidden, so use the known sender schema to configure the field
+explicitly; an absent discovery suggestion is not proof the account is absent from the alert.
 
 Replace the placeholder with your intended canonical account string and select
 the correct policy. If this field should only apply to one provider type, restrict

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import { assertResponderOrAbove } from '@/lib/rbac';
+import { assertResponderOrAbove, getCurrentAuthorizationActor } from '@/lib/rbac';
+import { incidentReadWhere } from '@/lib/authorization-filters';
 import { buildCsv, type CsvColumn } from '@/lib/csv';
 import {
   buildIncidentWhere,
@@ -18,8 +19,11 @@ export async function GET(req: NextRequest) {
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  let readScope;
   try {
     await assertResponderOrAbove();
+    // The export covers what the incident list shows this person, not every incident.
+    readScope = incidentReadWhere(await getCurrentAuthorizationActor());
   } catch (_error) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
@@ -88,7 +92,7 @@ export async function GET(req: NextRequest) {
   // For larger exports, use pagination or streaming
   const MAX_EXPORT_LIMIT = 10000;
   const incidents = await prisma.incident.findMany({
-    where,
+    where: { AND: [readScope, where] },
     include: {
       service: true,
       assignee: true,

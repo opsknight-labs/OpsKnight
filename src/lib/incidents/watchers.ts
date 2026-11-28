@@ -2,7 +2,7 @@ import 'server-only';
 import { z } from 'zod/v3';
 import type { Prisma } from '@prisma/client';
 import { AppError } from '@/lib/errors';
-import { hasCapability, CAPABILITIES, type AppRole } from '@/lib/authorization';
+import { hasCapability, CAPABILITIES, type AppRole, type Capability } from '@/lib/authorization';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { requireOperationalUser } from '@/lib/users/operational-eligibility';
 
@@ -13,7 +13,14 @@ export const IncidentWatcherSchema = z
     role: z.enum(['FOLLOWER', 'STAKEHOLDER', 'EXEC']).default('FOLLOWER'),
   })
   .strict();
-type WatcherActor = { id: string; role: AppRole };
+/** `capabilities` is the actor's effective set (role + custom roles); without it the role's built-ins apply. */
+type WatcherActor = { id: string; role: AppRole; capabilities?: ReadonlySet<Capability> };
+
+function canManageWatchers(actor: WatcherActor): boolean {
+  return actor.capabilities
+    ? actor.capabilities.has(CAPABILITIES.OPERATIONS_MANAGE)
+    : hasCapability(actor.role, CAPABILITIES.OPERATIONS_MANAGE);
+}
 
 /** Adapters must establish incident visibility before permitting self-subscription. */
 export async function setIncidentWatcher(
@@ -22,10 +29,7 @@ export async function setIncidentWatcher(
   client?: Prisma.TransactionClient
 ) {
   const input = IncidentWatcherSchema.parse(raw);
-  if (
-    !hasCapability(actor.role, CAPABILITIES.OPERATIONS_MANAGE) &&
-    (input.userId !== actor.id || input.role !== 'FOLLOWER')
-  ) {
+  if (!canManageWatchers(actor) && (input.userId !== actor.id || input.role !== 'FOLLOWER')) {
     throw new AppError({
       code: 'AUTHORIZATION_DENIED',
       userMessage: 'You may only subscribe yourself as a follower.',
@@ -72,7 +76,7 @@ export async function deleteIncidentWatcher(
       where: { id: input.watcherId, incidentId: input.incidentId },
     });
     if (!watcher) throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
-    if (!hasCapability(actor.role, CAPABILITIES.OPERATIONS_MANAGE) && watcher.userId !== actor.id) {
+    if (!canManageWatchers(actor) && watcher.userId !== actor.id) {
       throw new AppError({
         code: 'AUTHORIZATION_DENIED',
         userMessage: 'You may only unsubscribe yourself.',

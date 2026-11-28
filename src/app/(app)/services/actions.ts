@@ -10,11 +10,18 @@ import { randomBytes } from 'crypto';
 import { encrypt } from '@/lib/encryption';
 import { integrationKeyFingerprint } from '@/lib/integrations/credentials';
 import { logAudit } from '@/lib/audit';
+import { isAdministratorRole } from '@/lib/authorization';
+import { storeSlackWebhookUrl } from '@/lib/slack-webhook-secret';
 import { assertAdmin, assertCanModifyService } from '@/lib/rbac';
 import { assertServiceNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
 import { assertJiraIssueType, assertJiraProjectKey, parseLabels } from '@/lib/jira-validation';
-import { parseServiceNotificationChannels } from '@/lib/service-notification-settings';
+import {
+  isDispatchableServiceChannel,
+  parseServiceNotificationChannels,
+  unsupportedServiceChannels,
+} from '@/lib/service-notification-settings';
 import { setServiceWarRoomPolicy } from '@/lib/incident-collaboration/policy';
+import { revokeSubscriptionsLosingLastSelection } from '@/lib/status-pages/subscriber-administration';
 import type {
   WarRoomProviderSet,
   IncidentMeetingProvider,
@@ -134,6 +141,17 @@ export async function updateService(serviceId: string, formData: FormData) {
   const teamId = formData.get('teamId') as string;
   const escalationPolicyId = formData.get('escalationPolicyId') as string;
 
+  if (!isAdministratorRole(currentUser.role)) {
+    // Same rule as team service assignment: only administrators move a service between teams.
+    const current = await prisma.service.findUnique({
+      where: { id: serviceId },
+      select: { teamId: true },
+    });
+    if (current?.teamId && (teamId || null) !== current.teamId) {
+      throw new Error('Unauthorized. Only administrators can move a service between teams.');
+    }
+  }
+
   if (teamId && currentUser.role !== 'ADMIN') {
     const destinationMembership = await prisma.teamMember.findUnique({
       where: { userId_teamId: { teamId, userId: currentUser.id } },
@@ -205,34 +223,71 @@ function isSlackWebhookUrl(value: string) {
 
 export async function updateServiceNotificationSettings(serviceId: string, formData: FormData) {
   const currentUser = await assertCanModifyService(serviceId);
-  const channels = parseServiceNotificationChannels(formData);
+  let channels = parseServiceNotificationChannels(formData);
+  const unsupported = unsupportedServiceChannels(channels);
+  if (unsupported.length > 0) {
+    // EMAIL, SMS, PUSH and WHATSAPP never deliver at service level. A value that is already stored
+    // (legacy row, older form) is dropped on this save; adding a new one is refused.
+    const stored = await prisma.service.findUnique({
+      where: { id: serviceId },
+      select: { serviceNotificationChannels: true },
+    });
+    const storedChannels = new Set<string>(stored?.serviceNotificationChannels ?? []);
+    if (unsupported.some(channel => !storedChannels.has(channel))) {
+      return redirect(`/services/${serviceId}?tab=notifications&error=unsupported-channel`);
+    }
+    channels = channels.filter(channel => isDispatchableServiceChannel(channel));
+  }
   const isSlackEnabled = channels.includes('SLACK');
   const slackChannel = isSlackEnabled
     ? formData.has('slackChannel')
       ? String(formData.get('slackChannel') ?? '').trim() || null
       : undefined
     : null;
+  // The stored URL is a secret and is never sent to the form, so an empty field means "unchanged";
+  // clearing needs the explicit checkbox. Turning Slack off clears it.
+  const typedSlackWebhookUrl = String(formData.get('slackWebhookUrl') ?? '').trim();
   const slackWebhookUrl = isSlackEnabled
-    ? formData.has('slackWebhookUrl')
-      ? String(formData.get('slackWebhookUrl') ?? '').trim() || null
-      : undefined
+    ? formData.get('clearSlackWebhookUrl') === 'true'
+      ? null
+      : typedSlackWebhookUrl || undefined
     : null;
   if (slackWebhookUrl && !isSlackWebhookUrl(slackWebhookUrl)) {
     return redirect(`/services/${serviceId}?tab=notifications&error=invalid-slack-webhook`);
   }
+  let storedSlackWebhookUrl: string | null | undefined = slackWebhookUrl;
+  if (slackWebhookUrl) {
+    try {
+      storedSlackWebhookUrl = await storeSlackWebhookUrl(slackWebhookUrl);
+    } catch {
+      return redirect(`/services/${serviceId}?tab=notifications&error=slack-webhook-encryption`);
+    }
+  }
 
-  await prisma.service.update({
-    where: { id: serviceId },
-    data: {
-      serviceNotificationChannels: channels,
-      serviceNotifyOnTriggered: formData.get('serviceNotifyOnTriggered') === 'true',
-      serviceNotifyOnAck: formData.get('serviceNotifyOnAck') === 'true',
-      serviceNotifyOnResolved: formData.get('serviceNotifyOnResolved') === 'true',
-      serviceNotifyOnSlaBreach: formData.get('serviceNotifyOnSlaBreach') === 'true',
-      ...(slackChannel === undefined ? {} : { slackChannel }),
-      ...(slackWebhookUrl === undefined ? {} : { slackWebhookUrl }),
-    },
-  });
+  const data = {
+    serviceNotificationChannels: channels,
+    serviceNotifyOnTriggered: formData.get('serviceNotifyOnTriggered') === 'true',
+    serviceNotifyOnAck: formData.get('serviceNotifyOnAck') === 'true',
+    serviceNotifyOnResolved: formData.get('serviceNotifyOnResolved') === 'true',
+    serviceNotifyOnSlaBreach: formData.get('serviceNotifyOnSlaBreach') === 'true',
+    ...(slackChannel === undefined ? {} : { slackChannel }),
+    ...(storedSlackWebhookUrl === undefined ? {} : { slackWebhookUrl: storedSlackWebhookUrl }),
+  };
+  // The form carries the service revision it was loaded with (and refreshes after each immediate
+  // link/unlink). A save from a stale form is refused instead of overwriting a newer change. A form
+  // without one (an older frontend during a rolling deploy) keeps the previous last-write-wins save.
+  const submittedRevision = String(formData.get('expectedRevision') ?? '');
+  if (/^\d{1,10}$/.test(submittedRevision)) {
+    const saved = await prisma.service.updateMany({
+      where: { id: serviceId, revision: Number(submittedRevision) },
+      data,
+    });
+    if (saved.count !== 1) {
+      return redirect(`/services/${serviceId}?tab=notifications&error=stale-settings`);
+    }
+  } else {
+    await prisma.service.update({ where: { id: serviceId }, data });
+  }
 
   if (!isSlackEnabled) {
     await prisma.slackDestination.updateMany({
@@ -688,9 +743,11 @@ export async function deleteService(serviceId: string): Promise<{ error?: string
     };
   }
 
-  // Now delete the service
-  await prisma.service.delete({
-    where: { id: serviceId },
+  // Now delete the service; subscribers who only followed it are revoked, not widened to every service.
+  const unsubscribedSubscribers = await prisma.$transaction(async tx => {
+    const revoked = await revokeSubscriptionsLosingLastSelection(tx, { serviceId });
+    await tx.service.delete({ where: { id: serviceId } });
+    return revoked;
   });
 
   await logAudit({
@@ -698,7 +755,7 @@ export async function deleteService(serviceId: string): Promise<{ error?: string
     entityType: 'SERVICE',
     entityId: serviceId,
     actorId: currentUser.id,
-    details: { serviceId },
+    details: { serviceId, unsubscribedSubscribers },
   });
 
   revalidatePath('/services');

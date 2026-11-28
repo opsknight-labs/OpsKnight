@@ -940,6 +940,27 @@ Sets the polling interval while the general queue is idle.
 - Static default: `ghcr.io/opsknight-labs/opsknight:2.2.0`, `opsknight-local:test`
 - Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`, `env.example`, `scripts/soak-test-2h.sh`
 
+## `OPSKNIGHT_INBOUND_DELIVERY_RETENTION_DAYS`
+
+Days a finished inbound webhook delivery is kept before the scheduler deletes it (default `30`,
+range 1 to 3650; out-of-range values are clamped). These rows are the dedupe ledger and the
+diagnostics history of an integration, so a retried or replayed identical payload older than the
+window is treated as new. Cleanup runs hourly, removes at most 10,000 rows per run (10 batches of
+1,000), skips deliveries still being processed and continues on the next tick until the backlog is
+gone.
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: integer from `1` to `3650`
+- Secret: no
+- Runtime roles: scheduler or integrated runtime
+- Deployment support: env.example
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `30`
+- Sources: `env.example`, `src/lib/integrations/delivery-retention.ts`
+
 ## `OPSKNIGHT_INGESTION_CONCURRENCY`
 
 - Type: string
@@ -983,6 +1004,12 @@ Sets the polling interval while the general queue is idle.
 - Sources: `deploy/compose/docker-compose.ingestion.yml`, `src/lib/ingestion/config.ts`
 
 ## `OPSKNIGHT_INGESTION_MAX_INFLIGHT_REQUESTS`
+
+Webhook and event requests one process works on at the same time (default `32`, range 1 to
+1024; out-of-range values are clamped). A request that finds every slot busy waits up to
+`OPSKNIGHT_INGESTION_REQUEST_WAIT_MS`, then gets `503` with `Retry-After`. That response is the
+intended backpressure signal: senders that retry (most providers do) recover without losing the
+alert. Raise the limit only after checking database pool size and provider capacity.
 
 - Type: string
 - Required: conditional or optional; inspect cited source
@@ -1036,6 +1063,25 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: `24`
+- Sources: `deploy/compose/docker-compose.ingestion.yml`, `src/lib/ingestion/config.ts`
+
+## `OPSKNIGHT_INGESTION_REQUEST_WAIT_MS`
+
+How long, in milliseconds, a request waits for a free in-flight slot before it is answered with
+`503` and `Retry-After` (default `25`, range 0 to 1000; out-of-range values are clamped, `0`
+rejects immediately). The `503` is the intended backpressure signal, not a fault. A longer wait
+smooths short bursts but holds sockets open on a saturated replica.
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: integer from `0` to `1000`
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `25`
 - Sources: `deploy/compose/docker-compose.ingestion.yml`, `src/lib/ingestion/config.ts`
 
 ## `OPSKNIGHT_MIGRATION_ONLY`

@@ -90,6 +90,9 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
       if (response.status === 401) {
         throw new Error('Your session expired. Sign in again to refresh.');
       }
+      if (response.status === 503) {
+        throw new Error('The server is busy refreshing. Try again in a few seconds.');
+      }
       if (!response.ok) {
         throw new Error('Fresh data could not be loaded. Please retry.');
       }

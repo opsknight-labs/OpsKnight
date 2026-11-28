@@ -1,4 +1,4 @@
-import { render, fireEvent, act } from '@testing-library/react';
+import { render, fireEvent } from '@testing-library/react';
 import PullToRefresh from '@/components/mobile/PullToRefresh';
 import { useRouter } from 'next/navigation';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
@@ -88,6 +88,27 @@ describe('PullToRefresh', () => {
 
     fireEvent.touchEnd(ptrDiv);
 
+    expect(refreshMock).not.toHaveBeenCalled();
+  });
+  it('tells the user the server is busy when the refresh answers 503', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({ error: 'REFRESH_BUSY' }),
+    }) as unknown as typeof fetch;
+    const { container, findByText } = render(
+      <PullToRefresh>
+        <div>Test Content</div>
+      </PullToRefresh>
+    );
+    const ptrDiv = container.firstChild as HTMLElement;
+    ptrDiv.closest = vi.fn().mockReturnValue({ scrollTop: 0 });
+
+    fireEvent.touchStart(ptrDiv, { targetTouches: [{ clientY: 100 }] });
+    fireEvent.touchMove(ptrDiv, { targetTouches: [{ clientY: 300 }] });
+    fireEvent.touchEnd(ptrDiv);
+
+    expect(await findByText(/server is busy refreshing/i)).toBeTruthy();
     expect(refreshMock).not.toHaveBeenCalled();
   });
 });

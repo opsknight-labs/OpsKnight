@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { parseServiceNotificationChannels } from '@/lib/service-notification-settings';
+import {
+  isDispatchableServiceChannel,
+  parseServiceNotificationChannels,
+  unsupportedServiceChannels,
+} from '@/lib/service-notification-settings';
 
 describe('parseServiceNotificationChannels', () => {
   it('treats an explicitly empty channel snapshot as disabling every channel', () => {
@@ -34,5 +38,16 @@ describe('parseServiceNotificationChannels', () => {
     formData.append('serviceNotificationChannels', 'SLACK');
 
     expect(parseServiceNotificationChannels(formData)).toEqual([]);
+  });
+});
+
+describe('dispatchable service channels', () => {
+  it('flags the channels the dispatcher never sends to', () => {
+    expect(unsupportedServiceChannels(['SLACK', 'EMAIL', 'WEBHOOK', 'SMS', 'PUSH', 'WHATSAPP'])).toEqual(
+      ['EMAIL', 'SMS', 'PUSH', 'WHATSAPP']
+    );
+    expect(unsupportedServiceChannels(['SLACK', 'WEBHOOK', 'MICROSOFT_TEAMS'])).toEqual([]);
+    expect(isDispatchableServiceChannel('MICROSOFT_TEAMS')).toBe(true);
+    expect(isDispatchableServiceChannel('EMAIL')).toBe(false);
   });
 });

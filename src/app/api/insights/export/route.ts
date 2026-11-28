@@ -7,6 +7,7 @@ import { jsonError } from '@/lib/api-response';
 import { AuthorizationError, CAPABILITIES } from '@/lib/authorization';
 import { logger } from '@/lib/logger';
 import prisma from '@/lib/prisma';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { assertCapability, getCurrentAuthorizationActor } from '@/lib/rbac';
 import { getUserTimeZone } from '@/lib/timezone';
 
@@ -23,6 +24,11 @@ export async function GET(req: NextRequest) {
     return error instanceof AuthorizationError
       ? jsonError('You do not have permission to export analytics.', 403)
       : jsonError('Unauthorized', 401);
+  }
+
+  // Each export recomputes every section live, so one person cannot repeat it at will.
+  if (!(await checkRateLimit(`analytics:export:${user.id}`, 10, 60_000)).allowed) {
+    return jsonError('Too many exports. Try again in a minute.', 429);
   }
 
   try {

@@ -1,5 +1,6 @@
 import { z } from 'zod/v3';
 import { EscalationTargetType, NotificationChannel, type Prisma } from '@prisma/client';
+import { AppError } from '@/lib/errors';
 import { escalationConditionSchema } from './policy-validation';
 
 export const MAX_ESCALATION_STEPS = 50;
@@ -75,4 +76,33 @@ export async function lockResponderPolicy(client: Prisma.TransactionClient, poli
   await client.$queryRaw`SELECT id FROM "EscalationPolicy" WHERE id=${policyId} FOR UPDATE`;
 }
 
+/**
+ * Steps are part of the policy's REST representation. The revision trigger fires only on an UPDATE of
+ * the policy row, so a step change must touch it or a stale v2 If-Match still passes and overwrites it.
+ */
+export async function bumpResponderPolicyRevision(
+  client: Prisma.TransactionClient,
+  policyId: string
+) {
+  await client.escalationPolicy.update({
+    where: { id: policyId },
+    data: { updatedAt: new Date() },
+  });
+}
+
 export const assertResponderPolicySnapshotSafe = captureResponderSnapshot;
+
+/** API callers get a validation error, not a 500, when an edit makes the policy too large to pin. */
+export async function assertResponderPolicySnapshotSafeForApi(
+  client: Prisma.TransactionClient,
+  policyId: string
+) {
+  try {
+    await captureResponderSnapshot(client, policyId);
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Pinned escalation policy ')) {
+      throw new AppError({ code: 'INVALID_ESCALATION_STEP', userMessage: error.message });
+    }
+    throw error;
+  }
+}

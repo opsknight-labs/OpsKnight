@@ -35,7 +35,8 @@ import {
 import { getDefaultAnalyticsViewQuery, listAnalyticsViews } from '@/lib/analytics/views';
 import { getAuthOptions } from '@/lib/auth';
 import { opsHelpersOn } from '@/lib/intelligence/helpers/on-demand';
-import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { CAPABILITIES } from '@/lib/authorization';
+import { actorHasCapability } from '@/lib/authorization-policy';
 import {
   dashboardUserReadWhere,
   serviceReadWhere,
@@ -107,7 +108,8 @@ export default async function AnalyticsPage({
   const context = await createAnalyticsContext(actor, params, getUserTimeZone(user ?? undefined));
   const key = analyticsParamsKey(params);
   const exportQuery = toAnalyticsSearchParams(params).toString();
-  const canExport = hasCapability(actor.role, CAPABILITIES.REPORT_EXPORT);
+  // The effective capabilities (custom role and grants included), as the export route checks.
+  const canExport = actorHasCapability(actor, CAPABILITIES.REPORT_EXPORT);
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -152,7 +154,11 @@ export default async function AnalyticsPage({
         users={users.map(u => ({ id: u.id, name: u.name || u.email }))}
         priorities={PRIORITIES}
         actions={
-          <AnalyticsViews views={views} teams={teams.filter(t => actor.teamIds.includes(t.id))} />
+          <AnalyticsViews
+            views={views}
+            teams={teams.filter(t => actor.teamIds.includes(t.id))}
+            canManage={actorHasCapability(actor, CAPABILITIES.REPORT_MANAGE)}
+          />
         }
       />
       <Suspense key={`fresh-${key}`} fallback={<div className="h-11 sm:h-5" aria-hidden />}>

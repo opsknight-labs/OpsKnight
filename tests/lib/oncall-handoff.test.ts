@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { processShiftRotations } from '@/lib/oncall-handoff';
+import { processShiftRotations, processUpcomingShiftReminders } from '@/lib/oncall-handoff';
 import type { DynamicOnCallShift } from '@/lib/oncall-shifts';
 
 // Mock prisma
@@ -47,6 +47,48 @@ describe('oncall-handoff', () => {
     vi.clearAllMocks();
     const { default: prisma } = await import('@/lib/prisma');
     vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 1 });
+  });
+
+  describe('processUpcomingShiftReminders', () => {
+    it('is not suppressed by an unrelated recent SCHEDULE notification for the same schedule', async () => {
+      const { default: prisma } = await import('@/lib/prisma');
+      const { getActiveOnCallShifts } = await import('@/lib/oncall-shifts');
+      const { createInAppNotifications } = await import('@/lib/in-app-notifications');
+      const now = new Date('2026-08-26T06:00:00Z');
+      const start = new Date(now.getTime() + 30 * 60 * 1000);
+
+      // Nobody is on call now; user-b starts in 30 minutes.
+      vi.mocked(getActiveOnCallShifts).mockImplementation(async (time: Date = new Date()) =>
+        time.getTime() > now.getTime()
+          ? [
+              {
+                id: 'shift-2',
+                scheduleId: 'sched-1',
+                userId: 'user-b',
+                schedule: { id: 'sched-1', name: 'Devops Schedule' },
+                user: { id: 'user-b', name: 'User B', email: null },
+                start,
+                end: new Date(start.getTime() + 60 * 60 * 1000),
+              } as unknown as DynamicOnCallShift,
+            ]
+          : []
+      );
+      // The only stored notification is an override notice, not a shift reminder.
+      const stored = { title: 'Schedule override added' };
+      vi.mocked(prisma.inAppNotification.findFirst).mockImplementation((async (args: {
+        where: { title?: string };
+      }) =>
+        args.where.title === undefined || args.where.title === stored.title
+          ? stored
+          : null) as never);
+
+      const sent = await processUpcomingShiftReminders(now, 60);
+
+      expect(sent).toBe(1);
+      expect(createInAppNotifications).toHaveBeenCalledWith(
+        expect.objectContaining({ userIds: ['user-b'], title: 'Upcoming On-Call Shift' })
+      );
+    });
   });
 
   describe('processShiftRotations', () => {

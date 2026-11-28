@@ -1,6 +1,9 @@
 import { NextRequest } from 'next/server';
 import { getCurrentUser } from '@/lib/rbac';
-import { requeueCentralNotification } from '@/lib/notification-control-plane';
+import {
+  notificationRetryBlockedReason,
+  requeueCentralNotification,
+} from '@/lib/notification-control-plane';
 import { emitAuditEvent } from '@/lib/audit';
 import { logger } from '@/lib/logger';
 import { jsonError, jsonOk } from '@/lib/api-response';
@@ -30,7 +33,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   try {
     const requeued = await requeueCentralNotification(id);
     if (!requeued) {
-      return jsonError('Notification is not eligible for another delivery attempt', 409);
+      return jsonError(
+        (await notificationRetryBlockedReason(id)) ??
+          'Notification is not eligible for another delivery attempt',
+        409
+      );
     }
     await emitAuditEvent({
       action: 'NOTIFICATION_DELIVERY_REQUEUED',

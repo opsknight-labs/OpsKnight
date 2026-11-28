@@ -1,6 +1,7 @@
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import { getCurrentAuthorizationActor } from '@/lib/rbac';
+import { getCurrentAuthorizationActor, getCurrentUser } from '@/lib/rbac';
+import { getUserTimeZone } from '@/lib/timezone';
 import {
   DashboardAnalyticsUnavailableError,
   getDashboardAnalytics,
@@ -113,7 +114,10 @@ export async function GET(request: Request) {
 
   try {
     const actor = await getCurrentAuthorizationActor();
-    const analytics = await getDashboardAnalytics(actor, filters);
+    const analytics = await getDashboardAnalytics(actor, {
+      ...filters,
+      userTimeZone: getUserTimeZone(await getCurrentUser()),
+    });
     return jsonOk(analytics, 200, { 'Cache-Control': 'private, no-store' });
   } catch (error) {
     if (error instanceof DashboardAnalyticsUnavailableError) {

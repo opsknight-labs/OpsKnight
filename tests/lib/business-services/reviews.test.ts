@@ -14,7 +14,7 @@ import {
   priorPeriod,
   reviewPeriod,
 } from '@/lib/business-services/reviews/period';
-import { estimateCostCents, revenueOf } from '@/lib/business-services/reviews/data';
+import { causeLabel, estimateCostCents, revenueOf } from '@/lib/business-services/reviews/data';
 import { normalizeConfig, reviewConfigSchema } from '@/lib/business-services/reviews/config';
 import {
   authorize,
@@ -269,5 +269,22 @@ describe('RBAC', () => {
         action: AUTHORIZATION_ACTIONS.SERVICE_REVIEW_MANAGE,
       }).allowed
     ).toBe(false);
+  });
+});
+
+describe('causeLabel', () => {
+  const incident = (status: string) => ({
+    title: 'API latency',
+    postmortem: { status, rootCause: 'Expired cert on db-7\nsecond line' },
+  });
+
+  it('quotes the first line of a published postmortem root cause', () => {
+    expect(causeLabel(incident('PUBLISHED'))).toBe('Expired cert on db-7');
+  });
+
+  it('falls back to the incident title for a draft or archived postmortem', () => {
+    expect(causeLabel(incident('DRAFT'))).toBe('API latency');
+    expect(causeLabel(incident('ARCHIVED'))).toBe('API latency');
+    expect(causeLabel({ title: 'API latency', postmortem: null })).toBe('API latency');
   });
 });

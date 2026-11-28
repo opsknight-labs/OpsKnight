@@ -31,6 +31,7 @@ import {
 import UserAvatar from '@/components/UserAvatar';
 import IncidentUserPicker from './IncidentUserPicker';
 import { cn } from '@/lib/utils';
+import { notify } from '@/lib/toast';
 import { FIELD_SELECT_CLASS } from '@/components/incident/field-styles';
 
 type Watcher = {
@@ -56,8 +57,8 @@ type IncidentWatchersProps = {
   }>;
   canManage: boolean;
   currentUserId?: string | null;
-  onAddWatcher: (formData: FormData) => void;
-  onRemoveWatcher: (formData: FormData) => void;
+  onAddWatcher: (formData: FormData) => void | Promise<void>;
+  onRemoveWatcher: (formData: FormData) => void | Promise<void>;
   className?: string;
 };
 
@@ -116,6 +117,21 @@ export default function IncidentWatchers({
     : null;
   const isCurrentWatcher = Boolean(currentWatcherRecord);
 
+  // A failed action (watcher already removed in another tab, access denied) must not reach the
+  // page's error boundary: show it as a toast and keep the incident page.
+  const attempt = async (
+    action: (formData: FormData) => void | Promise<void>,
+    formData: FormData
+  ) => {
+    try {
+      await action(formData);
+      return true;
+    } catch (error) {
+      notify.error(error);
+      return false;
+    }
+  };
+
   const handleSelfWatch = () => {
     if (!currentUserId) return;
     const formData = new FormData();
@@ -123,7 +139,7 @@ export default function IncidentWatchers({
     formData.append('watcherRole', 'FOLLOWER');
 
     startTransition(async () => {
-      await onAddWatcher(formData);
+      await attempt(onAddWatcher, formData);
     });
   };
 
@@ -133,7 +149,7 @@ export default function IncidentWatchers({
     formData.append('watcherMemberId', currentWatcherRecord.id);
 
     startTransition(async () => {
-      await onRemoveWatcher(formData);
+      await attempt(onRemoveWatcher, formData);
     });
   };
 
@@ -143,7 +159,7 @@ export default function IncidentWatchers({
     formData.append('watcherRole', newRole);
 
     startTransition(async () => {
-      await onAddWatcher(formData);
+      await attempt(onAddWatcher, formData);
     });
   };
 
@@ -156,7 +172,7 @@ export default function IncidentWatchers({
     formData.append('watcherRole', selectedRole);
 
     startTransition(async () => {
-      await onAddWatcher(formData);
+      if (!(await attempt(onAddWatcher, formData))) return;
       setSelectedUserId('');
       setOpen(false);
     });
@@ -494,7 +510,11 @@ export default function IncidentWatchers({
                   )}
 
                   {canManage && (
-                    <form action={onRemoveWatcher}>
+                    <form
+                      action={async (formData: FormData) => {
+                        await attempt(onRemoveWatcher, formData);
+                      }}
+                    >
                       <input type="hidden" name="watcherMemberId" value={watcher.id} />
                       <Button
                         type="submit"

@@ -29,6 +29,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import { Clock, ShieldAlert } from 'lucide-react';
 import { notify } from '@/lib/toast';
 import PolicyStepCreateForm from '@/components/PolicyStepCreateForm';
+import { useInFlightEscalationGuard } from './useInFlightEscalationGuard';
 import type { PolicyStepStat } from '@/lib/intelligence/ops-insights/policy-intelligence';
 
 type EscalationStep = {
@@ -69,6 +70,8 @@ type StepsListProps = {
     newOrder: Array<string | { id: string; delayMinutes?: number }>
   ) => Promise<{ error?: string } | undefined>;
   addStep: (policyId: string, formData: FormData) => Promise<{ error?: string } | undefined>;
+  /** Open incidents mid-escalation on the policy; a failed read counts as none (the server still moves their cursors). */
+  countMidEscalation: (policyId: string) => Promise<{ count?: number; error?: string }>;
   users: Array<{
     id: string;
     name: string;
@@ -93,6 +96,7 @@ export default function StepsList({
   moveStep,
   reorderSteps,
   addStep,
+  countMidEscalation,
   users,
   teams,
   schedules,
@@ -116,42 +120,39 @@ export default function StepsList({
     })
   );
 
+  const countInFlight = async () =>
+    (await countMidEscalation(policyId).catch(() => undefined))?.count ?? 0;
+  const { guard, dialog: inFlightDialog } = useInFlightEscalationGuard(countInFlight);
+
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
+    if (!over || active.id === over.id) return;
 
-    if (active.id !== over?.id) {
-      setSteps(items => {
-        const oldIndex = items.findIndex(item => item.id === active.id);
-        const newIndex = items.findIndex(item => item.id === over?.id);
+    const previous = steps;
+    const oldIndex = previous.findIndex(item => item.id === active.id);
+    const newIndex = previous.findIndex(item => item.id === over.id);
 
-        // 1. Capture original timeline delays in positional order
-        const delays = items.map(item => item.delayMinutes);
+    // Responders move to new positions, but the timeline delays stay positional so Step 1 always maintains Immediate (0m).
+    const delays = previous.map(item => item.delayMinutes);
+    const reordered = arrayMove(previous, oldIndex, newIndex).map((item, index) => ({
+      ...item,
+      delayMinutes: delays.at(index) ?? item.delayMinutes,
+    }));
+    setSteps(reordered);
 
-        // 2. Reorder items (responders move to new positions)
-        const newItems = arrayMove(items, oldIndex, newIndex);
-
-        // 3. Re-assign delays based on the position so Step 1 always maintains Immediate (0m)
-        const itemsWithFixedDelays = newItems.map((item, index) => ({
-          ...item,
-          delayMinutes: delays.at(index) ?? item.delayMinutes,
-        }));
-
-        // 4. Trigger server update persisting both order and positional delays
-        startTransition(async () => {
-          const reorderPayload = itemsWithFixedDelays.map(s => ({
-            id: s.id,
-            delayMinutes: s.delayMinutes,
-          }));
-          const result = await reorderSteps(policyId, reorderPayload);
-          if (result?.error) {
-            notify.error(result.error);
-            router.refresh(); // Sync back on error
-          }
-        });
-
-        return itemsWithFixedDelays;
+    // Persist both order and positional delays, once the operator confirms when incidents are mid-escalation.
+    const persist = () =>
+      startTransition(async () => {
+        const result = await reorderSteps(
+          policyId,
+          reordered.map(item => ({ id: item.id, delayMinutes: item.delayMinutes }))
+        );
+        if (result?.error) {
+          notify.error(result.error);
+          router.refresh(); // Sync back on error
+        }
       });
-    }
+    void guard('reorder', persist, () => setSteps(previous));
   }
 
   return (
@@ -196,6 +197,7 @@ export default function StepsList({
                     updateStep={updateStep}
                     deleteStep={deleteStep}
                     moveStep={moveStep}
+                    countInFlight={countInFlight}
                     users={users}
                     teams={teams}
                     schedules={schedules}
@@ -211,6 +213,8 @@ export default function StepsList({
             </SortableContext>
           </DndContext>
         )}
+
+        {inFlightDialog}
 
         {canManage && (
           <div className="pt-6 border-t border-ink-100">

@@ -10,6 +10,7 @@ import { jsonError, jsonOk } from '@/lib/api-response';
 import { v1ErrorResponse } from '@/lib/api-v1-errors';
 import { createServiceObjective } from '@/lib/slo/commands';
 import { runSerializableTransaction } from '@/lib/db-utils';
+import { isAppError } from '@/lib/errors';
 
 export async function GET(request: NextRequest) {
   try {
@@ -50,15 +51,20 @@ export async function POST(request: NextRequest) {
       if (!service) return jsonError('Service not found', 404);
     }
 
+    // null = the slot must be empty: a POST must not silently retire the active objective
+    // (and cut its version history off) the way the settings UI's replace does.
     const objective = await runSerializableTransaction(tx =>
-      createServiceObjective(tx, data, { id: actor.id, source: 'UI' })
+      createServiceObjective(tx, data, { id: actor.id, source: 'UI' }, null)
     );
     return jsonOk({ ...objective, id: objective.lineageId, versionId: objective.id }, 201);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return jsonError('Validation failed', 400, { details: error.errors });
     }
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+    if (
+      (isAppError(error) && error.code === 'PRECONDITION_FAILED') ||
+      (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')
+    ) {
       return jsonError('An active objective already exists for this service and metric', 409);
     }
     logger.error('Service objective creation failed', { error });

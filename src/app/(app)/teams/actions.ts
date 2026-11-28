@@ -1,11 +1,14 @@
 'use server';
 
 import prisma from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
+import { AppError } from '@/lib/errors';
 import { assignTeamServices } from '@/lib/teams/service-commands';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { revalidatePath } from 'next/cache';
 import { logAudit } from '@/lib/audit';
 import { assertAdminOrResponder, assertAdmin, assertTeamManager } from '@/lib/rbac';
+import { CAPABILITIES, capabilitiesOf } from '@/lib/authorization';
 import { logger } from '@/lib/logger';
 import { assertTeamNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
 import { removeTeamMembership } from '@/lib/teams/membership-commands';
@@ -19,6 +22,8 @@ import {
   findTeamDeletionBlocker,
 } from '@/lib/teams/administration';
 
+const TEAM_ALREADY_DELETED = 'This team no longer exists. It may already have been deleted.';
+
 type TeamFormState = {
   error?: string | null;
   success?: boolean;
@@ -28,7 +33,7 @@ export async function createTeam(
   _prevState: TeamFormState,
   formData: FormData
 ): Promise<TeamFormState> {
-  let currentUser: { id: string } | null = null;
+  let currentUser: Awaited<ReturnType<typeof assertAdminOrResponder>>;
   try {
     currentUser = await assertAdminOrResponder();
   } catch (error) {
@@ -56,12 +61,26 @@ export async function createTeam(
     return { error: error instanceof Error ? error.message : 'Failed to validate team name.' };
   }
 
-  const team = await prisma.team.create({
-    data: {
-      name: normalizedName,
-      description: description || null,
-    },
-  });
+  let team: Awaited<ReturnType<typeof prisma.team.create>>;
+  try {
+    team = await prisma.team.create({
+      data: {
+        name: normalizedName,
+        description: description || null,
+        // Only organisation admins can manage a team they are not on, so anyone else who creates
+        // one owns it. Otherwise nobody could ever add a member to it.
+        ...(capabilitiesOf(currentUser).includes(CAPABILITIES.ADMIN_MANAGE)
+          ? {}
+          : { members: { create: { userId: currentUser.id, role: 'OWNER' as const } } }),
+      },
+    });
+  } catch (error) {
+    // A concurrent create of the same name passes the check above and loses on the unique index.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return { error: 'A team with that name already exists.' };
+    }
+    throw error;
+  }
 
   const actorId = currentUser.id;
   await logAudit({
@@ -108,24 +127,33 @@ export async function updateTeam(teamId: string, formData: FormData) {
   }
 
   const actorId = currentUser.id;
-  await runSerializableTransaction(async tx => {
-    await requireTeamAccess(tx, teamId, { id: actorId }, true);
-    await setTeamLead(teamId, { userId: teamLeadId || null }, { id: actorId }, { client: tx });
-    await tx.team.update({
-      where: { id: teamId },
-      data: { name: normalizedName, description: description || null },
+  try {
+    await runSerializableTransaction(async tx => {
+      await requireTeamAccess(tx, teamId, { id: actorId }, true);
+      await setTeamLead(teamId, { userId: teamLeadId || null }, { id: actorId }, { client: tx });
+      await tx.team.update({
+        where: { id: teamId },
+        data: { name: normalizedName, description: description || null },
+      });
+      await logAudit(
+        {
+          action: 'team.updated',
+          entityType: 'TEAM',
+          entityId: teamId,
+          actorId,
+          details: { name: normalizedName },
+        },
+        tx
+      );
     });
-    await logAudit(
-      {
-        action: 'team.updated',
-        entityType: 'TEAM',
-        entityId: teamId,
-        actorId,
-        details: { name: normalizedName },
-      },
-      tx
-    );
-  });
+  } catch (error) {
+    // Show the rule that was broken (inactive lead, lost access, name taken in a race) in the form.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return { error: 'A team with that name already exists.' };
+    }
+    if (error instanceof AppError) return { error: error.userMessage };
+    throw error;
+  }
 
   revalidatePath('/teams');
   revalidatePath('/services');
@@ -148,40 +176,42 @@ export async function deleteTeam(teamId: string) {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
     };
   }
+  const team = await prisma.team.findUnique({ where: { id: teamId }, select: { name: true } });
+  if (!team) return { error: TEAM_ALREADY_DELETED };
   const blocker = await findTeamDeletionBlocker(teamId);
   if (blocker) return { error: blocker };
-  await prisma.$transaction([
-    prisma.teamMember.deleteMany({
-      where: { teamId },
-    }),
-    prisma.service.updateMany({
-      where: { teamId },
-      data: { teamId: null },
-    }),
-    prisma.incident.updateMany({
-      where: { teamId },
-      data: { teamId: null },
-    }),
-    prisma.escalationRule.updateMany({
-      where: { targetTeamId: teamId },
-      data: { targetTeamId: null },
-    }),
-    prisma.dashboard.updateMany({
-      where: { teamId },
-      data: { teamId: null },
-    }),
-    prisma.team.delete({
-      where: { id: teamId },
-    }),
-  ]);
-
   const actorId = currentUser.id;
-  await logAudit({
-    action: 'team.deleted',
-    entityType: 'TEAM',
-    entityId: teamId,
-    actorId,
-  });
+  try {
+    // The audit row commits with the delete: a failed audit rolls the delete back, and a
+    // committed delete always has its audit row.
+    await prisma.$transaction(async tx => {
+      await tx.teamMember.deleteMany({ where: { teamId } });
+      await tx.service.updateMany({ where: { teamId }, data: { teamId: null } });
+      await tx.incident.updateMany({ where: { teamId }, data: { teamId: null } });
+      await tx.escalationRule.updateMany({
+        where: { targetTeamId: teamId },
+        data: { targetTeamId: null },
+      });
+      await tx.dashboard.updateMany({ where: { teamId }, data: { teamId: null } });
+      await tx.team.delete({ where: { id: teamId } });
+      await logAudit(
+        {
+          action: 'team.deleted',
+          entityType: 'TEAM',
+          entityId: teamId,
+          actorId,
+          details: { name: team.name },
+        },
+        tx
+      );
+    });
+  } catch (error) {
+    // A second delete from another tab loses the race for the row.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      return { error: TEAM_ALREADY_DELETED };
+    }
+    throw error;
+  }
 
   revalidatePath('/teams');
   revalidatePath('/services');

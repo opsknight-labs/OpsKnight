@@ -87,6 +87,19 @@ describe('ChartWidget', () => {
       expect(container.querySelector('title')?.textContent).toBe('Sep 1, 2026: 4 incidents');
     });
 
+    it('says the history is unavailable instead of drawing an empty calendar when the query failed', () => {
+      const { container } = render(
+        <ChartWidget
+          metricKey="heatmapData"
+          metrics={{ ...mockMetrics, heatmapData: [], heatmapAvailable: false }}
+          config={{ chartType: 'heatmap' }}
+        />
+      );
+
+      expect(screen.getByText('Incident history is temporarily unavailable.')).toBeDefined();
+      expect(container.querySelector('title')).toBeNull();
+    });
+
     it('renders dual-series chart for mttaVsMttr', () => {
       const { container } = render(
         <ChartWidget
@@ -101,11 +114,7 @@ describe('ChartWidget', () => {
 
     it('renders native pie chart for urgencyMix', () => {
       const { container } = render(
-        <ChartWidget
-          metricKey="urgencyMix"
-          metrics={mockMetrics}
-          config={{ chartType: 'pie' }}
-        />
+        <ChartWidget metricKey="urgencyMix" metrics={mockMetrics} config={{ chartType: 'pie' }} />
       );
 
       expect(container.querySelector('.analytics-pie-chart')).toBeDefined();

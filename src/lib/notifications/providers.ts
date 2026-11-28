@@ -19,6 +19,7 @@ import {
   assertProviderConfigReady,
   notificationProviderConfigSchema,
   notificationProviderKeySchema,
+  VAPID_KEY_HISTORY_LIMIT,
   type NotificationProviderKey,
 } from './provider-schema';
 
@@ -327,7 +328,7 @@ export async function rotateWebPushKeys(input: {
           (entry, index, all) =>
             all.findIndex(candidate => candidate.publicKey === entry.publicKey) === index
         )
-        .slice(0, 3)
+        .slice(0, VAPID_KEY_HISTORY_LIMIT)
     : [];
   const config = await encryptProviderConfig('web-push', {
     ...old,

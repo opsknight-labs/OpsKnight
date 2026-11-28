@@ -193,12 +193,6 @@ function StatusPageLivePreview({
     if (previewData.statusPage?.customDomain?.trim()) {
       return previewData.statusPage.customDomain.trim();
     }
-    if (previewData.statusPage?.subdomain?.trim()) {
-      return `${previewData.statusPage.subdomain.trim()}.opsknight.com`;
-    }
-    if (previewData.statusPage?.slug?.trim()) {
-      return `status-${previewData.statusPage.slug.trim()}.opsknight.com`;
-    }
     return 'status.example.com';
   }, [previewDomain, previewData.statusPage]);
 

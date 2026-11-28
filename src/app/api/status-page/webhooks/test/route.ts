@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import crypto from 'crypto';
 import prisma from '@/lib/prisma';
 import { assertAdmin } from '@/lib/rbac';
+import { logAudit } from '@/lib/audit';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
 import { decryptStoredSecret } from '@/lib/encryption';
@@ -13,8 +14,9 @@ import { enqueueCentralNotification } from '@/lib/notification-control-plane';
  * Sends a test payload to webhooks for a status page
  */
 export async function POST(req: NextRequest) {
+  let admin: Awaited<ReturnType<typeof assertAdmin>>;
   try {
-    await assertAdmin();
+    admin = await assertAdmin();
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : 'Unauthorized', 403);
   }
@@ -42,6 +44,14 @@ export async function POST(req: NextRequest) {
         404
       );
     }
+
+    await logAudit({
+      action: 'status_page.webhook.tested',
+      entityType: 'STATUS_PAGE',
+      entityId: statusPageId,
+      actorId: admin.id,
+      details: { webhookIds: validWebhooks.map(w => w.id) },
+    });
 
     // Send test payload to all webhooks
     const testPayload = {

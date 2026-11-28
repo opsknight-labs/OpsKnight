@@ -18,6 +18,8 @@ import {
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
 import { withV2Observability } from '@/lib/api-v2/observability';
+import { deriveAnnouncementNotificationPlan } from '@/lib/status-pages/announcement-notification-plan';
+import { createAnnouncementFanoutJob } from '@/lib/status-pages/announcement-commands';
 
 export const GET = withV2Observability(async function GET(
   req: NextRequest,
@@ -122,21 +124,33 @@ export const POST = withV2Observability(async function POST(
       });
     }
 
+    // Notify subscribers exactly as an announcement created in the console does.
+    const startDate = validated.startDate ? new Date(validated.startDate) : new Date();
+    const publishAt = new Date();
+    const plan = deriveAnnouncementNotificationPlan({
+      isActive: validated.isActive,
+      notificationTiming: 'ON_PUBLISH',
+      publishAt,
+      startDate,
+    });
+
     const execution = await runV2IdempotentAuditedMutation(
       req,
       apiKey.id,
       `status-page:${id}:announcement:create`,
       validated,
-      tx =>
-        tx.statusPageAnnouncement.create({
+      async tx => {
+        const created = await tx.statusPageAnnouncement.create({
           data: {
             statusPageId: id,
             title: validated.title,
             message: validated.message,
             type: validated.type,
-            startDate: validated.startDate ? new Date(validated.startDate) : new Date(),
+            startDate,
             endDate: validated.endDate ? new Date(validated.endDate) : null,
             isActive: validated.isActive,
+            publishAt,
+            notificationTiming: 'ON_PUBLISH',
             affectedServiceIds: affectedServiceIds ?? Prisma.JsonNull,
             affectedBusinessServiceIds: affectedBusinessServiceIds ?? Prisma.JsonNull,
           },
@@ -152,7 +166,18 @@ export const POST = withV2Observability(async function POST(
             affectedBusinessServiceIds: true,
             createdAt: true,
           },
-        }),
+        });
+        if (plan.shouldNotify && plan.scheduledAt) {
+          await createAnnouncementFanoutJob(tx, {
+            announcementId: created.id,
+            statusPageId: id,
+            scheduledAt: plan.scheduledAt,
+            generation: 0, // a new row starts at generation 0
+            deliveryMode: 'ALL_ELIGIBLE',
+          });
+        }
+        return created;
+      },
       announcement => ({
         action: 'status_page_announcement.created',
         entityType: 'STATUS_PAGE',

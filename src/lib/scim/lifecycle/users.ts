@@ -24,6 +24,17 @@ import { reconcileTeam } from './membership';
 import { reconcileScimRoles } from './roles';
 import { applyProfileAuthority, requestedProfileFields } from './profile';
 
+/** An administrator's email is a login and password-reset address; a directory must not move it. */
+class ScimAdministratorEmailRefused extends ScimFailure {
+  constructor() {
+    super(
+      400,
+      'The email of an administrator account cannot be changed through SCIM.',
+      'mutability'
+    );
+  }
+}
+
 function profile(document: UserDocument): {
   email: string;
   name: string;
@@ -276,6 +287,12 @@ export async function users(request: NextRequest, id?: string) {
     // A case-only representation change is not a new login identity.
     if (nextProfile.email.toLowerCase() === existing.email.toLowerCase())
       nextProfile.email = existing.email;
+    if (
+      request.method !== 'DELETE' &&
+      nextProfile.email !== existing.email &&
+      existing.role === 'ADMIN'
+    )
+      throw new ScimAdministratorEmailRefused();
     if (request.method !== 'DELETE' && nextProfile.email !== existing.email) {
       const collisions = await tx.$queryRaw<{ id: string }[]>`
         SELECT id FROM "User" WHERE lower(email) = lower(${nextProfile.email}) AND id <> ${id} LIMIT 1`;
@@ -373,6 +390,23 @@ export async function users(request: NextRequest, id?: string) {
       }
     );
     return { user, externalId: identity.externalId };
+  }).catch(async error => {
+    // The refusal rolled the transaction back, so its record is written on its own.
+    if (error instanceof ScimAdministratorEmailRefused)
+      try {
+        await prisma.scimEvent.create({
+          data: {
+            connectorId: principal.connectorId,
+            action: 'user.update_refused',
+            resourceId: id,
+            requestId: scimRequestId(),
+            details: { credentialId: principal.credentialId, reason: 'administrator_email_change' },
+          },
+        });
+      } catch {
+        // The refusal stands even if its record cannot be written: a 503 would make the directory retry the refused change.
+      }
+    throw error;
   });
   invalidateSessionSecurityProjection(id);
   if (request.method === 'DELETE') return new Response(null, { status: 204 });

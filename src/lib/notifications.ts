@@ -3,7 +3,6 @@ import prisma from './prisma';
 import { incidentNotificationPriority } from './notification-priority';
 import {
   NOTIFICATION_CHANNELS,
-  NOTIFICATION_RETRY_POLICY,
   type NotificationDeliveryOutcome,
   type NotificationEventType,
 } from './notification-delivery';
@@ -33,6 +32,8 @@ async function sendCentralIncidentNotification(input: {
   escalationStep?: number | null;
   priority?: string | null;
   urgency?: string | null;
+  /** Record the page as SKIPPED with this reason instead of delivering it. */
+  suppressedReason?: string;
 }): Promise<SendNotificationResult | null> {
   // SLACK here is the personal Slack DM page; service channel posts use their own outbox effect.
   if (!['EMAIL', 'SMS', 'VOICE', 'PUSH', 'WHATSAPP', 'SLACK'].includes(input.channel)) return null;
@@ -86,6 +87,7 @@ async function sendCentralIncidentNotification(input: {
     sourceId: input.incidentId,
     eventKey: input.eventKey,
     displayMessage: 'Incident notification',
+    suppressedReason: input.suppressedReason,
     ...incidentNotificationPriority(input),
     payload: {
       kind,
@@ -100,7 +102,7 @@ async function sendCentralIncidentNotification(input: {
   });
   const persisted = await prisma.notification.findUnique({
     where: { id: queued.id },
-    select: { id: true, status: true, attempts: true, errorMsg: true },
+    select: { id: true, status: true, attempts: true, maxAttempts: true, errorMsg: true },
   });
   if (!persisted) {
     if (queued.delivered) {
@@ -139,6 +141,7 @@ function existingIntentResult(notification: {
   id: string;
   status: string;
   attempts: number;
+  maxAttempts: number;
   errorMsg?: string | null;
 }): SendNotificationResult {
   if (notification.status === 'SENT' || notification.status === 'DELIVERED')
@@ -152,10 +155,7 @@ function existingIntentResult(notification: {
       terminal: true,
       deduped: true,
     };
-  if (
-    notification.status === 'FAILED' &&
-    notification.attempts >= NOTIFICATION_RETRY_POLICY.maxAttempts
-  )
+  if (notification.status === 'FAILED' && notification.attempts >= notification.maxAttempts)
     return {
       success: false,
       outcome: 'PERMANENT_FAILURE',
@@ -180,7 +180,9 @@ export async function sendNotification(
   message: string,
   incident?: IncidentWithService,
   eventType: NotificationEventType = 'triggered',
-  explicitEventKey?: string
+  explicitEventKey?: string,
+  /** Record the page as SKIPPED with this reason instead of delivering it. */
+  suppressedReason?: string
 ): Promise<SendNotificationResult> {
   if (!NOTIFICATION_CHANNELS.includes(channel))
     return {
@@ -198,8 +200,10 @@ export async function sendNotification(
       terminal: true,
     };
   const eventAt = notificationEventInstant(identityIncident, eventType);
-  const eventKey =
-    explicitEventKey ?? notificationEventKey({ incident: identityIncident, eventType, message });
+  // A suppressed record gets its own key so it can never block a real page for the same event.
+  const eventKey = `${
+    explicitEventKey ?? notificationEventKey({ incident: identityIncident, eventType, message })
+  }${suppressedReason ? ':suppressed' : ''}`;
   const durableMessage = encodeNotificationEnvelope(
     buildNotificationEnvelope(identityIncident, eventType, eventAt, message)
   );
@@ -215,6 +219,7 @@ export async function sendNotification(
     escalationStep: identityIncident.currentEscalationStep,
     priority: identityIncident.priority,
     urgency: identityIncident.urgency,
+    suppressedReason,
   });
   return (
     central ?? {

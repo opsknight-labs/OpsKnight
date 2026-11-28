@@ -15,6 +15,7 @@ import { INCIDENT_ROLE_KEYS } from '@/lib/incidents/roles';
 import { assertCanChangeIncidentRole } from '@/lib/incidents/role-access';
 import { assignIncidentRoleCommand } from '@/lib/incidents/roles-command';
 import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
+import { keepSince, timelineCompleteSince } from '@/lib/incidents/timeline-window';
 import {
   addNote,
   addWatcher,
@@ -181,14 +182,15 @@ export async function loadOlderIncidentTimelineActivity(
     notifFilter = cursorFilter;
   }
 
-  const [events, notes, notifications] = await Promise.all([
+  const take = Math.min(Math.max(1, limit), 200);
+  const [fetchedEvents, fetchedNotes, fetchedNotifications] = await Promise.all([
     prisma.incidentEvent.findMany({
       where: {
         incidentId: parsedIncidentId,
         ...eventFilter,
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: Math.min(Math.max(1, limit), 200),
+      take,
     }),
     prisma.incidentNote.findMany({
       where: {
@@ -207,7 +209,7 @@ export async function loadOlderIncidentTimelineActivity(
         },
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: Math.min(Math.max(1, limit), 200),
+      take,
     }),
     prisma.notification.findMany({
       where: {
@@ -227,9 +229,19 @@ export async function loadOlderIncidentTimelineActivity(
         user: { select: { id: true, name: true, email: true } },
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: Math.min(Math.max(1, limit), 200),
+      take,
     }),
   ]);
+
+  // One cutoff across the three tables: rows older than it are fetched by the next page, so a page never skips rows.
+  const since = timelineCompleteSince([
+    { rows: fetchedEvents, take },
+    { rows: fetchedNotes, take },
+    { rows: fetchedNotifications, take },
+  ]);
+  const events = keepSince(fetchedEvents, since);
+  const notes = keepSince(fetchedNotes, since);
+  const notifications = keepSince(fetchedNotifications, since);
 
   const permissions = await getUserPermissions();
   const decision = await prisma.incidentAutomationDecision.findUnique({

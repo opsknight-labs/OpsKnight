@@ -94,6 +94,12 @@ const HEALTH: Record<
     icon: CircleDashed,
     hint: 'No measurement in the window. No measurement is not compliance.',
   },
+  PARTIAL: {
+    label: 'Partial window',
+    tone: 'neutral',
+    icon: CircleDashed,
+    hint: 'Less than a full window has been measured since this definition or service started. The value is shown but does not count as a breach.',
+  },
   UNAVAILABLE: {
     label: 'Unavailable',
     tone: 'neutral',
@@ -213,6 +219,7 @@ function definition(item: ServiceObjectiveItem) {
     version: item.version,
     name: item.name,
     description: item.description,
+    metricType: item.metricType,
     target: item.target,
     comparator: item.comparator,
     windowType: item.windowType,

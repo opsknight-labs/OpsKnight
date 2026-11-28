@@ -12,6 +12,8 @@ import StatusPageWorkspace from '@/components/status-page/StatusPageWorkspace';
 import { getStatusPageSnapshot, buildStatusPageSnapshot } from '@/lib/status-pages/snapshot';
 import type { StatusAnnouncementType } from '@/lib/validation';
 import { requirePageAccess } from '@/lib/access/server';
+import { getBaseUrl } from '@/lib/env-validation';
+import { getStatusPagePublicBaseUrl } from '@/lib/status-page-url';
 
 function normalizeAnnouncementType(value: string): StatusAnnouncementType {
   switch (value) {
@@ -133,7 +135,7 @@ export default async function StatusPageWorkspacePage({
         trail={[{ label: statusPage.name }]}
         description={
           statusPage.customDomain || statusPage.subdomain
-            ? `${statusPage.customDomain || `${statusPage.subdomain}.opsknight.com`} · ${publicHref}`
+            ? `${statusPage.customDomain || new URL(getStatusPagePublicBaseUrl(statusPage)).host} · ${publicHref}`
             : `Public URL ${publicHref}`
         }
         icon={Globe}
@@ -196,6 +198,7 @@ export default async function StatusPageWorkspacePage({
           allBusinessServices={allBusinessServices}
           liveSnapshot={liveSnapshot}
           draftIncidentId={draftIncidentId}
+          appHost={new URL(getBaseUrl()).host}
         />
       </div>
     </div>

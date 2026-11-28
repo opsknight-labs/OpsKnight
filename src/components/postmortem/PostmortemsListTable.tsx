@@ -236,7 +236,13 @@ export default function PostmortemsListTable({
     if (pendingDelete.kind === 'bulk') {
       setIsDeleting(true);
       try {
-        await bulkDeletePostmortems(pendingDelete.ids);
+        const result = await bulkDeletePostmortems(pendingDelete.ids);
+        if (!result.success) {
+          // The action refuses the whole batch (for example rows written by someone else).
+          notify.error(result.error ?? 'Failed to delete postmortems');
+          return;
+        }
+        notify.success(`Deleted ${result.count} postmortem${result.count === 1 ? '' : 's'}.`);
         setSelectedIds([]);
         router.refresh();
       } catch (err) {

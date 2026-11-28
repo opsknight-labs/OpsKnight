@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import PostmortemsListTable from '@/components/postmortem/PostmortemsListTable';
 
 vi.mock('next/navigation', () => ({
@@ -12,9 +12,18 @@ vi.mock('@/contexts/TimezoneContext', () => ({
   useTimezone: () => ({ userTimeZone: 'UTC' }),
 }));
 
+const mocks = vi.hoisted(() => ({
+  bulkDeletePostmortems: vi.fn(),
+  notifyError: vi.fn(),
+  notifySuccess: vi.fn(),
+}));
+
 vi.mock('@/app/(app)/postmortems/actions', () => ({
   deletePostmortem: vi.fn(),
-  bulkDeletePostmortems: vi.fn(),
+  bulkDeletePostmortems: mocks.bulkDeletePostmortems,
+}));
+vi.mock('@/lib/toast', () => ({
+  notify: { error: mocks.notifyError, success: mocks.notifySuccess },
 }));
 
 const pm = {
@@ -42,7 +51,43 @@ const pm = {
 const pagination = { currentPage: 1, totalPages: 1, totalItems: 1, itemsPerPage: 50 };
 
 describe('PostmortemsListTable', () => {
-  beforeEach(() => window.localStorage.clear());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.localStorage.clear();
+  });
+
+  const deleteSelected = async () => {
+    render(<PostmortemsListTable postmortems={[pm]} pagination={pagination} canManage />);
+    const table = screen.getByRole('table', { name: 'Postmortems' });
+    fireEvent.click(within(table).getByRole('checkbox', { name: 'Select Search outage review' }));
+    fireEvent.click(screen.getByRole('button', { name: /Delete Selected \(1\)/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+  };
+
+  it('shows the reason and keeps the selection when the bulk delete is refused', async () => {
+    mocks.bulkDeletePostmortems.mockResolvedValue({
+      success: false,
+      error: 'Only administrators or the postmortem author can delete the selected records',
+    });
+
+    await deleteSelected();
+
+    await waitFor(() =>
+      expect(mocks.notifyError).toHaveBeenCalledWith(
+        'Only administrators or the postmortem author can delete the selected records'
+      )
+    );
+    expect(mocks.notifySuccess).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /Delete Selected \(1\)/ })).toBeInTheDocument();
+  });
+
+  it('confirms how many postmortems were deleted', async () => {
+    mocks.bulkDeletePostmortems.mockResolvedValue({ success: true, count: 1 });
+
+    await deleteSelected();
+
+    await waitFor(() => expect(mocks.notifySuccess).toHaveBeenCalledWith('Deleted 1 postmortem.'));
+  });
 
   it('renders the table with incident subtitle, visibility, author and item count', () => {
     render(<PostmortemsListTable postmortems={[pm]} pagination={pagination} canManage />);

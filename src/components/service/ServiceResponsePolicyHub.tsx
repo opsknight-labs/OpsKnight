@@ -52,6 +52,8 @@ interface ServiceResponsePolicyHubProps {
     exceptions?: SupportHoursExceptionInput[];
   } | null;
   canManage: boolean;
+  /** SLA targets are admin-only (they can be loosened); the other policies follow `canManage`. */
+  canManageSla: boolean;
 }
 
 export default function ServiceResponsePolicyHub({
@@ -61,6 +63,7 @@ export default function ServiceResponsePolicyHub({
   incidentClassificationPolicy,
   responseSupportHoursPolicy,
   canManage,
+  canManageSla,
 }: ServiceResponsePolicyHubProps) {
   const [activeTab, setActiveTab] = useState<'sla' | 'classification' | 'hours'>('sla');
 
@@ -143,7 +146,7 @@ export default function ServiceResponsePolicyHub({
             scopeKey={`service:${serviceId}`}
             policy={incidentSlaPolicy}
             workspacePolicy={workspaceIncidentSlaPolicy}
-            canManage={canManage}
+            canManage={canManageSla}
             embedded={true}
           />
         )}

@@ -914,12 +914,15 @@ export async function invalidateRollups(
 /**
  * Backfill rollups for a date range
  * Useful for initial setup or recovery
+ *
+ * Returns the per-service rollups that failed (the all-services path isolates them, so one bad
+ * service does not stop the rest); a single-service backfill throws instead.
  */
 export async function backfillRollups(
   startDate: Date,
   endDate: Date,
   serviceId?: string
-): Promise<void> {
+): Promise<{ days: number; failures: number; failedDays: string[] }> {
   const current = new Date(startDate);
   current.setUTCHours(0, 0, 0, 0);
 
@@ -927,11 +930,17 @@ export async function backfillRollups(
   end.setUTCHours(23, 59, 59, 999);
 
   let count = 0;
+  let failures = 0;
+  const failedDays: string[] = [];
   while (current <= end) {
     if (serviceId) {
       await generateDailyRollup(current, serviceId);
     } else {
-      await generateAllDailyRollups(current);
+      const result = await generateAllDailyRollups(current);
+      if (result.failures > 0) {
+        failures += result.failures;
+        failedDays.push(current.toISOString().split('T')[0]);
+      }
     }
     current.setUTCDate(current.getUTCDate() + 1);
     count++;
@@ -941,7 +950,9 @@ export async function backfillRollups(
     startDate: startDate.toISOString(),
     endDate: endDate.toISOString(),
     daysProcessed: count,
+    failures,
   });
+  return { days: count, failures, failedDays };
 }
 
 /**

@@ -81,13 +81,11 @@ export default function IncidentCustomFieldsCard({
 
   // Create lookup for initial values
   const valueMap = new Map(customFieldValues.map(v => [v.customField.id, v.value || '']));
+  // Only stored values: a field's default is shown as a hint, never as if it had been saved.
   const [formValues, setFormValues] = useState<Map<string, string>>(() => {
     const initial = new Map<string, string>();
     for (const field of allCustomFields) {
-      initial.set(
-        field.id,
-        toInputValue(valueMap.get(field.id) ?? (field.defaultValue || ''), field.type)
-      );
+      initial.set(field.id, toInputValue(valueMap.get(field.id) ?? '', field.type));
     }
     return initial;
   });
@@ -144,6 +142,9 @@ export default function IncidentCustomFieldsCard({
         const isSaving = savingFieldId === field.id;
         const isSaved = savedFieldId === field.id;
         const options: string[] = Array.isArray(field.options) ? (field.options as string[]) : [];
+        const unsetHint = field.defaultValue
+          ? `Default: ${formatFieldValue(field.defaultValue, field.type)} (not saved)`
+          : null;
 
         return (
           <div
@@ -185,7 +186,7 @@ export default function IncidentCustomFieldsCard({
                     aria-label={field.name}
                     className={cn(FIELD_SELECT_CLASS, 'w-full justify-between')}
                   >
-                    <SelectValue placeholder="Select option..." />
+                    <SelectValue placeholder={unsetHint ?? 'Select option...'} />
                   </SelectTrigger>
                   <SelectContent>
                     {options.map((opt: string) => (
@@ -207,7 +208,11 @@ export default function IncidentCustomFieldsCard({
                     }}
                   />
                   <span className="text-sm font-medium text-foreground">
-                    {currentValue === 'true' ? 'Yes' : 'No'}
+                    {currentValue === ''
+                      ? (unsetHint ?? 'Not set')
+                      : currentValue === 'true'
+                        ? 'Yes'
+                        : 'No'}
                   </span>
                 </div>
               ) : field.type === 'DATE' ? (
@@ -224,7 +229,7 @@ export default function IncidentCustomFieldsCard({
                   type="number"
                   aria-label={field.name}
                   value={currentValue}
-                  placeholder="0"
+                  placeholder={unsetHint ?? '0'}
                   onChange={e => setFormValues(prev => new Map(prev).set(field.id, e.target.value))}
                   onBlur={e => void handleSave(field.id, e.target.value)}
                   onKeyDown={e => {
@@ -240,11 +245,12 @@ export default function IncidentCustomFieldsCard({
                   aria-label={field.name}
                   value={currentValue}
                   placeholder={
-                    field.type === 'URL'
+                    unsetHint ??
+                    (field.type === 'URL'
                       ? 'https://...'
                       : field.type === 'EMAIL'
                         ? 'user@example.com'
-                        : 'Enter value...'
+                        : 'Enter value...')
                   }
                   onChange={e => setFormValues(prev => new Map(prev).set(field.id, e.target.value))}
                   onBlur={e => void handleSave(field.id, e.target.value)}

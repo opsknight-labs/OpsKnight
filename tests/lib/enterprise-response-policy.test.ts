@@ -145,6 +145,20 @@ describe('enterprise response-policy contract', () => {
     ).toBe(false);
   });
 
+  it('matches an incident with no priority against negative priority conditions only', () => {
+    const context = {
+      priority: null,
+      urgency: 'HIGH' as const,
+      supportHoursState: 'INSIDE' as const,
+    };
+    const match = (operator: string) =>
+      escalationConditionsMatch([{ field: 'PRIORITY', operator, values: ['P4', 'P5'] }], context);
+    expect(match('NOT_IN')).toBe(true);
+    expect(match('NOT_EQUALS')).toBe(true);
+    expect(match('IN')).toBe(false);
+    expect(match('EQUALS')).toBe(false);
+  });
+
   it('defers only LOW urgency outside support hours without pausing SLA', () => {
     const now = new Date('2026-09-11T20:00:00Z');
     const nextSupportAt = new Date('2026-09-14T03:30:00Z');

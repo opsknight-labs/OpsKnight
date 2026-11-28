@@ -54,10 +54,45 @@ scrape_configs:
       - targets: ["opsknight-web:3000"]
 ```
 
+In a split deployment (`docker-compose.split.yml`, the Swarm stack, or Helm
+`runtime.mode=split`) the web service does not answer for the other roles. The
+scheduler, workers and status projector are separate processes with their own
+in-memory counters (for example the MCP and runbook maintenance series that the
+maintenance alerts read), and they serve `/api/metrics` on the same port. Scrape
+each role, and label the target with its role:
+
+```yaml
+scrape_configs:
+  - job_name: opsknight
+    metrics_path: /api/metrics
+    authorization:
+      type: Bearer
+      credentials_file: /run/secrets/opsknight_metrics_token
+    static_configs:
+      - targets: ["opsknight-web:3000"]
+        labels: { role: web }
+      - targets: ["opsknight-scheduler:3000"]
+        labels: { role: scheduler }
+      - targets:
+          - opsknight-general-worker:3000
+          - opsknight-critical-worker:3000
+          - opsknight-bulk-worker:3000
+          - opsknight-intelligence-worker:3000
+          - opsknight-runbook-worker:3000
+          - opsknight-status-projector:3000
+        labels: { role: worker }
+```
+
+Without those targets a maintenance failure in the scheduler or a worker never
+reaches Prometheus, so its alert cannot fire.
+
 - Compose and Swarm: attach Prometheus to a controlled network path and scrape
-  the web runtime through its service address.
+  each runtime role through its service address (the web service only in
+  integrated mode).
 - Helm: render the selected values and create a `ServiceMonitor` only when the
-  Prometheus Operator is installed.
+  Prometheus Operator is installed. With `runtime.mode=split` the chart also
+  creates a `PodMonitor` (`<release>-roles`) for the scheduler and worker pods,
+  because the Service selects only the web pods.
 - Kustomize: keep the Service, authentication secret, and scraper policy in an
   owned overlay.
 

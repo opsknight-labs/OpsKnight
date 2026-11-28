@@ -36,9 +36,16 @@ export async function readDashboardData(
     (typeof configuredDays === 'number' && Number.isInteger(configuredDays)
       ? Math.max(1, Math.min(configuredDays, 90))
       : 7);
+  // The dashboard page reads the owner's time zone for daily trends and after-hours counts; the
+  // API must bucket the same way or the two disagree for any owner outside UTC.
+  const owner = await prisma.user.findUnique({
+    where: { id: actor.id },
+    select: { timeZone: true },
+  });
   const metrics = await calculateActorSLAMetrics(actor, {
     windowDays: days,
     ...(query.serviceId ? { serviceId: query.serviceId } : {}),
+    userTimeZone: owner?.timeZone,
   });
   return {
     dashboardId: dashboard.id,

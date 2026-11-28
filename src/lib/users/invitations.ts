@@ -71,6 +71,13 @@ export async function renewUserInvitation(
   const values = invitationRenewInput.parse(input);
   return executeInvitation({ kind: 'renew', userId, values }, actor, options);
 }
+/** A link for an administrator account is a takeover capability; only the console, with its step-up, issues one. */
+const apiKeyAdminInvitationRefused = () =>
+  new AppError({
+    code: 'AUTHORIZATION_DENIED',
+    userMessage:
+      'API keys cannot invite administrators or renew their invitations. Use the OpsKnight console.',
+  });
 type InvitationCommand =
   | { kind: 'create'; values: z.output<typeof invitationCreateInput> }
   | { kind: 'renew'; userId: string; values: z.output<typeof invitationRenewInput> };
@@ -81,6 +88,8 @@ async function executeInvitation(
 ) {
   if (options.client && !options.prepared)
     throw new Error('Prepare invitation configuration before opening the mutation transaction.');
+  if (actor.apiKey && command.kind === 'create' && command.values.role === 'ADMIN')
+    throw apiKeyAdminInvitationRefused();
   const prepared = options.prepared ?? (await prepareUserInvitation());
   const providers = command.values.delivery === 'EMAIL' ? prepared.emailProviders : [];
   if (command.values.delivery === 'EMAIL' && !providers.length)
@@ -159,6 +168,7 @@ async function executeInvitation(
         throw new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'User not found.' });
       if (options.expectedRevision !== undefined && existing.revision !== options.expectedRevision)
         throw preconditionFailed();
+      if (actor.apiKey && existing.role === 'ADMIN') throw apiKeyAdminInvitationRefused();
       if (existing.status !== 'INVITED')
         throw new AppError({
           code: 'RESOURCE_CONFLICT',

@@ -25,6 +25,10 @@ export interface DynamicOnCallShift {
   end: Date;
 }
 
+/** How far past the read window a shift's real end is searched for. shortcut: a shift that runs
+ * longer than this reports this horizon as its end; raise it if rotations that long exist. */
+const MAX_SHIFT_LOOKAHEAD_MS = 366 * 24 * 60 * 60 * 1000;
+
 export type ActiveOnCallShiftsOptions = {
   scheduleId?: string;
   where?: Prisma.OnCallScheduleWhereInput;
@@ -43,6 +47,9 @@ export async function getActiveOnCallShifts(
   }
   const windowStart = new Date(atTime.getTime() - 24 * 60 * 60 * 1000);
   const windowEnd = new Date(atTime.getTime() + 48 * 60 * 60 * 1000);
+  // Overrides are read this far ahead so a block that outlasts the window still ends where the
+  // next override cuts it.
+  const horizonEnd = new Date(atTime.getTime() + MAX_SHIFT_LOOKAHEAD_MS);
 
   const options: ActiveOnCallShiftsOptions | undefined =
     typeof scheduleIdOrOptions === 'string'
@@ -84,7 +91,7 @@ export async function getActiveOnCallShifts(
       },
       overrides: {
         where: {
-          start: { lte: windowEnd },
+          start: { lte: horizonEnd },
           end: { gte: windowStart },
           user: { status: 'ACTIVE' },
         },
@@ -110,7 +117,12 @@ export async function getActiveOnCallShifts(
   for (const schedule of schedules) {
     if (!schedule.layers.length && !schedule.overrides.length) continue;
 
-    const blocks = buildScheduleBlocks(
+    const layerPriority = new Map<string, number>(
+      schedule.layers.map(layer => [layer.id, (layer as { priority?: number }).priority ?? 0])
+    );
+
+    const activeBlocksUntil = (until: Date) => {
+      const blocks = buildScheduleBlocks(
       schedule.layers.map(layer => ({
         id: layer.id,
         name: layer.name,
@@ -151,19 +163,18 @@ export async function getActiveOnCallShifts(
         replacesUserId: override.replacesUserId,
       })),
       windowStart,
-      windowEnd,
+      until,
       schedule.timeZone || 'UTC'
     );
-
-    const layerPriority = new Map<string, number>(
-      schedule.layers.map(layer => [layer.id, (layer as { priority?: number }).priority ?? 0])
-    );
-
-    const finalBlocks = getFinalScheduleBlocks(blocks, layerPriority);
-
-    const activeBlocks = finalBlocks.filter(
-      b => b.start.getTime() <= atTime.getTime() && b.end.getTime() > atTime.getTime()
-    );
+      return getFinalScheduleBlocks(blocks, layerPriority).filter(
+        b => b.start.getTime() <= atTime.getTime() && b.end.getTime() > atTime.getTime()
+      );
+    };
+    let activeBlocks = activeBlocksUntil(windowEnd);
+    // A block that reaches the window's edge was cut there: its end is not the real handoff.
+    if (activeBlocks.some(b => b.end.getTime() >= windowEnd.getTime())) {
+      activeBlocks = activeBlocksUntil(horizonEnd);
+    }
 
     for (const block of activeBlocks) {
       activeShifts.push({

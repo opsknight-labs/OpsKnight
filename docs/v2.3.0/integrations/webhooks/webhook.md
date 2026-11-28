@@ -80,7 +80,7 @@ Send a stable `dedup_key` for every update to the same source alert. A minimal t
 }
 ```
 
-Resolve it by sending the same `dedup_key` with `"status": "resolved"`. Use `"status": "acknowledged"` to acknowledge it. If `dedup_key` is missing, OpsKnight falls back to `id`, `alert_id`, or a value derived from the summary; changing the summary can therefore create a new incident.
+Resolve it by sending the same `dedup_key` with `"status": "resolved"`. Use `"status": "acknowledged"` to acknowledge it. If `dedup_key` is missing, OpsKnight falls back to `id`, `alert_id`, or a value derived from the summary plus whichever of `host`, `hostname`, `instance`, `node`, `resource`, `component` and `labels` the payload carries, so the same summary from different hosts opens separate incidents; changing the summary or one of those fields can therefore create a new incident. Payloads with none of those fields keep the summary-only key, so "High CPU" from several hosts still merges: always send a `dedup_key` that names the host.
 
 Accepted trigger-like values include `triggered`, `fired`, `alert`, `critical`, `error`, and `open`. Resolve-like values include `resolved`, `ok`, `normal`, `closed`, and `fixed`. Severity values `high`, `medium`, and `low` map to critical, warning, and info.
 

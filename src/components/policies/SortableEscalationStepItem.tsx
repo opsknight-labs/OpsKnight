@@ -41,6 +41,7 @@ type SortableEscalationStepItemProps = {
   updateStep: (stepId: string, formData: FormData) => Promise<{ error?: string } | undefined>;
   deleteStep: (stepId: string) => Promise<{ error?: string } | undefined>;
   moveStep: (stepId: string, direction: 'up' | 'down') => Promise<{ error?: string } | undefined>;
+  countInFlight: () => Promise<number>;
   users?: Array<{
     id: string;
     name: string;

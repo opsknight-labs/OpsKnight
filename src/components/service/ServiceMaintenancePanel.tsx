@@ -328,21 +328,23 @@ function ScheduleDialog({
       });
       return;
     }
+    const minutes = Number(form.get('duration'));
+    // "Start now" lets the server clock set the start: a browser clock a few minutes off would
+    // schedule the window instead, or be rejected as in the past.
     const startsAt = startNow
-      ? new Date()
+      ? null
       : parseLocalDateTimeInput(String(form.get('startsAt') ?? ''), userTimeZone);
-    if (!startsAt) {
+    if (!startNow && !startsAt) {
       setError(`Choose a start time that exists in ${userTimeZone}.`);
       return;
     }
-    const minutes = Number(form.get('duration'));
-    const endsAt = new Date(startsAt.getTime() + minutes * 60_000);
     startTransition(async () => {
-      const result = await createMaintenanceWindowAction(serviceId, {
-        ...common,
-        startsAt,
-        endsAt,
-      });
+      const result = await createMaintenanceWindowAction(
+        serviceId,
+        startsAt
+          ? { ...common, startsAt, endsAt: new Date(startsAt.getTime() + minutes * 60_000) }
+          : { ...common, startNowForMinutes: minutes }
+      );
       if (result.ok) {
         notify.success(startNow ? 'Maintenance started' : 'Maintenance scheduled');
         setOpen(false);

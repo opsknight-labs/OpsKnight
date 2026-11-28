@@ -49,6 +49,20 @@ describe('NoteMarkdown & Inline Markdown Parser', () => {
     expect(link?.getAttribute('rel')).toBe('noopener noreferrer');
   });
 
+  it('does not load an image from another host until the viewer asks for it', () => {
+    const { container } = render(
+      <NoteMarkdown content="![pixel](https://tracker.example.com/p.png)" />
+    );
+
+    expect(container.querySelector('img')).toBeNull();
+    expect(screen.getByText(/tracker\.example\.com is not loaded automatically/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load image' }));
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(
+      'https://tracker.example.com/p.png'
+    );
+  });
+
   it('renders image markdown with img element and preview options', () => {
     const { container } = render(
       <NoteMarkdown content="Graph below: ![CPU Spike](/api/uploads/123-cpu.png)" />

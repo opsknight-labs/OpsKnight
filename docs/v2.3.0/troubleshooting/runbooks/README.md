@@ -97,6 +97,11 @@ and cannot determine which should execute the write.
 **Cause**: The Agent lost contact or its lease expired after a write started.
 The write may or may not have executed.
 
+A result the Agent produced before the lease expired, or within 60 seconds
+after it, is still accepted while the attempt has not yet been marked
+`UNKNOWN`. A result produced later than that is refused as expired and the
+step becomes `UNKNOWN`.
+
 **Resolution**:
 
 1. **Inspect the actual target** before any retry — the write may have
@@ -135,7 +140,23 @@ The write may or may not have executed.
 2. The unapplied-changes warning blocks saving across tabs.
 3. Refresh JSON from the builder only if you intend to discard unapplied
    edits.
-4. Publishing publishes the **saved draft**, not unsaved editor contents.
+4. Publishing publishes the **saved draft**, not unsaved editor contents. While
+   the builder holds unsaved edits the **Publish draft** button is disabled and
+   says so; save first.
+
+## A runbook action is refused
+
+**Symptoms**: Publish draft, creating a draft, saving the details sheet,
+archiving, restoring or duplicating a runbook shows a red message.
+
+**Cause**: A rule refused the change, for example a validation checksum that no
+longer matches the draft, a details sheet that was opened before someone else
+changed the runbook, or a runbook that is archived.
+
+**Resolution**: Read the message: it names the reason, in the dialog and in a
+toast. Validate the draft again, reopen the details sheet, or restore the
+archived runbook, then retry. Only unexpected failures show the generic "Could
+not complete this action" message.
 
 ## Preview changed or prerequisites are blocked
 

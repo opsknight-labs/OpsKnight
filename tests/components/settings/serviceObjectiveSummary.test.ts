@@ -32,6 +32,11 @@ describe('summarizeObjective', () => {
       'RESTRICTED'
     );
   });
+  it('shows a partial window without an error budget or a breach', () => {
+    expect(
+      summarizeObjective({ ...uptime, snapshot: snap(98, null, 'PARTIAL'), canReadHistory: true })
+    ).toMatchObject({ health: 'PARTIAL', value: 98, budgetRemaining: null });
+  });
   it('has no error budget for minute targets or legacy metrics', () => {
     expect(
       summarizeObjective({

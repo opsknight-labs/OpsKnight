@@ -6,6 +6,7 @@ import { activeIncidentStatuses } from '@/lib/incident-status';
 import { discoverUserDependencies, type UserDependencyReport } from '@/lib/users/dependencies';
 import { assertUserIsNotSoleOwner, assertNotLastAdmin } from '@/app/(app)/users/actions';
 import { isRetentionHeld } from '@/lib/retention/holds';
+import { subjectAuditRowsWhere } from './audit-pseudonymise';
 
 /**
  * Per-domain row counts for a subject, keyed by the domain ids in
@@ -237,17 +238,9 @@ export async function discoverSubjectErasureData(
     prisma.actionItem.count({ where: { ownerId: subjectId } }),
     prisma.notification.count({ where: { userId: subjectId } }),
     prisma.inAppNotification.count({ where: { userId: subjectId } }),
-    user.email
-      ? prisma.auditLog.count({
-          where: {
-            OR: [
-              { actorId: subjectId },
-              { actorEmail: user.email.toLowerCase() },
-              { targetEmail: user.email.toLowerCase() },
-            ],
-          },
-        })
-      : prisma.auditLog.count({ where: { actorId: subjectId } }),
+    prisma.auditLog.count({
+      where: subjectAuditRowsWhere(subjectId, user.email?.toLowerCase() ?? null),
+    }),
     prisma.oidcConfig.count({ where: { updatedBy: subjectId } }),
     prisma.slackIntegration.count({ where: { installedBy: subjectId } }),
     Promise.all([

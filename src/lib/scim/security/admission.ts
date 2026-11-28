@@ -37,6 +37,10 @@ const unknownLane = new Lane();
 const verifiedLane = new Lane();
 let windowStart = 0;
 let attempts = 0;
+let unaddressed = 0;
+// Ceiling on unverified attempts per minute across every address; far above one directory's needs
+// and a single address's 120, so it only binds a flood spread over many addresses.
+const GLOBAL_UNVERIFIED_PER_MINUTE = 6000;
 
 /** Process-local work budgets precede every database credential lookup. Hints
  * select a lane only; every admitted credential is still verified in PostgreSQL. */
@@ -47,10 +51,12 @@ export async function acquireScimAdmission(tokenHash: string, clientIp?: string)
     if (now - windowStart >= 60000) {
       windowStart = now;
       attempts = 0;
+      unaddressed = 0;
     }
-    if (attempts >= 1200)
+    if (attempts >= GLOBAL_UNVERIFIED_PER_MINUTE)
       throw new ScimFailure(429, 'SCIM authentication is busy. Retry in one minute.');
     if (clientIp && clientIp !== '0.0.0.0' && clientIp !== 'unknown') {
+      // Each source address has its own budget, so one noisy address cannot use up the others'.
       const key = createHmac('sha256', secret).update(clientIp).digest('hex');
       const entry = networks.get(key);
       if (entry && entry.until > now) {
@@ -61,6 +67,11 @@ export async function acquireScimAdmission(tokenHash: string, clientIp?: string)
         if (networks.size >= 4096) networks.delete(networks.keys().next().value!);
         networks.set(key, { count: 1, until: now + 60000 });
       }
+    } else {
+      // Requests with no usable source address share one smaller budget.
+      if (unaddressed >= 1200)
+        throw new ScimFailure(429, 'SCIM authentication is busy. Retry in one minute.');
+      unaddressed++;
     }
     attempts++;
   }

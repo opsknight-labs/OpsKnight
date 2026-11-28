@@ -233,7 +233,7 @@ export default function SquireComposer({
           role="status"
           className="absolute inset-x-3 bottom-full z-10 mb-1 rounded-xl border border-border bg-popover px-3 py-2 text-sm text-muted-foreground shadow-lg"
         >
-          {search.loading ? 'Searching…' : 'No matches'}
+          {search.loading ? 'Searching…' : search.failed ? 'Search is unavailable' : 'No matches'}
         </p>
       )}
       {editing && (

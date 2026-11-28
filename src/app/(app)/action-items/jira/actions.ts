@@ -2,7 +2,8 @@
 
 import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
-import { assertAdminOrResponder } from '@/lib/rbac';
+import { assertAdminOrResponder, getCurrentAuthorizationActor } from '@/lib/rbac';
+import { postmortemReadWhere } from '@/lib/authorization-filters';
 import {
   createJiraIssueAndLink,
   linkExistingJiraIssue,
@@ -151,9 +152,11 @@ export async function createJiraIssueFromActionItem(
 
   try {
     await assertAdminOrResponder();
+    const actor = await getCurrentAuthorizationActor();
 
+    // Items on postmortems the actor cannot read are reported as not found.
     const actionItem = await prisma.actionItem.findUnique({
-      where: { id: actionItemId },
+      where: { id: actionItemId, postmortem: postmortemReadWhere(actor) },
       select: {
         id: true,
         title: true,
@@ -244,9 +247,11 @@ export async function linkJiraIssueToActionItem(
 
   try {
     await assertAdminOrResponder();
+    const actor = await getCurrentAuthorizationActor();
 
+    // Items on postmortems the actor cannot read are reported as not found.
     const actionItem = await prisma.actionItem.findUnique({
-      where: { id: actionItemId },
+      where: { id: actionItemId, postmortem: postmortemReadWhere(actor) },
       select: {
         id: true,
         incidentId: true,
@@ -324,9 +329,15 @@ export async function unlinkJiraIssueFromActionItem(
 
   try {
     await assertAdminOrResponder();
+    const actor = await getCurrentAuthorizationActor();
 
     const link = await prisma.externalIssueLink.findFirst({
-      where: { id: linkId, provider: 'JIRA', actionItemId },
+      where: {
+        id: linkId,
+        provider: 'JIRA',
+        actionItemId,
+        actionItem: { postmortem: postmortemReadWhere(actor) },
+      },
       select: {
         id: true,
         externalKey: true,
@@ -399,9 +410,15 @@ export async function syncActionItemJiraIssue(
 
   try {
     await assertAdminOrResponder();
+    const actor = await getCurrentAuthorizationActor();
 
     const link = await prisma.externalIssueLink.findFirst({
-      where: { id: linkId, provider: 'JIRA', actionItemId },
+      where: {
+        id: linkId,
+        provider: 'JIRA',
+        actionItemId,
+        actionItem: { postmortem: postmortemReadWhere(actor) },
+      },
       select: {
         id: true,
         actionItem: {

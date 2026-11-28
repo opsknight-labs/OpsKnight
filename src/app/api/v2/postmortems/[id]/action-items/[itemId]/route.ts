@@ -11,7 +11,7 @@ import {
   getPostmortemActionItems,
   replacePostmortemActionItems,
 } from '@/lib/postmortems/action-item-commands';
-import type { ActionItem } from '@/lib/action-items';
+import { getStoredActionItemId, type ActionItem } from '@/lib/action-items';
 import { assertPostmortemAccess, postmortemEditWhere } from '@/lib/postmortems/authorization';
 
 const paramsSchema = z
@@ -127,11 +127,19 @@ export const PATCH = defineV2Route({
       details: { postmortemId: parent.id, actionItemId: params.itemId, changes: Object.keys(body) },
       tx,
     });
+    // The first write to a legacy (JSON-only) item stores it as a row under a derived id.
+    const storedId = updated.items.some(item => item.id === params.itemId)
+      ? params.itemId
+      : getStoredActionItemId({
+          postmortemId: parent.id,
+          legacyId: params.itemId,
+          index: collection.items.findIndex(item => item.id === params.itemId),
+        });
     return {
       data: {
         postmortemId: parent.id,
         revision: updated.revision,
-        item: updated.items.find(item => item.id === params.itemId),
+        item: updated.items.find(item => item.id === storedId),
       },
       headers: { ...etagHeaders(updated.revision), 'Cache-Control': 'private, no-store' },
     };

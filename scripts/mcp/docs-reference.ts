@@ -243,7 +243,8 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
   },
   MCP_DEADLINE_EXCEEDED: {
     area: 'tools',
-    meaning: 'The request ran past its ten-second deadline.',
+    meaning:
+      'The request ran past its ten-second deadline before its work finished. A change that had already committed is reported as done, not as this error.',
     fix: 'Retry with fewer steps or a smaller query.limit.',
   },
   MCP_DEPENDENCY_FAILED: {

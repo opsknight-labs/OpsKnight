@@ -18,7 +18,12 @@ export interface RateLimitResult {
   remaining: number;
   resetAt: number;
   retryAfter: number;
+  /** The shared counter could not be read: the request is refused, but no quota was exceeded. */
+  unavailable?: boolean;
 }
+
+/** A database blip is brief, so do not tell clients to wait out a whole rate-limit window. */
+const UNAVAILABLE_RETRY_AFTER_SECONDS = 5;
 
 export async function checkV2RateLimit(
   apiKeyId: string,
@@ -52,7 +57,9 @@ export async function checkV2RateLimit(
   const pgResult = await checkRateLimit(dbKey, config.limit, config.windowMs);
 
   const resetAt = pgResult.resetAt;
-  const retryAfter = Math.max(1, Math.ceil((resetAt - now) / 1000));
+  const retryAfter = pgResult.unavailable
+    ? UNAVAILABLE_RETRY_AFTER_SECONDS
+    : Math.max(1, Math.ceil((resetAt - now) / 1000));
   const remaining = pgResult.remaining;
 
   return {
@@ -61,6 +68,7 @@ export async function checkV2RateLimit(
     remaining,
     resetAt,
     retryAfter,
+    ...(pgResult.unavailable ? { unavailable: true } : {}),
   };
 }
 
@@ -86,6 +94,14 @@ export async function enforceV2RateLimit(
   // projections retain their independent, shared REST protection.
   if (internalV2Admission(apiKeyId) && operationClass === 'READ') return {};
   const result = await checkV2RateLimit(apiKeyId, operationClass);
+  if (result.unavailable) {
+    // Fail closed, but say what happened: a 429 here sends operators chasing a quota problem.
+    throw new AppError({
+      code: 'DATABASE_UNAVAILABLE',
+      userMessage: 'Rate limiting is temporarily unavailable. Retry shortly.',
+      details: { retryAfter: result.retryAfter },
+    });
+  }
   recordRateLimitDecision(operationClass, result.allowed);
   const headers = rateLimitHeaders(result);
 

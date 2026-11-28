@@ -1,6 +1,7 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import prisma from '@/lib/prisma';
 import {
+  calculateMultiServiceAvailability,
   calculateMultiServiceUptime,
   calculateSLAMetrics,
   deriveServiceSlaStatus,
@@ -32,6 +33,9 @@ vi.mock('@/lib/prisma', () => ({
     service: {
       findMany: vi.fn().mockResolvedValue([]),
     },
+    maintenanceWindowService: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     incidentEvent: {
       findMany: vi.fn().mockResolvedValue([]),
     },
@@ -40,6 +44,9 @@ vi.mock('@/lib/prisma', () => ({
       upsert: vi.fn().mockResolvedValue({}),
     },
     sLADefinition: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    escalationRule: {
       findMany: vi.fn().mockResolvedValue([]),
     },
     $executeRaw: vi.fn().mockResolvedValue(0),
@@ -67,6 +74,9 @@ type PrismaMock = {
     count: ReturnType<typeof vi.fn>;
   };
   service: {
+    findMany: ReturnType<typeof vi.fn>;
+  };
+  maintenanceWindowService: {
     findMany: ReturnType<typeof vi.fn>;
   };
   incidentEvent: {
@@ -128,6 +138,103 @@ describe('calculateMultiServiceUptime visibility', () => {
         }),
       })
     );
+  });
+});
+
+describe('calculateMultiServiceUptime from recorded outages', () => {
+  const HOUR = 3_600_000;
+  const periodEnd = new Date(Date.now() - 1000);
+  const periodStart = new Date(periodEnd.getTime() - 10 * 24 * HOUR);
+  const at = (hoursFromStart: number) => new Date(periodStart.getTime() + hoursFromStart * HOUR);
+  const periodMs = periodEnd.getTime() - periodStart.getTime();
+  const serviceCreated = (createdAt: Date) =>
+    prismaMock.service.findMany.mockResolvedValueOnce([{ id: 'svc', createdAt }]);
+  const incidents = (
+    rows: Array<{
+      createdAt: Date;
+      resolvedAt: Date | null;
+      status: string;
+    }>
+  ) =>
+    prismaMock.incident.findMany.mockResolvedValueOnce(
+      rows.map(row => ({ serviceId: 'svc', updatedAt: row.createdAt, ...row }))
+    );
+
+  it('keeps counting an incident after it is snoozed or suppressed', async () => {
+    serviceCreated(at(-1000));
+    incidents([
+      { createdAt: at(10), resolvedAt: at(20), status: 'SNOOZED' },
+      { createdAt: at(30), resolvedAt: at(40), status: 'SUPPRESSED' },
+    ]);
+
+    const result = await calculateMultiServiceUptime(['svc'], periodStart, periodEnd);
+
+    expect(result.svc).toBeCloseTo(100 - (20 * HOUR * 100) / periodMs, 6);
+  });
+
+  it('reads unresolved incidents of any status, not only open ones', async () => {
+    serviceCreated(at(-1000));
+    incidents([]);
+
+    await calculateMultiServiceUptime(['svc'], periodStart, periodEnd);
+
+    const call = prismaMock.incident.findMany.mock.calls.at(-1) as [{ where: unknown }];
+    const where = call[0].where;
+    expect(JSON.stringify(where)).toContain('"resolvedAt":null,"status":{"not":"RESOLVED"}');
+  });
+
+  it('does not count recorded maintenance of the service as downtime', async () => {
+    serviceCreated(at(-1000));
+    incidents([
+      { createdAt: at(10), resolvedAt: at(20), status: 'SUPPRESSED' },
+      { createdAt: at(30), resolvedAt: at(40), status: 'RESOLVED' },
+    ]);
+    prismaMock.maintenanceWindowService.findMany.mockResolvedValueOnce([
+      { serviceId: 'svc', startsAt: at(8), endsAt: at(16) },
+      { serviceId: 'other', startsAt: at(30), endsAt: at(40) },
+    ]);
+
+    const result = await calculateMultiServiceAvailability(['svc'], periodStart, periodEnd);
+
+    // 10-20 loses its first 6h; the other service's window does not apply to this one.
+    expect(result.svc.downtimeMs).toBe(14 * HOUR);
+    const call = prismaMock.maintenanceWindowService.findMany.mock.calls.at(-1) as [
+      { where: { serviceId: unknown; startsAt: { lt: Date }; endsAt: { gt: Date } } },
+    ];
+    expect(call[0].where.serviceId).toEqual({ in: ['svc'] });
+    expect(call[0].where.startsAt.lt).toEqual(periodEnd);
+    expect(call[0].where.endsAt.gt).toEqual(periodStart);
+  });
+
+  it('counts overlapping incidents once', async () => {
+    serviceCreated(at(-1000));
+    incidents([
+      { createdAt: at(10), resolvedAt: at(20), status: 'RESOLVED' },
+      { createdAt: at(15), resolvedAt: at(25), status: 'RESOLVED' },
+    ]);
+
+    const result = await calculateMultiServiceUptime(['svc'], periodStart, periodEnd);
+
+    expect(result.svc).toBeCloseTo(100 - (15 * HOUR * 100) / periodMs, 6);
+  });
+
+  it('measures a service only from its creation and reports the measured downtime', async () => {
+    serviceCreated(new Date(periodEnd.getTime() - 24 * HOUR));
+    incidents([
+      {
+        createdAt: new Date(periodEnd.getTime() - 12 * HOUR),
+        resolvedAt: new Date(periodEnd.getTime() - 6 * HOUR),
+        status: 'RESOLVED',
+      },
+    ]);
+
+    const result = await calculateMultiServiceAvailability(['svc'], periodStart, periodEnd);
+
+    expect(result.svc).toEqual({
+      uptimePercent: 75,
+      downtimeMs: 6 * HOUR,
+      periodMs: 24 * HOUR,
+    });
   });
 });
 
@@ -750,10 +857,10 @@ describe('calculateSLAMetrics composed PostgreSQL queries', () => {
       expect(query.sql).not.toMatch(/^\s*\?\s*$/m);
     }
 
-    const heatmapQuery = queries.find(query => query.sql.includes('SELECT DATE("createdAt")'));
+    const heatmapQuery = queries.find(query => query.sql.includes(') as date'));
     const aggregateQuery = queries.find(query => query.sql.includes('total_incidents'));
     const eventQuery = queries.find(query => query.sql.includes('escalation_count'));
-    const trendBucketQuery = queries.find(query => query.sql.includes('to_char('));
+    const trendBucketQuery = queries.find(query => query.sql.includes('AS bucket'));
 
     for (const query of [heatmapQuery, aggregateQuery, eventQuery, trendBucketQuery]) {
       expect(query).toBeDefined();
@@ -764,6 +871,24 @@ describe('calculateSLAMetrics composed PostgreSQL queries', () => {
       expect(query.values).toContainEqual(['service-a', 'service-b']);
       expect(query.values).toContainEqual(['team-a', 'team-b']);
     }
+  });
+
+  it("buckets the heatmap by the viewer's time zone, like the trend", async () => {
+    setupBaseMocks({
+      activeIncidents: [],
+      recentIncidents: [],
+      previousIncidents: [],
+      heatmapIncidents: [],
+      escalationEvents: [],
+    });
+    prismaMock.$queryRaw.mockReset().mockResolvedValue([]);
+
+    await calculateSLAMetrics({ windowDays: 1, userTimeZone: 'America/Los_Angeles' });
+
+    const queries = prismaMock.$queryRaw.mock.calls.map(([query]) => query as CapturedSqlQuery);
+    const heatmapQuery = queries.find(query => query.sql.includes(') as date'));
+    expect(heatmapQuery?.sql).toContain("AT TIME ZONE 'America/Los_Angeles'");
+    expect(heatmapQuery?.sql).not.toContain('DATE("createdAt")');
   });
 
   it('marks comparison data unavailable when optional raw queries fail', async () => {

@@ -32,6 +32,7 @@ import {
   type CircuitBreaker,
 } from './circuit-breaker';
 import { decrypt, encrypt } from '@/lib/encryption';
+import { readSlackWebhookUrl, slackWebhookHandle } from '@/lib/slack-webhook-secret';
 import {
   acquireProviderAdmission,
   acquireProviderConcurrency,
@@ -39,7 +40,7 @@ import {
   releaseProviderConcurrency,
   type ProviderAdmissionScope,
 } from './provider-admission';
-import { notificationRetryDelayMs, NOTIFICATION_RETRY_POLICY } from './notification-delivery';
+import { defaultNotificationMaxAttempts, notificationRetryDelayMs } from './notification-delivery';
 import { logger } from './logger';
 import type { SlackLiveCardRequest } from './slack/live-card';
 import {
@@ -284,6 +285,8 @@ export type CentralNotificationInput = {
   bundle?: boolean;
   /** Escalation step that sent this page, stored for step analytics. */
   escalationStepIndex?: number;
+  /** Record the page as SKIPPED for this reason (for example quiet hours) instead of delivering it. */
+  suppressedReason?: string;
 };
 
 const centralNotificationInputSchema = z
@@ -330,6 +333,7 @@ const centralNotificationInputSchema = z
     rollUpParentId: z.string().max(191).optional(),
     bundle: z.boolean().optional(),
     escalationStepIndex: z.number().int().min(0).max(1_000).optional(),
+    suppressedReason: z.string().max(500).optional(),
   })
   .strict();
 
@@ -618,30 +622,32 @@ export async function createCentralNotificationIntent(
   }
   const payloadEncrypted = await encrypt(serializedPayload);
   const scheduledAt = input.scheduledAt ?? new Date();
-  const maxAttempts = Math.min(
-    Math.max(input.maxAttempts ?? NOTIFICATION_RETRY_POLICY.maxAttempts, 1),
-    20
-  );
   const policy = defaultNotificationPolicy(input.category, input.templateKey);
   const trafficClass = input.trafficClass ?? policy.trafficClass;
+  const maxAttempts = Math.min(
+    Math.max(input.maxAttempts ?? defaultNotificationMaxAttempts(trafficClass), 1),
+    20
+  );
   const priority = Math.min(
     Math.max(input.priority ?? policy.priority, notificationAgingFloor(trafficClass)),
     9
   );
   const id = intentId(deliveryKey);
-  const noiseDecision = unavailableEndpointStatus
-    ? ({ action: 'DELIVER' } as const)
-    : await notificationNoiseDecision(store, {
-        recipientId: input.recipientId || recipientHash,
-        sourceType: input.sourceType,
-        sourceId: input.sourceId,
-        eventType: input.templateKey,
-        trafficClass,
-        priority,
-        rollUpParentId: input.rollUpParentId,
-        bundle: input.bundle,
-        channel: input.channel,
-      });
+  const suppressedReason = input.suppressedReason;
+  const noiseDecision =
+    unavailableEndpointStatus || suppressedReason
+      ? ({ action: 'DELIVER' } as const)
+      : await notificationNoiseDecision(store, {
+          recipientId: input.recipientId || recipientHash,
+          sourceType: input.sourceType,
+          sourceId: input.sourceId,
+          eventType: input.templateKey,
+          trafficClass,
+          priority,
+          rollUpParentId: input.rollUpParentId,
+          bundle: input.bundle,
+          channel: input.channel,
+        });
   const effectiveScheduledAt =
     noiseDecision.action === 'DEFER' || noiseDecision.action === 'BUNDLE'
       ? noiseDecision.until
@@ -655,7 +661,9 @@ export async function createCentralNotificationIntent(
         userId: input.userId,
         channel: input.channel,
         status:
-          unavailableEndpointStatus || noiseDecision.action === 'SUPPRESS' ? 'SKIPPED' : 'PENDING',
+          unavailableEndpointStatus || suppressedReason || noiseDecision.action === 'SUPPRESS'
+            ? 'SKIPPED'
+            : 'PENDING',
         message:
           noiseDecision.action === 'GROUP'
             ? `Grouped notification (${noiseDecision.groupKey}): ${input.displayMessage}`.slice(
@@ -688,13 +696,14 @@ export async function createCentralNotificationIntent(
         expiresAt: input.expiresAt ?? resolveNotificationExpiry(input, scheduledAt),
         errorMsg: unavailableEndpointStatus
           ? `Notification endpoint is unavailable: ${unavailableEndpointStatus}`
-          : noiseDecision.action === 'SUPPRESS'
-            ? noiseDecision.reason
-            : undefined,
+          : (suppressedReason ??
+            (noiseDecision.action === 'SUPPRESS' ? noiseDecision.reason : undefined)),
       },
       select: { id: true },
     });
-    return unavailableEndpointStatus ? { id, created: true, skipped: true } : { id, created: true };
+    return unavailableEndpointStatus || suppressedReason
+      ? { id, created: true, skipped: true }
+      : { id, created: true };
   } catch (error) {
     if (!isUniqueConstraintError(error)) throw error;
     const existing = await store.notification.findUnique({
@@ -799,7 +808,7 @@ export async function createCentralNotificationIntentsBatch(
         scheduledAt: effectiveScheduledAt,
         nextAttemptAt: effectiveScheduledAt,
         maxAttempts: Math.min(
-          Math.max(input.maxAttempts ?? NOTIFICATION_RETRY_POLICY.maxAttempts, 1),
+          Math.max(input.maxAttempts ?? defaultNotificationMaxAttempts(trafficClass), 1),
           20
         ),
         expiresAt: input.expiresAt ?? resolveNotificationExpiry(input, scheduledAt),
@@ -1454,12 +1463,23 @@ async function dispatchPayload(
     }
     case 'SLACK_WEBHOOK': {
       const { sendSlackNotification } = await import('./slack');
+      // Rows queued before encryption carry the URL (plaintext or encrypted); newer rows carry none and
+      // read the service's current webhook here, so the secret never sits in the queue.
+      let webhookUrl = await readSlackWebhookUrl(payload.webhookUrl);
+      const policy = payload.lifecyclePolicy;
+      if (policy?.targetKind === 'SERVICE_SLACK_WEBHOOK' && policy.serviceId) {
+        const service = await prisma.service.findUnique({
+          where: { id: policy.serviceId },
+          select: { slackWebhookUrl: true },
+        });
+        webhookUrl = (await readSlackWebhookUrl(service?.slackWebhookUrl)) ?? webhookUrl;
+      }
       return executeProvider(CircuitBreakers.slack(), () =>
         sendSlackNotification(
           payload.eventType,
           payload.incident,
           payload.additionalMessage,
-          payload.webhookUrl,
+          webhookUrl,
           { maxAttempts: 1 }
         )
       );
@@ -1646,22 +1666,23 @@ async function cleanupExpiredNotifications(now: Date): Promise<number> {
 function isAmbiguousDeliveryError(errorText: string): boolean {
   if (!errorText) return false;
   const normalized = errorText.toLowerCase();
-  return (
-    normalized.includes('ambiguous') ||
-    normalized.includes('unconfirmed') ||
-    normalized.includes('unknown') ||
-    normalized.includes('etimedout') ||
-    normalized.includes('timeout') ||
-    normalized.includes('timed out') ||
-    normalized.includes('esockettimedout') ||
-    normalized.includes('econnreset') ||
-    normalized.includes('socket hang up') ||
-    normalized.includes('epipe') ||
-    normalized.includes('und_err_socket') ||
-    normalized.includes('und_err_connect_timeout') ||
-    (normalized.includes('network') && !normalized.includes('enotfound')) ||
-    (normalized.includes('connection') && !normalized.includes('econnrefused'))
-  );
+  // Whole tokens only, so "unknown" or "connection" inside another word does not count.
+  if (
+    /\b(?:ambiguous|unconfirmed|unknown|etimedout|timeout|timed out|esockettimedout|econnreset|socket hang up|epipe|und_err_socket|und_err_connect_timeout)\b/.test(
+      normalized
+    )
+  ) {
+    return true;
+  }
+  // The connection was never made, so nothing was sent and a retry cannot duplicate it.
+  if (
+    /\b(?:enotfound|econnrefused|enetunreach|ehostunreach|eai_again)\b|network is unreachable|no route to host/.test(
+      normalized
+    )
+  ) {
+    return false;
+  }
+  return /\b(?:network|connection)\b/.test(normalized);
 }
 
 function isSafeEmailFailoverCondition(result: DeliveryResult): boolean {
@@ -1718,7 +1739,7 @@ function isClientRejectionStatus(statusCode: number | undefined): boolean {
 }
 
 function isPermanentProviderError(message: string): boolean {
-  return /not configured|no (?:enabled email|SMS) provider configured|no Slack webhook URL configured|notifications? (?:are )?(?:disabled|not enabled)|package not installed|configuration incomplete|unsupported provider|unknown provider|invalid phone number format|phone number .* not verified|phone number must include an international country code|no (?:phone number|device|web subscription)|authentication failed|invalid (?:api )?(?:key|credentials)|unauthorized|official Slack host|webhook URL is required|invalid or restricted Webhook URL|message_limit_exceeded|^(?:channel_not_found|not_in_channel|is_archived|invalid_auth|not_authed|token_revoked|token_expired|account_inactive|missing_scope)$/i.test(
+  return /not configured|no (?:enabled email|SMS) provider configured|no Slack webhook URL configured|notifications? (?:are )?(?:disabled|not enabled)|package not installed|configuration incomplete|unsupported provider|unknown (?:email |SMS )?provider|invalid phone number format|phone number .* not verified|phone number must include an international country code|no (?:phone number|device|web subscription)|authentication failed|invalid (?:api )?(?:key|credentials)|unauthorized|official Slack host|webhook URL is required|invalid or restricted Webhook URL|message_limit_exceeded|^(?:channel_not_found|not_in_channel|is_archived|invalid_auth|not_authed|token_revoked|token_expired|account_inactive|missing_scope)$/i.test(
     message
   );
 }
@@ -1910,8 +1931,14 @@ async function serviceTargetDeliveryRevoked(
     return dest ? null : 'Service Slack channel was disabled or retargeted';
   }
   if (policy.targetKind === 'SERVICE_SLACK_WEBHOOK') {
-    return service.serviceNotificationChannels.includes('SLACK') &&
-      service.slackWebhookUrl?.trim() === policy.targetAddress
+    const current = await readSlackWebhookUrl(service.slackWebhookUrl);
+    if (!service.serviceNotificationChannels.includes('SLACK') || !current)
+      return 'Service Slack webhook was disabled or retargeted';
+    // New rows hold a handle of the URL they were queued for; older rows hold the URL itself
+    // (plaintext or encrypted), so compare decrypted values.
+    const queuedFor = policy.targetAddress;
+    return queuedFor === slackWebhookHandle(current) ||
+      (queuedFor && (await readSlackWebhookUrl(queuedFor)) === current)
       ? null
       : 'Service Slack webhook was disabled or retargeted';
   }
@@ -2023,8 +2050,8 @@ async function serviceSlackDeliveryRevoked(
       }
     }
   } else {
-    const currentWebhook = service.slackWebhookUrl?.trim();
-    if (!currentWebhook || currentWebhook !== payload.webhookUrl?.trim())
+    const currentWebhook = await readSlackWebhookUrl(service.slackWebhookUrl);
+    if (!currentWebhook || currentWebhook !== (await readSlackWebhookUrl(payload.webhookUrl)))
       return 'Service Slack webhook was removed or changed';
   }
   return null;
@@ -2137,7 +2164,9 @@ async function finishAttempt(input: {
   try {
     if (input.attemptId) {
       const settled = await prisma.notificationDeliveryAttempt.updateMany({
-        where: { id: input.attemptId, outcome: 'IN_FLIGHT' },
+        // A lapsed lease can have parked the attempt as UNKNOWN while the provider call was running;
+        // a definite result that arrives afterwards still settles it.
+        where: { id: input.attemptId, finishedAt: null, outcome: { in: ['IN_FLIGHT', 'UNKNOWN'] } },
         data: {
           outcome: input.outcome,
           provider: input.provider,
@@ -2737,21 +2766,38 @@ async function deliverCentralNotificationOwned(
     }
 
     if (result.errorCode === 'AUTH_SECURITY_POLICY_UNAVAILABLE') {
+      const policyError = 'Authentication recipient policy unavailable.';
+      // Nothing was sent. Close the IN_FLIGHT marker, or recovery would park the row as UNKNOWN.
+      const settled = await finishAttempt({
+        notificationId: candidate.id,
+        ordinal,
+        outcome: 'NOT_DISPATCHED',
+        startedAt,
+        attemptId: preCreatedAttemptId,
+        provider: currentProvider,
+        errorCode: result.errorCode,
+        errorMessage: policyError,
+      });
+      if (!settled) return { success: false, claimed: true, error: policyError };
       await prisma.notification.updateMany({
-        where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+        where: {
+          id: candidate.id,
+          status: 'PENDING',
+          lastAttemptAt: now,
+          claimToken: ownershipToken,
+        },
         data: {
           status: 'PENDING',
           attempts: { decrement: 1 },
           lastAttemptAt: null,
+          claimToken: null,
+          claimedBy: null,
+          claimHeartbeatAt: null,
           nextAttemptAt: new Date(Date.now() + notificationRetryDelayMs(1)),
           errorMsg: 'Authentication recipient policy unavailable; delivery deferred.',
         },
       });
-      return {
-        success: false,
-        claimed: true,
-        error: 'Authentication recipient policy unavailable.',
-      };
+      return { success: false, claimed: true, error: policyError };
     }
     if (result.success) {
       const finishedAt = new Date();
@@ -2979,18 +3025,20 @@ async function deliverCentralNotificationOwned(
       'CALLBACK';
     const isAmbiguous =
       circuitTimeout ||
-      // A provider HTTP 5xx can occur after accepting a message. Without a
-      // provider receipt, retrying it (even on the same provider) risks a duplicate.
-      // This applies to email AND any callback-capable provider (Voice, SMS, WhatsApp on Twilio).
-      ((isEmail || isCallbackCapable) &&
-        typeof result.statusCode === 'number' &&
-        result.statusCode >= 500) ||
-      result.errorCode === 'UNKNOWN' ||
-      result.errorCode === 'ETIMEDOUT' ||
-      result.errorCode === 'ECONNRESET' ||
-      // A 4xx is a definitive refusal; its text (e.g. SMTP "550 User unknown") is not ambiguity.
-      (!isClientRejectionStatus(result.statusCode) &&
-        isAmbiguousDeliveryError(`${errorMessage} ${result.errorCode || ''}`));
+      // A permanent failure (nothing was sent) is never ambiguous, whatever else its text says.
+      (!isPermanentProviderError(errorMessage) &&
+        // A provider HTTP 5xx can occur after accepting a message. Without a
+        // provider receipt, retrying it (even on the same provider) risks a duplicate.
+        // This applies to email AND any callback-capable provider (Voice, SMS, WhatsApp on Twilio).
+        (((isEmail || isCallbackCapable) &&
+          typeof result.statusCode === 'number' &&
+          result.statusCode >= 500) ||
+          result.errorCode === 'UNKNOWN' ||
+          result.errorCode === 'ETIMEDOUT' ||
+          result.errorCode === 'ECONNRESET' ||
+          // A 4xx is a definitive refusal; its text (e.g. SMTP "550 User unknown") is not ambiguity.
+          (!isClientRejectionStatus(result.statusCode) &&
+            isAmbiguousDeliveryError(`${errorMessage} ${result.errorCode || ''}`))));
 
     if (isAmbiguous) {
       const reconciliationDeadline = new Date(Date.now() + UNKNOWN_RECONCILIATION_DELAY_MS);
@@ -3103,7 +3151,7 @@ async function deliverCentralNotificationOwned(
       await prisma.notification.updateMany({
         where: {
           id: candidate.id,
-          status: 'PENDING',
+          status: { in: ['PENDING', 'UNKNOWN'] },
           lastAttemptAt: now,
           claimToken: ownershipToken,
         },
@@ -3150,7 +3198,7 @@ async function deliverCentralNotificationOwned(
       await prisma.notification.updateMany({
         where: {
           id: candidate.id,
-          status: 'PENDING',
+          status: { in: ['PENDING', 'UNKNOWN'] },
           lastAttemptAt: now,
           claimToken: ownershipToken,
         },
@@ -3182,7 +3230,7 @@ async function deliverCentralNotificationOwned(
     const failedUpdate = await prisma.notification.updateMany({
       where: {
         id: candidate.id,
-        status: 'PENDING',
+        status: { in: ['PENDING', 'UNKNOWN'] },
         lastAttemptAt: now,
         claimToken: ownershipToken,
       },
@@ -3207,7 +3255,12 @@ async function deliverCentralNotificationOwned(
   const finalAttempts = candidate.attempts + 1;
   const isExhausted = finalAttempts >= candidate.maxAttempts;
   await prisma.notification.updateMany({
-    where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now, claimToken: ownershipToken },
+    where: {
+      id: candidate.id,
+      status: { in: ['PENDING', 'UNKNOWN'] },
+      lastAttemptAt: now,
+      claimToken: ownershipToken,
+    },
     data: {
       status: 'FAILED',
       failedAt: new Date(),
@@ -3606,6 +3659,22 @@ export async function requeueCentralNotification(
       if (error === notRequeued) return false;
       throw error;
     });
+}
+
+/** Why a failed or unknown row cannot be requeued when its message content is gone, or null. */
+export async function notificationRetryBlockedReason(
+  notificationId: string
+): Promise<string | null> {
+  const row = await prisma.notification.findUnique({
+    where: { id: notificationId },
+    select: { channel: true, payloadEncrypted: true, expiresAt: true },
+  });
+  // Teams rows are requeued from their external operation, not from a stored payload.
+  if (!row || row.channel === 'MICROSOFT_TEAMS') return null;
+  const expired = row.expiresAt !== null && row.expiresAt <= new Date();
+  return row.payloadEncrypted === null || expired
+    ? 'This notification can no longer be retried: its message content was removed after the retention period.'
+    : null;
 }
 
 export async function cancelCentralNotification(

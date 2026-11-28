@@ -39,6 +39,33 @@ describe('DashboardShareModal Component', () => {
     expect(input.value).toContain('serviceId=svc-payments');
   });
 
+  it('names the previewed template in the link so recipients open the same one', () => {
+    render(
+      <DashboardShareModal {...defaultProps} dashboardId={undefined} templateId="sre-ops" isTemplate />
+    );
+
+    const input = screen.getByRole('textbox') as HTMLInputElement;
+    expect(new URL(input.value).pathname).toBe('/reports/executive');
+    expect(new URL(input.value).searchParams.get('template')).toBe('sre-ops');
+  });
+
+  it('does not add a template to the link of a saved dashboard', () => {
+    render(<DashboardShareModal {...defaultProps} templateId="sre-ops" />);
+
+    const input = screen.getByRole('textbox') as HTMLInputElement;
+    expect(new URL(input.value).searchParams.has('template')).toBe(false);
+  });
+
+  it('lets only report managers change who can open the dashboard', () => {
+    const { rerender } = render(<DashboardShareModal {...defaultProps} />);
+    expect(screen.getByText('Access Permissions')).toBeDefined();
+
+    rerender(<DashboardShareModal {...defaultProps} canManage={false} />);
+    expect(screen.queryByText('Access Permissions')).toBeNull();
+    // The link itself is still shareable.
+    expect(screen.getByRole('button', { name: /copy/i })).toBeDefined();
+  });
+
   it('copies share link and shows copied confirmation', async () => {
     const writeTextMock = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, {

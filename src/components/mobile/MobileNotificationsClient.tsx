@@ -260,7 +260,13 @@ export default function MobileNotificationsClient() {
       setUnreadCount(previousUnread);
       if (!navigator.onLine) {
         try {
-          await queueOfflinePatch({ markAllAsRead: true });
+          // The queue may replay hours later: bound it to what the user was looking at, by the
+          // server's own timestamps, so alerts that arrive after the tap stay unread.
+          const newest = Math.max(...previousNotifications.map(item => Date.parse(item.createdAt)));
+          await queueOfflinePatch({
+            markAllAsRead: true,
+            readUpTo: new Date(Number.isFinite(newest) ? newest : Date.now()).toISOString(),
+          });
           setErrorMessage(
             'Offline. Mark-all is queued, but the alerts remain unread until OpsKnight confirms it.'
           );

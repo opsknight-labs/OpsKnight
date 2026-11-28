@@ -12,7 +12,8 @@ export function isValidInputValue(type: RunbookInputType | 'SELECT', value: unkn
   switch (type) {
     case 'STRING':
     case 'SELECT':
-      return typeof value === 'string' && value.length <= 2000;
+      // Only SECRET_REF inputs may carry secret://; the Agent claim path decrypts any such value.
+      return typeof value === 'string' && value.length <= 2000 && !isSecretReferenceValue(value);
     case 'NUMBER':
       return typeof value === 'number' && Number.isFinite(value);
     case 'BOOLEAN':

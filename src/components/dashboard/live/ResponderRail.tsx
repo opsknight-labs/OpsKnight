@@ -19,6 +19,7 @@ import { buildIncidentListHref } from '@/lib/incident-links';
 import {
   formatIncidentAge,
   isCriticalIncident,
+  isLiveSectionUnavailable,
   type LiveIncident,
 } from '@/lib/dashboard/live-incidents-shared';
 import { useLiveDashboard } from './LiveDashboardProvider';
@@ -150,7 +151,7 @@ function IncidentLine({
 }
 
 export function SlaRiskCard({ grow = false }: { grow?: boolean } = {}) {
-  const { snapshot, now, setQuery } = useLiveDashboard();
+  const { snapshot, now, setQuery, loading } = useLiveDashboard();
   const items = snapshot?.rail.slaRisk ?? [];
   const summary = snapshot?.summary;
   return (
@@ -168,7 +169,12 @@ export function SlaRiskCard({ grow = false }: { grow?: boolean } = {}) {
       testId="rail-sla-card"
     >
       <div className="space-y-1.5" data-testid="rail-sla-risk">
-        {items.length === 0 ? (
+        {!snapshot ? (
+          <EmptyLine
+            icon={<AlertTriangle className="h-4 w-4 shrink-0 text-status-elevated" aria-hidden />}
+            text={loading ? 'Loading SLA state…' : 'SLA state unavailable'}
+          />
+        ) : items.length === 0 ? (
           <EmptyLine
             icon={<CheckCircle2 className="h-4 w-4 shrink-0 text-status-ok" aria-hidden />}
             text="Everything is within SLA"
@@ -191,16 +197,24 @@ export function SlaRiskCard({ grow = false }: { grow?: boolean } = {}) {
 export function OnCallCard() {
   const { snapshot } = useLiveDashboard();
   const shifts = snapshot?.rail.onCall ?? [];
+  const shiftsUnavailable = isLiveSectionUnavailable(snapshot, 'onCall');
   return (
     <RailCard
       title="On-Call Now"
-      count={shifts.length}
+      count={shiftsUnavailable ? undefined : shifts.length}
       subtitle={shifts.length ? 'Current responders' : undefined}
       icon={<Users className="h-3.5 w-3.5" />}
       action={{ label: 'Schedules', href: '/schedules' }}
     >
       <ul className="space-y-0.5" data-testid="rail-on-call" aria-label="Active on-call shifts">
-        {shifts.length === 0 ? (
+        {shiftsUnavailable ? (
+          <li>
+            <EmptyLine
+              icon={<AlertTriangle className="h-4 w-4 shrink-0 text-status-elevated" aria-hidden />}
+              text="On-call shifts unavailable"
+            />
+          </li>
+        ) : shifts.length === 0 ? (
           <li>
             <EmptyLine
               icon={<AlertTriangle className="h-4 w-4 shrink-0 text-status-elevated" aria-hidden />}
@@ -266,7 +280,11 @@ const ATTENTION_TONE: Record<'rose' | 'amber' | 'violet', string> = {
  */
 export function OpsPulsePanel({ aiops }: { aiops?: ReactNode } = {}) {
   const { snapshot, now, currentUserId, query, setQuery } = useLiveDashboard();
-  const coverage = snapshot?.coverage;
+  const shiftsUnavailable = isLiveSectionUnavailable(snapshot, 'onCall');
+  const coverage =
+    shiftsUnavailable || isLiveSectionUnavailable(snapshot, 'schedules')
+      ? undefined
+      : snapshot?.coverage;
   const attention = snapshot?.attention ?? [];
   const services = (snapshot?.rail.servicesAtRisk ?? []).slice(0, 5);
   const shifts = snapshot?.rail.onCall ?? [];
@@ -490,7 +508,12 @@ export function OpsPulsePanel({ aiops }: { aiops?: ReactNode } = {}) {
               Schedules →
             </Link>
           </div>
-          {shifts.length === 0 ? (
+          {shiftsUnavailable ? (
+            <EmptyLine
+              icon={<AlertTriangle className="h-4 w-4 shrink-0 text-status-elevated" aria-hidden />}
+              text="On-call shifts unavailable"
+            />
+          ) : shifts.length === 0 ? (
             <EmptyLine
               icon={<AlertTriangle className="h-4 w-4 shrink-0 text-status-elevated" aria-hidden />}
               text="No active on-call shifts"

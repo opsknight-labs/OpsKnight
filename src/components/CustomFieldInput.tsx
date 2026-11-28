@@ -17,7 +17,9 @@ type CustomFieldInputProps = {
     error?: string;
 };
 
-export default function CustomFieldInput({ field, value = '', onChange, error }: CustomFieldInputProps) {
+export default function CustomFieldInput({ field, value, onChange, error }: CustomFieldInputProps) {
+    // Untouched (undefined) shows the default; once cleared (''), it stays empty.
+    const shown = value ?? field.defaultValue ?? '';
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         onChange(e.target.value);
     };
@@ -30,7 +32,7 @@ export default function CustomFieldInput({ field, value = '', onChange, error }:
                         type="input"
                         inputType="text"
                         label={field.name}
-                        value={value || field.defaultValue || ''}
+                        value={shown}
                         onChange={handleChange}
                         required={field.required}
                         error={error}
@@ -43,7 +45,7 @@ export default function CustomFieldInput({ field, value = '', onChange, error }:
                         type="input"
                         inputType="number"
                         label={field.name}
-                        value={value || field.defaultValue || ''}
+                        value={shown}
                         onChange={handleChange}
                         required={field.required}
                         error={error}
@@ -56,7 +58,7 @@ export default function CustomFieldInput({ field, value = '', onChange, error }:
                         type="input"
                         inputType="date"
                         label={field.name}
-                        value={value || field.defaultValue || ''}
+                        value={shown}
                         onChange={handleChange}
                         required={field.required}
                         error={error}
@@ -71,7 +73,7 @@ export default function CustomFieldInput({ field, value = '', onChange, error }:
                             {field.name} {field.required && <span style={{ color: 'var(--color-error)' }}>*</span>}
                         </label>
                         <Select
-                            value={value || field.defaultValue || ''}
+                            value={shown}
                             onChange={handleChange}
                             options={options.map((opt: string) => ({ value: opt, label: opt }))}
                             required={field.required}
@@ -90,7 +92,7 @@ export default function CustomFieldInput({ field, value = '', onChange, error }:
                         <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)', fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-medium)' }}>
                             <input
                                 type="checkbox"
-                                checked={value === 'true' || (field.defaultValue === 'true' && !value)}
+                                checked={shown === 'true'}
                                 onChange={(e) => onChange(e.target.checked ? 'true' : 'false')}
                                 required={field.required}
                             />
@@ -111,7 +113,7 @@ export default function CustomFieldInput({ field, value = '', onChange, error }:
                         type="input"
                         inputType="url"
                         label={field.name}
-                        value={value || field.defaultValue || ''}
+                        value={shown}
                         onChange={handleChange}
                         required={field.required}
                         error={error}
@@ -125,7 +127,7 @@ export default function CustomFieldInput({ field, value = '', onChange, error }:
                         type="input"
                         inputType="email"
                         label={field.name}
-                        value={value || field.defaultValue || ''}
+                        value={shown}
                         onChange={handleChange}
                         required={field.required}
                         error={error}

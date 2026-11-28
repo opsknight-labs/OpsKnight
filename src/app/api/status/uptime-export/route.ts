@@ -188,18 +188,14 @@ export async function getUptimeExportResponse(req: NextRequest, slug?: string) {
     });
 
     // Compute uptime in PUBLIC mode using effective window
-    const { calculateMultiServiceUptime } = await import('@/lib/sla-server');
-    const uptimeMap = await calculateMultiServiceUptime(
+    const { calculateMultiServiceAvailability } = await import('@/lib/sla-server');
+    const availabilityMap = await calculateMultiServiceAvailability(
       serviceIds,
       effectiveStart,
       effectiveEnd,
       'PUBLIC'
     );
 
-    const totalPeriodMinutes = Math.max(
-      1,
-      (effectiveEnd.getTime() - effectiveStart.getTime()) / (1000 * 60)
-    );
     const excellentThreshold = statusPage.uptimeExcellentThreshold || 99.9;
     const goodThreshold = statusPage.uptimeGoodThreshold || 99.0;
 
@@ -214,8 +210,9 @@ export async function getUptimeExportResponse(req: NextRequest, slug?: string) {
     const reportServices = statusPage.services
       .filter(sp => !concealed.has(sp.service.id) && (!scope || scope.memberIds.has(sp.service.id)))
       .map(sp => {
-        const uptime = Math.max(0, Math.min(100, uptimeMap[sp.service.id] ?? 100));
-        const downtimeMinutes = Math.max(0, ((100 - uptime) / 100) * totalPeriodMinutes);
+        const measured = availabilityMap[sp.service.id];
+        const uptime = Math.max(0, Math.min(100, measured?.uptimePercent ?? 100));
+        const downtimeMinutes = Math.max(0, (measured?.downtimeMs ?? 0) / 60_000);
         return {
           id: sp.service.id,
           name: sp.displayName || sp.service.name,

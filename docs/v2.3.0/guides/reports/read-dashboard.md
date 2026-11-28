@@ -39,8 +39,9 @@ The filters are encoded in the URL. Switching between a saved dashboard and a te
 - **Gauges** show rates or compliance percentages. Read them with their denominator; a percentage over very few incidents is not a stable trend.
 - **Trend charts** use buckets inside the selected time window. Incident count, MTTA/MTTR, and SLA compliance are different series and should not be treated as interchangeable.
 - **Distribution charts** group incidents by urgency or status.
-- **Incident Heatmap** is a calendar-style incident-volume view, not an hourly latency heatmap.
+- **Incident Heatmap** is a calendar-style incident-volume view, not an hourly latency heatmap. Each day is a calendar day in your profile time zone, so an incident created in your evening is counted on that evening's date.
 - **Tables** rank or break down services, assignees, on-call load, SLA results, and other scoped entities.
+- **On-call load** shows each person's hours on call in the window and the incidents that started while they were on call for a schedule in that incident's service's escalation policy. A person on call for a different schedule is not credited with the incident, and a service whose policy has no schedule step credits no one.
 - **Smart Insights** summarizes notable patterns from the same authorized metrics.
 
 Use the [metrics reference](../../reference/metrics) for the precise population, unit, labels, and aggregation caveats behind a metric.
@@ -52,6 +53,12 @@ The server calculates metrics from records the current authorization actor can r
 ## Empty and partial results
 
 An empty chart is not automatically a runtime failure. It can mean no matching incidents exist in the selected window, the team/service combination has no matching records, the user cannot read those records, or the metric has no valid samples (for example, no resolved incidents for MTTR). Widen the time range, clear team/service filters, and compare with the incident list before escalating.
+
+If the query behind the **Incident Heatmap** fails, the widget (and the incident history on the Dashboard) says "Incident history is temporarily unavailable." instead of drawing an empty calendar, so a grey calendar always means no incidents.
+
+The Dashboard's **Trends & insights** are calculated one at a time per server process. A request for a view that is not cached waits its turn (up to 10 seconds, with at most eight others queued) and only then reports "Trends are temporarily unavailable"; a cached view is served at once, marked stale while it refreshes.
+
+With several application replicas, one replica at a time computes a given view (a database advisory lock per view). A replica that finds the lock taken keeps serving its stale copy and refreshes on a later request; a replica with nothing cached waits up to 3 seconds for the lock and then computes for itself, so a lock problem never blocks the Dashboard. Each replica keeps its own cache, so every replica still computes a view once when it expires.
 
 The **Updated** timestamp reports when the server rendered the current view.
 Open **Live** to refresh immediately or select automatic refresh every 30

@@ -51,8 +51,8 @@ you can:
 
 - replace its displayed title;
 - choose a width from one to four columns;
-- choose compact, standard, or expanded row height;
-- display a chart as line, bar, or pie; and
+- choose compact, standard, or expanded row height (after a width or height change the widgets re-flow row by row, so none overlap or run past the last column);
+- display a chart as line, bar, or pie (a chart with its own type, such as MTTA vs MTTR, shows that type in the list and keeps it until you pick another); and
 - set an optional SLA target for gauges and rate widgets.
 
 Select **Apply Changes**, review the result, and then select **Save Changes**.
@@ -63,7 +63,7 @@ default** beside the title when you want the registered widget name again.
 
 Drag a widget by its handle and drop it at the desired position. OpsKnight recalculates the grid order while retaining each widget's width and height. Keyboard dragging is supported by the grid interaction layer.
 
-Select **Save Changes** only after reviewing the complete layout. A successful save displays confirmation and updates the saved baseline; reload the page and verify the order and definitions survived. **Cancel** restores the last saved title, description, widgets, and layout and exits edit mode.
+Select **Save Changes** only after reviewing the complete layout. A successful save displays confirmation and updates the saved baseline; reload the page and verify the order and definitions survived. **Cancel** restores the last saved title, description, widgets, and layout and exits edit mode. This includes a rename you just saved: editing again straight after a save starts with no **Unsaved changes**, and **Cancel** keeps the new name.
 
 For a template preview, **Done** exits editing but does not persist a new dashboard. Select **Clone Dashboard** first when you need a saved, editable copy.
 
@@ -71,7 +71,9 @@ For a template preview, **Done** exits editing but does not persist a new dashbo
 
 Select **Share** or open the gear menu and choose **Share Dashboard**. The dialog
 builds a link to the current dashboard and includes non-default time-window,
-team, and service filters. Select **Copy** and test the URL as a user with the
+team, and service filters. When you share a template preview (not yet cloned into
+a saved dashboard), the link also names that template, so recipients open the
+same template rather than the default Executive Summary. Select **Copy** and test the URL as a user with the
 intended access level.
 
 For a saved dashboard, its owner can choose:

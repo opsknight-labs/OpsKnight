@@ -439,9 +439,12 @@ export async function decrypt(encryptedText: string): Promise<string> {
   }
 }
 
+/** True when a stored value is in one of the encrypt() formats rather than legacy plaintext. */
+export function isEncryptedSecret(value: string): boolean {
+  return value.startsWith('v3:') || value.startsWith('v2:') || /^[0-9a-f]+:[0-9a-f]+$/i.test(value);
+}
+
 /** Read a secret during the rollout from legacy plaintext to encrypted values. */
 export async function decryptStoredSecret(value: string): Promise<string> {
-  const looksEncrypted =
-    value.startsWith('v3:') || value.startsWith('v2:') || /^[0-9a-f]+:[0-9a-f]+$/i.test(value);
-  return looksEncrypted ? decrypt(value) : value;
+  return isEncryptedSecret(value) ? decrypt(value) : value;
 }

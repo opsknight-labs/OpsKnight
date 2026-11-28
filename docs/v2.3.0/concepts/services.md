@@ -213,10 +213,46 @@ select the configured destinations/channels and choose lifecycle events:
 - incident resolved; and
 - SLA breached.
 
+An SLA warning or breach goes to every one of those destinations, the same ones
+the other lifecycle events use: each linked Slack destination (subject to its
+priority and urgency conditions), the legacy Slack channel and webhook, every
+linked Microsoft Teams channel (as a text post), and each webhook. A breach state
+(`ack` or `resolve`, warning or breached, per target) is sent once per
+destination, so a repeat check does not post again. Email alerts follow the SLA
+alert address setting.
+
 The service UI can link multiple Slack destinations, Microsoft Teams
 destinations, and outbound webhook integrations, subject to the corresponding
 workspace connection. Slack channels must be joined/connected where required;
 Teams discovery and linking require a valid tenant installation and permissions.
+
+Service-level channels support Slack, Teams and webhooks only. Use escalation
+policies or user notification preferences for email, SMS, push and WhatsApp: the
+UI, the v2 API (`PATCH /api/v2/services/{id}/notification-settings`) and MCP
+refuse to save those four channels, because a service notification never sends
+them. A service that still lists one from before is read as stored, sends nothing
+to it (the dispatcher logs one warning), shows a notice on the Notifications tab,
+and drops the value the next time the form is saved. Over the API, remove a
+legacy value from the list before sending it back.
+
+The optional **Slack Webhook URL (Legacy Fallback)** is a secret, so OpsKnight
+stores it encrypted and never shows it again: the field says "Configured" and
+stays empty, an empty field on save leaves the stored URL unchanged, a new URL
+replaces it, and the **Remove** box clears it. Queued notifications hold a
+non-secret handle instead of the URL and read the current webhook when they send,
+so replacing the URL cancels messages still queued for the old one. Webhooks saved
+before this change keep working; the scheduler encrypts them in the background
+(up to 1,000 services an hour), and the encryption key must be configured for new
+saves to succeed.
+
+Linking or unlinking a Slack or Teams channel takes effect at once, but the
+other settings (events, channels, webhook) only apply when you press **Save**.
+Each form carries the service revision it was loaded with. If anyone changed the
+service in the meantime, Save is refused with "Someone else changed these
+settings; reload", nothing is written, and the form reloads with the current
+values so you can make your change again. Your own link and unlink actions update
+the revision, so they never block your Save. Over the API, send the `ETag` from
+`GET /api/v2/services/{id}/notification-settings` as `If-Match` on the `PATCH`.
 
 Disabling Slack as a service notification channel disables enabled Slack
 destinations for that service. Saving a channel name is not proof of delivery.
@@ -273,6 +309,23 @@ The service workspace shows incident history and calculated availability, MTTR,
 incident frequency, and SLA compliance for the selected time window. These are
 derived operational measures, not promises created merely by choosing an SLA
 tier label.
+
+Service uptime, in analytics, uptime objectives and the status-page uptime export, is
+`(period − downtime) / period`:
+
+- The period is the selected range, moved forward to the service's creation date, so a new service
+  is measured only from the day it existed.
+- Downtime is the union of the service's incident intervals, each running from the incident's
+  creation to its resolution (or to the end of the period while it is still open), clipped to the
+  period. Overlapping incidents count once.
+- Planned maintenance is not downtime. Time inside the service's recorded
+  [maintenance windows](../guides/services/maintenance-windows) is taken out of the outage intervals, so an incident
+  that overlaps a window counts only for the time outside it. The period is not shortened: a day that
+  is only maintenance still shows 100%.
+- The incident's current status does not matter. Snoozing, suppressing or acknowledging an incident
+  does not end an outage, so a past period never changes because an incident was snoozed later.
+  A suppressed incident that no maintenance window covers still counts until it is resolved.
+- A period with no measurable time shows 100%.
 
 When interpreting a result, verify time range, incident visibility/scope,
 excluded states, service objective revisions, and whether required scheduler/

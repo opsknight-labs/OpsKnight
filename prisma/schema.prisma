@@ -2242,6 +2242,7 @@ model UserNotificationEndpoint {
   lastFailureAt  DateTime?
   lastErrorCode  String?
   lastVerifiedAt DateTime?
+  lastResetAt    DateTime?
   createdAt      DateTime                   @default(now())
   updatedAt      DateTime                   @updatedAt
   user           User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -3578,6 +3579,8 @@ enum ObjectiveDataState {
   AVAILABLE
   NO_DATA
   UNAVAILABLE
+  /// The evaluated period is shorter than the objective's window (new definition or new service); the value is shown but never decides breach.
+  PARTIAL
 }
 
 /// @deprecated Immutable legacy incident-SLA history. No new rows are written.

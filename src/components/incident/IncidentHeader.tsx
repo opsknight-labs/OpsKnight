@@ -23,6 +23,7 @@ import {
   Pause,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { notify } from '@/lib/toast';
 import type { BaselineLabel } from '@/lib/incidents/baseline';
 import { FIELD_SELECT_CLASS, FIELD_VALUE_CLASS } from '@/components/incident/field-styles';
 import { incidentStatusTone, urgencyTone } from '@/lib/design/status-palette';
@@ -112,15 +113,23 @@ export default function IncidentHeader({
 
   const handleVisibilityChange = (newVisibility: 'PUBLIC' | 'PRIVATE') => {
     startTransition(async () => {
-      await updateIncidentVisibility(incident.id, newVisibility);
-      router.refresh();
+      try {
+        await updateIncidentVisibility(incident.id, newVisibility);
+        router.refresh();
+      } catch (error) {
+        notify.error(error);
+      }
     });
   };
 
   const handleUrgencyChange = (newUrgency: string) => {
     startTransition(async () => {
-      await updateIncidentUrgency(incident.id, newUrgency);
-      router.refresh();
+      try {
+        await updateIncidentUrgency(incident.id, newUrgency);
+        router.refresh();
+      } catch (error) {
+        notify.error(error);
+      }
     });
   };
 

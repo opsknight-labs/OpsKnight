@@ -17,6 +17,8 @@ interface DashboardShareModalProps {
   isOpen: boolean;
   onClose: () => void;
   dashboardId?: string;
+  /** The template being previewed (no saved dashboard yet): recipients must open the same one. */
+  templateId?: string;
   dashboardName: string;
   isTemplate?: boolean;
   currentVisibility?: 'PRIVATE' | 'TEAM' | 'PUBLIC';
@@ -26,17 +28,21 @@ interface DashboardShareModalProps {
     serviceId?: string;
   };
   onVisibilityChange?: (visibility: 'PRIVATE' | 'TEAM' | 'PUBLIC') => void;
+  /** report.manage: only managers may change who can open the dashboard; everyone can copy the link. */
+  canManage?: boolean;
 }
 
 export default function DashboardShareModal({
   isOpen,
   onClose,
   dashboardId,
+  templateId,
   dashboardName,
   isTemplate = false,
   currentVisibility = 'PRIVATE',
   currentFilters,
   onVisibilityChange,
+  canManage = true,
 }: DashboardShareModalProps) {
   const [copied, setCopied] = useState(false);
   const [selectedVisibility, setSelectedVisibility] = useState<'PRIVATE' | 'TEAM' | 'PUBLIC'>(
@@ -56,6 +62,9 @@ export default function DashboardShareModal({
     }
     if (currentFilters.serviceId) {
       params.set('serviceId', currentFilters.serviceId);
+    }
+    if (templateId && !dashboardId) {
+      params.set('template', templateId);
     }
 
     const basePath = dashboardId
@@ -171,7 +180,7 @@ export default function DashboardShareModal({
           </div>
 
           {/* Visibility Controls for Saved Dashboards */}
-          {!isTemplate && dashboardId && (
+          {canManage && !isTemplate && dashboardId && (
             <div className="space-y-2 pt-2 border-t border-border">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
                 <span>Access Permissions</span>

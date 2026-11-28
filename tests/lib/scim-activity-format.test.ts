@@ -58,4 +58,14 @@ describe('SCIM activity in plain language', () => {
     ]);
     expect(scimActionsMatchingLabel('   ')).toEqual([]);
   });
+
+  it('labels a refused administrator email change in plain language', () => {
+    expect(
+      describeScimEvent(
+        'user.update_refused',
+        { reason: 'administrator_email_change' },
+        'Ada Admin'
+      ).label
+    ).toBe('Change refused: administrator email');
+  });
 });

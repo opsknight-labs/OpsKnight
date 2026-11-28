@@ -421,6 +421,53 @@ export async function createScheduleOverrideMutation(
   }
 }
 
+export type CancelledScheduleOverride = {
+  id: string;
+  userId: string;
+  replacesUserId: string | null;
+  start: Date;
+  end: Date;
+  /** DELETED: it had not started. ENDED: it was in progress and now stops, keeping what it served. */
+  outcome: 'DELETED' | 'ENDED';
+};
+
+/**
+ * Cancels an override without rewriting history. One that has not started is removed; one in
+ * progress ends now so the coverage it already served stays in /on-call?at= and analytics; a
+ * finished one is history and is refused.
+ */
+export async function cancelScheduleOverrideMutation(
+  scheduleId: string,
+  overrideId: string,
+  tx?: TransactionClient,
+  now: Date = new Date()
+): Promise<CancelledScheduleOverride> {
+  return inScheduleTransaction(tx, async client => {
+    const override = await client.onCallOverride.findFirst({
+      where: { id: overrideId, scheduleId },
+      select: { id: true, userId: true, replacesUserId: true, start: true, end: true },
+    });
+    if (!override) throw new AppError({ code: 'SCHEDULE_OVERRIDE_NOT_FOUND' });
+    if (override.end <= now) {
+      throw new AppError({
+        code: 'SCHEDULE_OVERRIDE_CONFLICT',
+        userMessage:
+          'This override has already finished. Finished overrides are part of the schedule history and cannot be deleted.',
+        details: { overrideId },
+      });
+    }
+    const inProgress = override.start < now;
+    const changed = inProgress
+      ? await client.onCallOverride.updateMany({
+          where: { id: overrideId, scheduleId, end: { gt: now } },
+          data: { end: now },
+        })
+      : await client.onCallOverride.deleteMany({ where: { id: overrideId, scheduleId } });
+    if (changed.count !== 1) throw new AppError({ code: 'SCHEDULE_OVERRIDE_NOT_FOUND' });
+    return { ...override, end: inProgress ? now : override.end, outcome: inProgress ? 'ENDED' : 'DELETED' };
+  });
+}
+
 export type ScheduleDeletionSnapshot = {
   id: string;
   name: string;

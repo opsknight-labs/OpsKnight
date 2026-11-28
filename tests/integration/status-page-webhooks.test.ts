@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- loosely typed route-handler and session mocks */
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { POST, GET, PATCH, DELETE } from '@/app/api/status-page/webhooks/route';
 import { triggerStatusPageWebhooks } from '@/lib/status-page-webhooks';
@@ -28,7 +29,9 @@ vi.mock('@/lib/network-security', () => ({
 }));
 
 // Mock logger to avoid side-effects (like fetch calls to /api/logs/ingest)
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async importOriginal => ({
+  // Audit writes reach sanitizeAuditContext from the real module.
+  ...(await importOriginal<typeof import('@/lib/logger')>()),
   logger: {
     info: vi.fn(),
     error: vi.fn(),

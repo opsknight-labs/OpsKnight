@@ -95,7 +95,7 @@ describe('API: Admin Generate Reset Link', () => {
     expect(data.type).toBe('PASSWORD_RESET');
     expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
       where: { id: 'target-id' },
-      select: { id: true, email: true, status: true },
+      select: { id: true, email: true, status: true, role: true },
     });
     expect(mockIssuePasswordResetToken).toHaveBeenCalledWith({
       userId: 'target-id',

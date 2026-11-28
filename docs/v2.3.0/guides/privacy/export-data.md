@@ -33,6 +33,8 @@ Open **Settings → Privacy Requests**, select the request, and open its export 
 
 The artifact is encrypted at rest, tied to one request, expires server-side, and records downloads. Eligible user access and portability requests use the same automation gate. Manual request types and every status-page subscriber request cannot invoke it.
 
+The artifact is one compressed ZIP file with a manifest, a README and a JSON file per category (profile, identities, memberships, incidents, incident notes, schedules, notifications and audit events). The export is built one category at a time on the server. Notifications and audit events stop at 20,000 records each; the manifest and the file itself then say the export is partial and give the true total. The compressed ZIP may be at most 200 MB: a larger export fails with a size error, the artifact is recorded as failed, and nothing is stored for download.
+
 ## Verify the export
 
 Compare the downloaded checksum and size with the detail view, inspect representative records, and record secure delivery in the case system. Mark the request complete only after fulfilment is verified.
@@ -45,7 +47,7 @@ You cannot turn an export into a different subject's artifact. Let an erroneous 
 
 - **Generate is disabled:** confirm type, `PROCESSING`, verification, and export permission.
 - **Download is denied:** the artifact may be expired, failed, or associated with another request.
-- **Artifact failed:** inspect the recorded failure and application logs before retrying.
+- **Artifact failed:** inspect the recorded failure and application logs before retrying. A size failure means the compressed export is over 200 MB; deliver that subject's data through the approved manual process.
 - **Subscriber export says manual fulfilment:** this is expected in 2.0. Do not change the subject type to bypass the boundary; complete the approved manual export and record its evidence.
 
 ## Next steps

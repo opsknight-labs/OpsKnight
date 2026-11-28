@@ -60,7 +60,7 @@ Open **Incidents** and select **Create incident**.
 10. Optionally assign one active user or one existing team. User and team assignment are mutually exclusive. Leave both empty if triage has not established an owner.
 11. Complete the displayed custom fields. OpsKnight validates and normalizes text, number, date, select, boolean, URL, and email values before creation and applies configured defaults where applicable.
 12. Leave the deduplication key empty for an ordinary manual incident. If an exercise or external workflow requires one, use a stable value no longer than 200 characters and unique to that event stream.
-13. Review the form, then submit it once. Wait for the result instead of clicking repeatedly.
+13. Review the form, then submit it once. Wait for the result instead of clicking repeatedly. The form ignores a second submit, including a repeated `Cmd/Ctrl+Enter`, while the first is still running, and each attempt carries its own idempotency key, so a repeated request for the same attempt returns the first result instead of creating a second incident.
 
 ## Understand the creation result
 

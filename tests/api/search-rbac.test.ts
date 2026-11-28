@@ -4,6 +4,8 @@ import { GET } from '@/app/api/search/route';
 
 const mocks = vi.hoisted(() => ({
   findMany: vi.fn().mockResolvedValue([]),
+  userFindMany: vi.fn().mockResolvedValue([]),
+  policyFindMany: vi.fn().mockResolvedValue([]),
   userFindUnique: vi.fn(),
 }));
 
@@ -25,8 +27,8 @@ vi.mock('@/lib/prisma', () => ({
     incident: { findMany: mocks.findMany },
     service: { findMany: mocks.findMany },
     team: { findMany: mocks.findMany },
-    user: { findUnique: mocks.userFindUnique, findMany: mocks.findMany },
-    escalationPolicy: { findMany: mocks.findMany },
+    user: { findUnique: mocks.userFindUnique, findMany: mocks.userFindMany },
+    escalationPolicy: { findMany: mocks.policyFindMany },
     postmortem: { findMany: mocks.findMany },
     onCallSchedule: { findMany: mocks.findMany },
     runbook: { findMany: mocks.findMany },
@@ -43,6 +45,8 @@ describe('global search RBAC', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.findMany.mockResolvedValue([]);
+    mocks.userFindMany.mockResolvedValue([]);
+    mocks.policyFindMany.mockResolvedValue([]);
   });
 
   it('adds team and assignee scope for regular users', async () => {
@@ -140,6 +144,147 @@ describe('global search RBAC', () => {
       automationDecision: { is: null },
       automationTraces: { none: {} },
     });
+  });
+
+  it('keeps an older incident whose title is exactly the query when newer ones fill the limit', async () => {
+    mocks.userFindUnique.mockResolvedValue({
+      id: 'responder-1',
+      role: 'RESPONDER',
+      status: 'ACTIVE',
+      teamMemberships: [],
+    });
+    const incident = (id: string, title: string) => ({
+      id,
+      title,
+      status: 'OPEN',
+      urgency: 'LOW',
+      automationSourceRestricted: false,
+      automationTraces: [],
+      automationDecision: null,
+      service: null,
+    });
+    const newer = Array.from({ length: 8 }, (_, n) => incident(`new-${n}`, `failover note ${n}`));
+    mocks.findMany.mockImplementation(
+      async (args?: { where?: unknown; select?: { urgency?: unknown } }) => {
+        if (!args?.select?.urgency) return [];
+        // The exact-title query adds a third AND clause to the access scope and restricted-source filter.
+        const exactQuery = (args.where as { AND: unknown[] }).AND.length === 3;
+        return exactQuery ? [incident('old-exact', 'failover')] : newer;
+      }
+    );
+
+    const response = await GET(new NextRequest('http://localhost/api/search?q=failover'));
+    const body = await response.json();
+    const results: Array<{ id: string; type: string }> = (
+      body.data?.results ?? body.results
+    ).filter((result: { type: string }) => result.type === 'incident');
+
+    expect(results).toHaveLength(8);
+    expect(results[0].id).toBe('old-exact');
+  });
+
+  it('requires every word of a multi-word query instead of any of them', async () => {
+    mocks.userFindUnique.mockResolvedValue({
+      id: 'responder-1',
+      role: 'RESPONDER',
+      status: 'ACTIVE',
+      teamMemberships: [],
+    });
+
+    await GET(new NextRequest('http://localhost/api/search?q=payment%20timeout'));
+
+    const contains = (word: string) => ({ contains: word, mode: 'insensitive' });
+    const incidentWhere = mocks.findMany.mock.calls[0][0].where;
+    expect(incidentWhere.AND[1].OR[0].AND[1]).toEqual({
+      AND: [
+        { OR: [{ title: contains('payment') }, { description: contains('payment') }] },
+        { OR: [{ title: contains('timeout') }, { description: contains('timeout') }] },
+      ],
+    });
+    const serviceWhere = mocks.findMany.mock.calls[1][0].where;
+    expect(serviceWhere.AND[1]).toEqual({
+      AND: [
+        { OR: [{ name: contains('payment') }, { description: contains('payment') }] },
+        { OR: [{ name: contains('timeout') }, { description: contains('timeout') }] },
+      ],
+    });
+  });
+
+  it('answers 503 with Retry-After when the rate-limit store is down, and 429 only when limited', async () => {
+    mocks.userFindUnique.mockResolvedValue({
+      id: 'responder-1',
+      role: 'RESPONDER',
+      status: 'ACTIVE',
+      teamMemberships: [],
+    });
+    const { checkRateLimit } = await import('@/lib/rate-limit');
+
+    vi.mocked(checkRateLimit).mockResolvedValueOnce({
+      allowed: false,
+      remaining: 0,
+      resetAt: Date.now() + 60_000,
+      count: 31,
+      unavailable: true,
+    });
+    const down = await GET(new NextRequest('http://localhost/api/search?q=database'));
+    expect(down.status).toBe(503);
+    expect(down.headers.get('Retry-After')).toBe('5');
+
+    vi.mocked(checkRateLimit).mockResolvedValueOnce({
+      allowed: false,
+      remaining: 0,
+      resetAt: Date.now() + 20_000,
+      count: 31,
+    });
+    const limited = await GET(new NextRequest('http://localhost/api/search?q=database'));
+    expect(limited.status).toBe(429);
+    expect(Number(limited.headers.get('Retry-After'))).toBeGreaterThan(0);
+    expect(mocks.findMany).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['AUDITOR', true],
+    ['USER', true],
+    ['RESPONDER', false],
+    ['ADMIN', false],
+  ])('%s postmortem search is restricted to published rows: %s', async (role, publishedOnly) => {
+    mocks.userFindUnique.mockResolvedValue({
+      id: 'u-1',
+      role,
+      status: 'ACTIVE',
+      teamMemberships: [],
+    });
+
+    await GET(new NextRequest('http://localhost/api/search?q=database'));
+
+    const query = mocks.findMany.mock.calls
+      .map(([args]) => args)
+      .find(args => JSON.stringify(args?.where).includes('rootCause'));
+    expect(query).toBeDefined();
+    expect(JSON.stringify(query.where.AND)).toEqual(
+      publishedOnly
+        ? expect.stringContaining('"status":"PUBLISHED"')
+        : expect.not.stringContaining('"status":"PUBLISHED"')
+    );
+  });
+
+  it.each([
+    ['USER', false],
+    ['RESPONDER', true],
+    ['AUDITOR', true],
+    ['ADMIN', true],
+  ])('%s user and policy search matches the pages it can open: %s', async (role, canOpen) => {
+    mocks.userFindUnique.mockResolvedValue({
+      id: 'u-1',
+      role,
+      status: 'ACTIVE',
+      teamMemberships: [{ teamId: 'team-1' }],
+    });
+
+    await GET(new NextRequest('http://localhost/api/search?q=alice'));
+
+    expect(mocks.userFindMany).toHaveBeenCalledTimes(canOpen ? 1 : 0);
+    expect(mocks.policyFindMany).toHaveBeenCalledTimes(canOpen ? 1 : 0);
   });
 
   it('returns limited, scoped schedule and runbook matches', async () => {

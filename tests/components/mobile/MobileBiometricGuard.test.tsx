@@ -134,4 +134,62 @@ describe('MobileBiometricGuard', () => {
       vi.useRealTimers();
     }
   });
+
+  it('keeps the same children mounted across lock and unlock, so unsaved input survives', async () => {
+    vi.spyOn(appLock, 'platformAuthenticatorAvailable').mockResolvedValue(true);
+    vi.spyOn(appLock, 'isAppLockEnabled').mockReturnValue(false);
+    vi.spyOn(appLock, 'isValidAppLockAssertion').mockReturnValue(true);
+    vi.spyOn(appLock, 'getAppLockCredentialDescriptor').mockReturnValue(undefined);
+    let verify!: (assertion: object) => void;
+    Object.defineProperty(navigator, 'credentials', {
+      value: { get: vi.fn(() => new Promise<object>(resolve => (verify = resolve))) },
+      configurable: true,
+    });
+
+    render(
+      <MobileBiometricGuard>
+        <input aria-label="note" />
+      </MobileBiometricGuard>
+    );
+    const input = await screen.findByLabelText('note');
+    await waitFor(() => expect(input.closest('[inert]')).toBeNull());
+    fireEvent.change(input, { target: { value: 'unsaved text' } });
+
+    // The user turns the lock on, leaves the app and comes back.
+    vi.spyOn(appLock, 'isAppLockEnabled').mockReturnValue(true);
+    Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(await screen.findByText(/OpsKnight is locked/i)).toBeInTheDocument();
+    Object.defineProperty(document, 'hidden', { value: false, configurable: true });
+    await act(async () => {
+      verify({});
+    });
+    await waitFor(() => {
+      expect(screen.queryByText(/OpsKnight is locked/i)).not.toBeInTheDocument();
+    });
+
+    expect(screen.getByLabelText('note')).toBe(input);
+    expect((screen.getByLabelText('note') as HTMLInputElement).value).toBe('unsaved text');
+  });
+
+  it('does not lock behind a dead button when no platform authenticator was found', async () => {
+    vi.spyOn(appLock, 'platformAuthenticatorAvailable').mockResolvedValue(false);
+    vi.spyOn(appLock, 'isAppLockEnabled').mockReturnValue(true);
+
+    render(
+      <MobileBiometricGuard>
+        <div>Protected Content</div>
+      </MobileBiometricGuard>
+    );
+    await screen.findByText('Protected Content');
+    Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    expect(screen.queryByText(/OpsKnight is locked/i)).not.toBeInTheDocument();
+    Object.defineProperty(document, 'hidden', { value: false, configurable: true });
+  });
 });

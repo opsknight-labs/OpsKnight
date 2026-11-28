@@ -7,7 +7,10 @@ import { AppError, isAppError } from '@/lib/errors';
 import { logger, withRequestContext } from '@/lib/logger';
 import { assertAdmin, assertPermanentAdminForAdminTargets } from '@/lib/rbac';
 import { getClientIp } from '@/lib/client-ip';
+import { isAdministratorRole } from '@/lib/authorization';
 import { emitAuditEvent } from '@/lib/audit';
+import { assertRecentAuthentication } from '@/lib/access/step-up';
+import { createInAppNotifications } from '@/lib/in-app-notifications';
 import { checkRateLimit, issuePasswordResetToken } from '@/lib/password-reset';
 import { issueUserInviteToken } from '@/lib/invitations';
 import { readJsonBodyWithLimit } from '@/lib/request-body';
@@ -46,7 +49,7 @@ async function postGenerateResetLink(req: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { id: parsed.data.userId },
-      select: { id: true, email: true, status: true },
+      select: { id: true, email: true, status: true, role: true },
     });
     if (!user) {
       return jsonError(
@@ -60,6 +63,14 @@ async function postGenerateResetLink(req: NextRequest) {
 
     // A takeover-capable link for an administrator needs an assigned admin, not a JIT grant.
     await assertPermanentAdminForAdminTargets(sessionUser, [user.id]);
+    // A link for another administrator is account takeover: require a fresh sign-in.
+    const targetsOtherAdmin = isAdministratorRole(user.role) && user.id !== sessionUser.id;
+    if (targetsOtherAdmin) {
+      await assertRecentAuthentication(
+        undefined,
+        'generating a sign-in link for another administrator'
+      );
+    }
 
     if (user.status === 'DISABLED') {
       return jsonError(
@@ -116,6 +127,17 @@ async function postGenerateResetLink(req: NextRequest) {
       ip,
       metadata: { generatedFor: user.id },
     });
+
+    if (targetsOtherAdmin) {
+      await createInAppNotifications({
+        userIds: [user.id],
+        type: 'SECURITY',
+        title: 'Password reset link generated for your account',
+        message: `${sessionUser.name || sessionUser.email} generated a password reset link for your account. If you did not expect this, contact another administrator.`,
+        entityType: 'USER',
+        entityId: user.id,
+      }).catch(error => logger.warn('Admin reset-link target notification failed', { error }));
+    }
 
     return jsonOk({ link: resetLink, type: 'PASSWORD_RESET' }, 200);
   } catch (error) {

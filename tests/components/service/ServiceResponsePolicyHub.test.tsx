@@ -55,6 +55,7 @@ describe('ServiceResponsePolicyHub', () => {
         incidentClassificationPolicy={mockClassification}
         responseSupportHoursPolicy={mockSupportHours}
         canManage={true}
+        canManageSla={true}
       />
     );
 
@@ -76,6 +77,7 @@ describe('ServiceResponsePolicyHub', () => {
         incidentClassificationPolicy={mockClassification}
         responseSupportHoursPolicy={mockSupportHours}
         canManage={true}
+        canManageSla={true}
       />
     );
 
@@ -96,5 +98,21 @@ describe('ServiceResponsePolicyHub', () => {
 
     expect(screen.getByText(/operational coverage mode/i)).toBeInTheDocument();
     expect(screen.getByText(/24×7 continuous/i)).toBeInTheDocument();
+  });
+
+  it('leaves SLA targets read-only for a team operator who may still manage the other policies', () => {
+    render(
+      <ServiceResponsePolicyHub
+        serviceId="svc-123"
+        incidentSlaPolicy={mockSlaPolicy}
+        workspaceIncidentSlaPolicy={mockWorkspaceSla}
+        incidentClassificationPolicy={mockClassification}
+        responseSupportHoursPolicy={mockSupportHours}
+        canManage={true}
+        canManageSla={false}
+      />
+    );
+
+    expect(screen.getByRole('checkbox', { name: /inherit workspace defaults/i })).toBeDisabled();
   });
 });

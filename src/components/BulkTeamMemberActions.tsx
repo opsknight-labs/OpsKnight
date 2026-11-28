@@ -49,6 +49,7 @@ export default function BulkTeamMemberActions({
   const [searchResults, setSearchResults] = useState<User[]>(availableUsers);
   const [isSearching, setIsSearching] = useState(false);
   const [hasMore, setHasMore] = useState(false);
+  const [failures, setFailures] = useState<{ userId: string; name: string; error: string }[]>([]);
 
   const [syncedInputs, setSyncedInputs] = useState({ availableUsers, search });
   if (syncedInputs.availableUsers !== availableUsers || syncedInputs.search !== search) {
@@ -124,29 +125,34 @@ export default function BulkTeamMemberActions({
     }
 
     startTransition(async () => {
-      let successCount = 0;
-      let errorCount = 0;
+      const added = new Set<string>();
+      const failed: { userId: string; name: string; error: string }[] = [];
 
       for (const userId of selectedUsers) {
         const formData = new FormData();
         formData.set('userId', userId);
         formData.set('role', role);
-        const result = await addMember(formData);
-        if (result?.error) {
-          errorCount++;
-        } else {
-          successCount++;
+        const name = searchResults.find(u => u.id === userId)?.name ?? userId;
+        try {
+          const result = await addMember(formData);
+          if (result?.error) failed.push({ userId, name, error: result.error });
+          else added.add(userId);
+        } catch {
+          failed.push({ userId, name, error: 'Something went wrong. Please try again.' });
         }
       }
 
-      if (successCount > 0) {
-        notify.success(`Successfully added ${successCount} member${successCount > 1 ? 's' : ''}`);
+      if (added.size > 0) {
+        notify.success(`Successfully added ${added.size} member${added.size > 1 ? 's' : ''}`);
+        setSearchResults(prev => prev.filter(u => !added.has(u.id)));
       }
-      if (errorCount > 0) {
-        notify.error(`Failed to add ${errorCount} member${errorCount > 1 ? 's' : ''}`);
+      if (failed.length > 0) {
+        notify.error(`Failed to add ${failed.length} member${failed.length > 1 ? 's' : ''}`);
       }
 
-      setSelectedUsers(new Set());
+      // Failed people stay selected so the same click can retry them once the cause is fixed.
+      setFailures(failed);
+      setSelectedUsers(new Set(failed.map(item => item.userId)));
     });
   };
 
@@ -283,6 +289,24 @@ export default function BulkTeamMemberActions({
               </div>
             )}
           </div>
+
+          {failures.length > 0 && (
+            <div
+              role="alert"
+              className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive"
+            >
+              <p className="font-medium">
+                {failures.length} member{failures.length > 1 ? 's' : ''} could not be added:
+              </p>
+              <ul className="mt-1 space-y-0.5">
+                {failures.map(item => (
+                  <li key={item.userId}>
+                    {item.name}: {item.error}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* Add Button */}
           <Button

@@ -45,6 +45,9 @@ let timer: NodeJS.Timeout | null = null;
 let activeRun: Promise<void> | null = null;
 let initialized = false;
 let lastJobCleanup = 0;
+let lastSessionCleanup = 0;
+let lastInboundDeliveryCleanup = 0;
+let lastSlackWebhookReencrypt = 0;
 let schedulerProfile: SchedulerProfile = 'full';
 let activeLeaseEpoch: number | null = null;
 
@@ -78,51 +81,6 @@ function kickBusinessServiceSweeps() {
 
 export interface CronSchedulerOptions {
   profile?: SchedulerProfile;
-}
-
-async function notifyOverdueActionItems(now: Date): Promise<number> {
-  const { default: prisma } = await import('./prisma');
-  const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const [items, admins] = await Promise.all([
-    prisma.actionItem.findMany({
-      where: {
-        status: { in: ['OPEN', 'IN_PROGRESS', 'BLOCKED'] },
-        dueDate: { lt: now },
-      },
-      select: { id: true, title: true, ownerId: true },
-      orderBy: { dueDate: 'asc' },
-      take: 500,
-    }),
-    prisma.user.findMany({
-      where: { role: 'ADMIN', status: 'ACTIVE' },
-      select: { id: true },
-    }),
-  ]);
-  if (items.length === 0) return 0;
-  const existing = await prisma.inAppNotification.findMany({
-    where: {
-      entityType: 'ACTION_ITEM',
-      entityId: { in: items.map(item => item.id) },
-      createdAt: { gte: since },
-    },
-    select: { userId: true, entityId: true },
-  });
-  const existingKeys = new Set(existing.map(row => `${row.userId}:${row.entityId}`));
-  const rows = items.flatMap(item => {
-    const recipients = new Set([...(item.ownerId ? [item.ownerId] : []), ...admins.map(a => a.id)]);
-    return Array.from(recipients)
-      .filter(userId => !existingKeys.has(`${userId}:${item.id}`))
-      .map(userId => ({
-        userId,
-        type: 'ACTION_ITEM' as const,
-        title: 'Overdue postmortem action item',
-        message: item.title,
-        entityType: 'ACTION_ITEM',
-        entityId: item.id,
-      }));
-  });
-  if (rows.length === 0) return 0;
-  return (await prisma.inAppNotification.createMany({ data: rows })).count;
 }
 
 /**
@@ -592,6 +550,19 @@ async function runOnce() {
       });
     }
 
+    // Meeting bridges: fail provisions with no live worker and retry Teams cleanup debt. Without
+    // this a lost MEETING_PROVISION job leaves the meeting PROVISIONING forever.
+    try {
+      const { reconcileStalledMeetingProvisions, reconcileMeetingCleanupDebt } =
+        await import('./incident-collaboration/meeting-reconciliation');
+      await reconcileStalledMeetingProvisions();
+      await reconcileMeetingCleanupDebt();
+    } catch (error) {
+      logger.warn('[Cron] Meeting reconciliation sweep failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     // Pre-paging noise controls: heartbeat misses raise incidents through normal ingestion, expired
     // suppression rules are retired and old decisions aged out. Bounded, and never a reason to fail the tick.
     let noiseControls: Awaited<
@@ -653,7 +624,13 @@ async function runOnce() {
         ? processCentralNotificationQueue({ trafficClasses: ['PUBLIC_INCIDENT', 'BULK'] })
         : Promise.resolve({ processed: 0, failed: 0, pending: 0, skipped: 0 }),
       processAutoUnsnoozeInternal(),
-      checkSLABreaches(),
+      // A failure here (a transient DB error while enqueueing one alert, say) must not skip the rest of the tick.
+      checkSLABreaches().catch(error => {
+        logger.error('[Cron] SLA breach check failed; continuing the tick', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return { warnings: [], checkedAt: new Date(), activeIncidentCount: 0, warningCount: 0 };
+      }),
       processShiftRotations(new Date()),
       processUpcomingShiftReminders(new Date(), 60),
     ]);
@@ -745,49 +722,131 @@ async function runOnce() {
       logger.warn('[Cron] Business service reviews failed', { error });
     }
 
-    // Group 3: Maintenance tasks (low priority, run last)
-    const { processAuthenticationAlerts } = await import('./auth-control/security-events');
-    await processAuthenticationAlerts();
-    const { cleanAuthenticationCeremonies } = await import('./auth-control/sessions');
-    await cleanAuthenticationCeremonies();
-    const { observeAuthenticationReplica } = await import('./auth-control/replicas');
-    if (process.env.OPSKNIGHT_PROCESS_ROLE !== 'scheduler') await observeAuthenticationReplica();
-    const tokenCleanup = await cleanupUserTokens();
-    const rateLimitCleanup = await cleanupExpiredRateLimits();
+    // Group 3: Maintenance tasks (low priority, run last). Each step is isolated: a step that keeps
+    // failing must not skip the ones after it (team-grant expiry reverts real TeamMember rows).
+    const maintenanceStep = async <T>(name: string, step: () => Promise<T>): Promise<T | null> => {
+      try {
+        return await step();
+      } catch (error) {
+        logger.warn(`[Cron] ${name} failed`, { error });
+        return null;
+      }
+    };
+    await maintenanceStep('Authentication alerts', async () => {
+      const { processAuthenticationAlerts } = await import('./auth-control/security-events');
+      await processAuthenticationAlerts();
+    });
+    await maintenanceStep('Authentication ceremony cleanup', async () => {
+      const { cleanAuthenticationCeremonies } = await import('./auth-control/sessions');
+      await cleanAuthenticationCeremonies();
+    });
+    await maintenanceStep('Authentication replica observation', async () => {
+      const { observeAuthenticationReplica } = await import('./auth-control/replicas');
+      if (process.env.OPSKNIGHT_PROCESS_ROLE !== 'scheduler') await observeAuthenticationReplica();
+    });
+    const tokenCleanup = await maintenanceStep('User token cleanup', cleanupUserTokens);
+    // Session registry rows (UserDevice session:*) pile up one per sign-in. Hourly, a bounded number
+    // of batches; cleanupExpiredSessions keeps every tombstone whose token could still be valid.
+    const sessionCleanup =
+      Date.now() - lastSessionCleanup > 60 * 60 * 1000
+        ? await maintenanceStep('Session registry cleanup', async () => {
+            const { cleanupExpiredSessions, SESSION_CLEANUP_BATCH } =
+              await import('./session-registry');
+            let deleted = 0;
+            for (let batch = 0; batch < 10; batch++) {
+              const removed = await cleanupExpiredSessions();
+              deleted += removed;
+              if (removed < SESSION_CLEANUP_BATCH) break;
+            }
+            lastSessionCleanup = Date.now();
+            return deleted;
+          })
+        : null;
+    // Inbound delivery dedupe rows: hourly, bounded batches, isolated so it cannot block the steps below.
+    const inboundDeliveryCleanup =
+      Date.now() - lastInboundDeliveryCleanup > 60 * 60 * 1000
+        ? await maintenanceStep('Inbound delivery retention', async () => {
+            const { cleanupInboundDeliveries, INBOUND_DELIVERY_RETENTION_PER_RUN } =
+              await import('./integrations/delivery-retention');
+            const removed = await cleanupInboundDeliveries();
+            // A full run means more is waiting: keep going on the next tick instead of in an hour.
+            if (removed < INBOUND_DELIVERY_RETENTION_PER_RUN) lastInboundDeliveryCleanup = Date.now();
+            return removed;
+          })
+        : null;
+    // Service Slack webhook URLs are encrypted at rest; convert any plaintext rows left from before.
+    // Hourly (a failure waits an hour too), bounded batches, isolated from the steps around it.
+    const slackWebhookEncryption =
+      Date.now() - lastSlackWebhookReencrypt > 60 * 60 * 1000
+        ? await maintenanceStep('Slack webhook encryption', async () => {
+            const {
+              reencryptSlackWebhookUrls,
+              SLACK_WEBHOOK_REENCRYPT_BATCH,
+              SLACK_WEBHOOK_REENCRYPT_MAX_BATCHES,
+            } = await import('./slack-webhook-secret');
+            lastSlackWebhookReencrypt = Date.now();
+            const converted = await reencryptSlackWebhookUrls();
+            // A full run means more may be waiting: continue on the next tick.
+            if (converted >= SLACK_WEBHOOK_REENCRYPT_BATCH * SLACK_WEBHOOK_REENCRYPT_MAX_BATCHES)
+              lastSlackWebhookReencrypt = 0;
+            return converted;
+          })
+        : null;
+    const rateLimitCleanup = await maintenanceStep('Rate limit cleanup', cleanupExpiredRateLimits);
     // MCP maintenance failure must not block incident-response maintenance; it logs and counts
     // its own failures.
-    const { runMcpMaintenance } = await import('./mcp/maintenance');
-    const mcpCleanup = await runMcpMaintenance();
-    const { cleanupExpiredNotificationCapacityData } = await import('./notification-fanout');
-    const notificationCapacityCleanup = await cleanupExpiredNotificationCapacityData();
-    const { expireDuePrivacyExportArtifacts } = await import('./privacy/export/artifact');
-    const privacyExportArtifactsExpired = await expireDuePrivacyExportArtifacts();
+    const mcpCleanup = await maintenanceStep('MCP maintenance', async () => {
+      const { runMcpMaintenance } = await import('./mcp/maintenance');
+      return runMcpMaintenance();
+    });
+    const notificationCapacityCleanup = await maintenanceStep(
+      'Notification capacity cleanup',
+      async () => {
+        const { cleanupExpiredNotificationCapacityData } = await import('./notification-fanout');
+        return cleanupExpiredNotificationCapacityData();
+      }
+    );
+    const privacyExportArtifactsExpired = await maintenanceStep(
+      'Privacy export expiry',
+      async () => {
+        const { expireDuePrivacyExportArtifacts } = await import('./privacy/export/artifact');
+        return expireDuePrivacyExportArtifacts();
+      }
+    );
     // Access control maintenance: revert ended temporary access, expire stale requests, and
-    // start scheduled access reviews. Enforcement never depends on this (checked per request).
-    let accessMaintenance: Record<string, unknown> | null = null;
-    try {
-      const { processEndedAccessGrants } = await import('./access/grants');
-      const { expireStaleAccessRequests } = await import('./access/requests');
-      const { maybeStartScheduledAccessReview } = await import('./access/admin');
-      accessMaintenance = {
-        grants: await processEndedAccessGrants(),
-        requests: await expireStaleAccessRequests(),
-        review: await maybeStartScheduledAccessReview(),
-      };
-    } catch (error) {
-      logger.warn('[Cron] Access-control maintenance failed', { error });
-    }
+    // start scheduled access reviews. Enforcement never depends on this for individual access
+    // grants (checked per request), but team grants are real TeamMember rows only this reverts.
+    const accessMaintenance = {
+      grants: await maintenanceStep('Access grant expiry', async () => {
+        const { processEndedAccessGrants } = await import('./access/grants');
+        return processEndedAccessGrants();
+      }),
+      requests: await maintenanceStep('Access request expiry', async () => {
+        const { expireStaleAccessRequests } = await import('./access/requests');
+        return expireStaleAccessRequests();
+      }),
+      review: await maintenanceStep('Scheduled access review', async () => {
+        const { maybeStartScheduledAccessReview } = await import('./access/admin');
+        return maybeStartScheduledAccessReview();
+      }),
+    };
     let jobsCleaned = false;
     if (Date.now() - lastJobCleanup > 24 * 60 * 60 * 1000) {
-      const { default: automationStore } = await import('./prisma');
-      const { scheduleAutomationRetention } = await import('./automation/jobs');
-      await scheduleAutomationRetention(automationStore);
-      await cleanupOldJobs(7);
-      lastJobCleanup = Date.now();
-      jobsCleaned = true;
+      jobsCleaned =
+        (await maintenanceStep('Background job cleanup', async () => {
+          const { default: automationStore } = await import('./prisma');
+          const { scheduleAutomationRetention } = await import('./automation/jobs');
+          await scheduleAutomationRetention(automationStore);
+          await cleanupOldJobs(7);
+          lastJobCleanup = Date.now();
+          return true;
+        })) ?? false;
     }
     logger.info('[Cron] Maintenance tasks processed', {
       tokenCleanup,
+      sessionCleanup,
+      inboundDeliveryCleanup,
+      slackWebhookEncryption,
       rateLimitCleanup,
       notificationCapacityCleanup,
       privacyExportArtifactsExpired,
@@ -835,7 +894,14 @@ async function runOnce() {
         await performDataCleanup(false).catch(cleanupErr => {
           logger.warn('[Cron] Daily data cleanup completed with warnings', { error: cleanupErr });
         });
-        const overdueNotifications = await notifyOverdueActionItems(now);
+        // Its own failure must not skip SLA drift detection or the rollups below.
+        let overdueNotifications = 0;
+        try {
+          const { notifyOverdueActionItems } = await import('./action-item-overdue-notifications');
+          overdueNotifications = await notifyOverdueActionItems(now);
+        } catch (overdueErr) {
+          logger.warn('[Cron] Overdue action item notifications failed', { error: overdueErr });
+        }
         // Run automated SLA drift detection and self-healing
         try {
           const { runSLADriftDetection } = await import('./sla-drift-detection');

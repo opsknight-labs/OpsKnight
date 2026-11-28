@@ -658,3 +658,47 @@ describe('getLiveDashboardSnapshot', () => {
     });
   });
 });
+
+describe('snapshot sub-reads that fail', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearCache();
+    prismaMock.incident.findMany.mockImplementation(async args =>
+      isActiveSetRead(args) ? [dbRow] : [trendRow]
+    );
+    prismaMock.incidentEvent.findMany.mockResolvedValue([]);
+    prismaMock.alert.groupBy.mockResolvedValue([]);
+    prismaMock.incidentWatcher.groupBy.mockResolvedValue([]);
+    prismaMock.onCallSchedule.findMany.mockResolvedValue([{ id: 's1', name: 'Primary' }]);
+  });
+
+  it('lists nothing as unavailable when every read succeeds', async () => {
+    const snapshot = await getLiveDashboardSnapshot(admin('u1'), DEFAULT_LIVE_QUERY, {
+      generation: '1',
+    });
+    expect(snapshot.unavailable).toEqual([]);
+    expect(snapshot.accuracy.trend).toBe('exact');
+  });
+
+  it('names the failed reads instead of presenting zeros and empty lists as facts', async () => {
+    prismaMock.incident.findMany.mockImplementation(async args => {
+      if (isActiveSetRead(args)) return [dbRow];
+      throw new Error('trend read failed');
+    });
+    prismaMock.incidentEvent.findMany.mockRejectedValue(new Error('activity read failed'));
+    prismaMock.onCallSchedule.findMany.mockRejectedValue(new Error('schedule read failed'));
+    vi.mocked(getActiveOnCallShifts).mockRejectedValueOnce(new Error('shift read failed'));
+
+    const snapshot = await getLiveDashboardSnapshot(admin('u1'), DEFAULT_LIVE_QUERY, {
+      generation: '1',
+    });
+
+    expect([...(snapshot.unavailable ?? [])].sort()).toEqual([
+      'activity',
+      'onCall',
+      'schedules',
+      'trend',
+    ]);
+    expect(snapshot.accuracy.trend).toBe('unavailable');
+  });
+});

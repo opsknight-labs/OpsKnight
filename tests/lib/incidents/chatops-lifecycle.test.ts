@@ -3,6 +3,7 @@ import { AppError } from '@/lib/errors';
 import {
   chatOpsLifecycleErrorMessage,
   executeChatOpsLifecycleCommand,
+  executeChatOpsNote,
 } from '@/lib/incidents/chatops-lifecycle';
 import { applyIncidentLifecycleCommand } from '@/lib/incidents/lifecycle';
 import { runSerializableTransaction } from '@/lib/db-utils';
@@ -15,11 +16,21 @@ const mocks = vi.hoisted(() => ({
     incident: {
       findUnique: vi.fn(),
     },
+    incidentNote: { create: vi.fn() },
+    incidentEvent: { create: vi.fn() },
   },
 }));
 
 vi.mock('@/lib/db-utils', () => ({
   runSerializableTransaction: vi.fn(async callback => callback(mocks.tx)),
+}));
+
+vi.mock('@/lib/idempotency', () => ({
+  executeIdempotentOperation: vi.fn(
+    async (_tx: unknown, input: { execute: () => Promise<unknown> }) => ({
+      value: await input.execute(),
+    })
+  ),
 }));
 
 vi.mock('@/lib/incidents/lifecycle', () => ({
@@ -196,5 +207,44 @@ describe('ChatOps lifecycle adapter', () => {
     });
 
     expect(chatOpsLifecycleErrorMessage(error)).not.toContain('database credentials');
+  });
+
+  it('keeps the whole note on the note but clips the indexed timeline message', async () => {
+    // High-entropy text of ~3 KB: a btree entry on the message cannot hold it.
+    const stackTrace = Array.from({ length: 3000 }, (_, i) =>
+      String.fromCharCode(33 + ((i * 7919) % 90))
+    ).join('');
+
+    await executeChatOpsNote({
+      incidentId: 'inc-1',
+      actor: { id: 'user-1', name: 'Alice' },
+      content: stackTrace,
+      provider: 'SLACK',
+    });
+
+    expect(mocks.tx.incidentNote.create).toHaveBeenCalledWith({
+      data: { incidentId: 'inc-1', userId: 'user-1', content: stackTrace },
+    });
+    const event = (mocks.tx.incidentEvent.create.mock.calls[0][0] as { data: { message: string } })
+      .data;
+    expect(Buffer.byteLength(event.message, 'utf8')).toBeLessThanOrEqual(1500);
+    expect(event.message.startsWith('Note added via Slack ChatOps by Alice:\n')).toBe(true);
+    expect(event.message.endsWith('…')).toBe(true);
+  });
+
+  it('writes a short note into the timeline unchanged', async () => {
+    await executeChatOpsNote({
+      incidentId: 'inc-1',
+      actor: { id: 'user-1', name: 'Alice' },
+      content: 'Restarted the worker',
+      provider: 'MICROSOFT_TEAMS',
+    });
+    expect(mocks.tx.incidentEvent.create).toHaveBeenCalledWith({
+      data: {
+        incidentId: 'inc-1',
+        type: 'COMMENT',
+        message: 'Note added via Microsoft Teams ChatOps by Alice:\nRestarted the worker',
+      },
+    });
   });
 });

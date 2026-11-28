@@ -6,6 +6,7 @@ import {
   type BreachWarning,
 } from '@/lib/sla-breach-monitor';
 import { enqueueCentralNotification } from '@/lib/notification-control-plane';
+import { sendServiceSlaNotifications } from '@/lib/service-notifications';
 
 vi.mock('@/lib/notification-control-plane', () => ({
   enqueueCentralNotification: vi.fn().mockResolvedValue({
@@ -13,6 +14,10 @@ vi.mock('@/lib/notification-control-plane', () => ({
     created: true,
     delivered: true,
   }),
+}));
+// Chat delivery (every Slack destination, Teams) is the shared dispatcher's job; it has its own tests.
+vi.mock('@/lib/service-notifications', () => ({
+  sendServiceSlaNotifications: vi.fn().mockResolvedValue({ success: true, queued: 1 }),
 }));
 vi.mock('@/lib/slack', () => ({
   configuredSlackWebhookUrl: vi.fn(() => undefined),
@@ -212,7 +217,7 @@ describe('sla-breach-monitor', () => {
       expect(result.warnings).toHaveLength(0);
     });
 
-    it('does not create an SLA Slack intent without a configured target', async () => {
+    it('records the transition when the shared dispatcher has no chat target to notify', async () => {
       const { default: prisma } = await import('@/lib/prisma');
       const now = new Date('2026-01-05T12:00:00Z');
       vi.setSystemTime(now);
@@ -252,6 +257,8 @@ describe('sla-breach-monitor', () => {
         },
       ] as unknown as Awaited<ReturnType<typeof prisma.incident.findMany>>);
 
+      vi.mocked(sendServiceSlaNotifications).mockResolvedValueOnce({ success: true, queued: 0 });
+
       await expect(checkSLABreaches()).resolves.toMatchObject({ warningCount: 1 });
       expect(enqueueCentralNotification).not.toHaveBeenCalled();
       // Nothing to deliver, but the transition is still recorded so it is not re-detected forever.
@@ -260,7 +267,7 @@ describe('sla-breach-monitor', () => {
       });
     });
 
-    it('does not create an SLA Slack intent when the service Slack checkbox is unchecked', async () => {
+    it('hands chat delivery to the shared dispatcher once per warning with the breach-state event key', async () => {
       const { default: prisma } = await import('@/lib/prisma');
       const now = new Date('2026-01-05T12:00:00Z');
       vi.setSystemTime(now);
@@ -291,18 +298,29 @@ describe('sla-breach-monitor', () => {
             name: 'Test Service',
             targetAckMinutes: 15,
             targetResolveMinutes: 120,
-            slackChannel: 'C123',
-            slackWebhookUrl: 'https://hooks.slack.com/services/test',
-            serviceNotificationChannels: [],
+            slackChannel: null,
+            slackWebhookUrl: null,
+            serviceNotificationChannels: ['SLACK', 'MICROSOFT_TEAMS'],
             serviceNotifyOnSlaBreach: true,
             webhookIntegrations: [],
           },
         },
       ] as unknown as Awaited<ReturnType<typeof prisma.incident.findMany>>);
 
-      await expect(checkSLABreaches()).resolves.toMatchObject({ warningCount: 1 });
+      await checkSLABreaches();
+
+      expect(sendServiceSlaNotifications).toHaveBeenCalledTimes(1);
+      expect(sendServiceSlaNotifications).toHaveBeenCalledWith(
+        'inc-1',
+        expect.objectContaining({
+          breachType: 'ack',
+          breached: false,
+          eventKey: 'ack:warning:15',
+        }),
+        { fallbackSlackWebhookUrl: undefined }
+      );
+      // The monitor itself no longer enqueues Slack or Teams rows.
       expect(enqueueCentralNotification).not.toHaveBeenCalled();
-      expect(prisma.incidentEvent.create).toHaveBeenCalledTimes(1);
     });
 
     it('does not commit the SLA dedupe marker when intent materialization fails', async () => {
@@ -344,9 +362,11 @@ describe('sla-breach-monitor', () => {
           },
         },
       ] as unknown as Awaited<ReturnType<typeof prisma.incident.findMany>>);
-      vi.mocked(enqueueCentralNotification).mockRejectedValueOnce(
-        new Error('database unavailable')
-      );
+      vi.mocked(sendServiceSlaNotifications).mockResolvedValueOnce({
+        success: false,
+        queued: 0,
+        errors: ['SLA Slack channel C123 notification failed: database unavailable'],
+      });
 
       // The check completes (one incident must not fail the scheduler cycle) but the marker is
       // not written, so the warning is retried next cycle.

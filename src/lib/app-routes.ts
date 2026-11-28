@@ -114,7 +114,12 @@ export function toMobilePath(pathname: string): string | null {
 }
 
 /** Desktop pages one level deep that would otherwise land on a mobile record page (`/m/incidents/[id]`). */
-const DESKTOP_ONLY_ROUTES = ['/incidents/templates', '/policies/create', '/postmortems/create'];
+const DESKTOP_ONLY_ROUTES = [
+  '/incidents/templates',
+  '/policies/create',
+  '/postmortems/create',
+  '/services/business',
+];
 
 /** Mobile pages below a record (`/m/services/[id]/automation`); e.g. a service's integrations stay desktop. */
 const MOBILE_DEEP_ROUTES = [/^\/services\/[^/]+\/automation$/];

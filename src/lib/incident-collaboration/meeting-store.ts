@@ -551,6 +551,69 @@ export function isRetryableMeetingError(error: unknown): boolean {
 }
 
 /**
+ * A close settled the row while the provider call was in flight, so the external meeting that call
+ * created is not on any row. Record it on the CLOSED row as cleanup debt and queue its removal,
+ * otherwise a live Teams meeting would exist that nobody can delete.
+ */
+async function reclaimOrphanedProviderMeeting(params: {
+  incidentId: string;
+  generation: number;
+  provider: IncidentMeetingProvider;
+  providerMeetingId?: string | null;
+  organizerEmail?: string | null;
+}): Promise<void> {
+  const { incidentId, generation, provider, providerMeetingId } = params;
+  if (provider !== 'MICROSOFT_TEAMS' || !providerMeetingId || !prisma?.$transaction) return;
+
+  const closeToken = crypto.randomUUID();
+  const queued = await prisma.$transaction(async tx => {
+    const claimed = await tx.incidentMeeting.updateMany({
+      where: { incidentId, generation, state: 'CLOSED', providerMeetingId: null },
+      data: {
+        providerMeetingId,
+        organizerEmail: params.organizerEmail || null,
+        externalCleanupPending: true,
+        health: 'DEGRADED',
+        closeToken,
+        cleanupAttemptedAt: new Date(),
+        lastErrorCode: 'ORPHANED_PROVISION',
+        lastErrorMessage: 'The meeting was created after the bridge was closed; removing it.',
+      },
+    });
+    if (claimed.count === 0) return false;
+    await tx.backgroundJob.create({
+      data: {
+        type: 'MEETING_CLOSE',
+        status: 'PENDING',
+        scheduledAt: new Date(),
+        maxAttempts: 5,
+        payload: {
+          incidentId,
+          generation,
+          closeToken,
+          cleanupRepair: true,
+          provider,
+          providerMeetingId,
+          organizerEmail: params.organizerEmail || null,
+          reason: 'orphaned_provision',
+        },
+      },
+    });
+    return true;
+  });
+
+  if (queued) {
+    await emitMeetingAuditEvent({
+      action: 'MEETING_CLEANUP_RETRY_REQUESTED',
+      incidentId,
+      provider,
+      generation,
+      reason: 'orphaned_provision',
+    });
+  }
+}
+
+/**
  * Execute meeting provisioning with atomic CAS fencing.
  * Called either synchronously by provisionIncidentMeeting or asynchronously by the MEETING_PROVISION job worker.
  * Guarantees that an in-flight provision NEVER overwrites a CLOSED state (TOCTOU protection).
@@ -656,6 +719,13 @@ export async function executeMeetingProvision(params: {
     // Check if close already won before or during adapter call
     const cachedBefore = memoryMeetingCache.get(incidentId);
     if (cachedBefore && (cachedBefore.state === 'CLOSED' || cachedBefore.state === 'CLOSING')) {
+      await reclaimOrphanedProviderMeeting({
+        incidentId,
+        generation: gen,
+        provider,
+        providerMeetingId: result.providerMeetingId,
+        organizerEmail: result.organizerEmail,
+      });
       return cachedBefore;
     }
 
@@ -686,6 +756,13 @@ export async function executeMeetingProvision(params: {
 
       if (dbHasRecord && updateResult.count === 0) {
         // CLOSE won the race in DB, or token changed. Do NOT resurrect to READY!
+        await reclaimOrphanedProviderMeeting({
+          incidentId,
+          generation: gen,
+          provider,
+          providerMeetingId: result.providerMeetingId,
+          organizerEmail: result.organizerEmail,
+        });
         const latest = await getIncidentMeeting(incidentId);
         return (
           latest || {
@@ -854,6 +931,43 @@ export async function executeMeetingProvision(params: {
 
     memoryMeetingCache.set(incidentId, failedMeeting);
     return failedMeeting;
+  }
+}
+
+/**
+ * Terminal settlement for a MEETING_PROVISION job that ran out of attempts without
+ * executeMeetingProvision recording a failure itself (e.g. a DB error ahead of its try block).
+ * Fenced on the provisioning token, so a close, retry or newer generation is never overwritten.
+ */
+export async function settleMeetingProvisionFailure(
+  incidentId: string,
+  error: string,
+  options: { provisioningToken: string; generation: number; provider: IncidentMeetingProvider }
+): Promise<void> {
+  const result = await prisma.incidentMeeting.updateMany({
+    where: {
+      incidentId,
+      generation: options.generation,
+      state: 'PROVISIONING',
+      provisioningToken: options.provisioningToken,
+    },
+    data: {
+      state: 'FAILED',
+      health: 'UNAVAILABLE',
+      lastErrorCode: 'PROVISION_FAILED',
+      lastErrorMessage: error.slice(0, 300),
+      lastReconciledAt: new Date(),
+    },
+  });
+  if (result.count > 0) {
+    recordMeetingProvisionOutcome(options.provider, 'failed');
+    await emitMeetingAuditEvent({
+      action: 'MEETING_PROVISION_FAILED',
+      incidentId,
+      provider: options.provider,
+      generation: options.generation,
+      reason: error.slice(0, 300),
+    });
   }
 }
 

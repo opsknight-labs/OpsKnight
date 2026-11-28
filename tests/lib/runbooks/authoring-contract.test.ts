@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { runbookInputsSchema } from '@/lib/runbooks/schemas';
 import { normalizeConditionValue, validateConditionComparison } from '@/lib/runbooks/conditions';
 import { validateAuthoringDefinition } from '@/lib/runbooks/authoring-validation';
-import { parseInputDefault } from '@/lib/runbooks/input-values';
+import { isValidInputValue, parseInputDefault } from '@/lib/runbooks/input-values';
 import {
   parseRunbookDefinition,
   referencedStepInputKeys,
@@ -121,6 +121,16 @@ describe('runbook authoring and execution contract', () => {
         defaultValue: 'secret://not-yet-installed',
       })
     ).toBe('secret://not-yet-installed');
+  });
+  it('only lets SECRET_REF inputs carry a secret reference', () => {
+    expect(isValidInputValue('SECRET_REF', 'secret://prod-db-password')).toBe(true);
+    expect(isValidInputValue('STRING', 'secret://prod-db-password')).toBe(false);
+    expect(isValidInputValue('SELECT', 'secret://prod-db-password')).toBe(false);
+    expect(isValidInputValue('STRING', 'secret://Not_A_Ref')).toBe(true);
+    expect(isValidInputValue('STRING', 'plain text')).toBe(true);
+    expect(() =>
+      parseInputDefault({ key: 'note', type: 'STRING', defaultValue: 'secret://prod-db-password' })
+    ).toThrow(/invalid string default/);
   });
   it('normalizes every list member and clears unary comparisons', () => {
     expect(

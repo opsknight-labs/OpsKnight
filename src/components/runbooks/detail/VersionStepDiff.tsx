@@ -33,6 +33,8 @@ export type StepDiffSide = {
 export type StepDiffItem = {
   key: string;
   change: StepChange;
+  /** The step keeps its content but runs in a different order. */
+  moved?: boolean;
   before: StepDiffSide;
   after: StepDiffSide;
 };
@@ -277,7 +279,7 @@ function StepDiffCard({
       </header>
 
       {/* Specific field diff callout if risk or type modified */}
-      {isChanged && (riskChanged || typeChanged) && (
+      {isChanged && (riskChanged || typeChanged || step.moved) && (
         <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
           <AlertCircle className="h-4 w-4 shrink-0 text-amber-500" />
           <div className="flex flex-wrap items-center gap-2">
@@ -293,6 +295,7 @@ function StepDiffCard({
                 <code className="font-bold">{step.after?.type}</code>
               </span>
             )}
+            {step.moved && <span>Step order changed: it now runs in a different position.</span>}
           </div>
         </div>
       )}

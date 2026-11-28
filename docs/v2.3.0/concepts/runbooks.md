@@ -65,7 +65,10 @@ A Runbook progresses through these stages:
 4. **Executed** — A responder (or automatic trigger) starts an execution that
    follows the frozen plan through dispatch, approval, action, and verification.
 5. **Retired** — A published version can be retired from active use while
-   preserving its audit history.
+   preserving its audit history. A rule pinned to a version keeps running
+   exactly that version after it is retired, so a newer publication never changes
+   what a pinned rule runs. Rules that follow the latest version use the newest
+   published one.
 
 ## Binding modes and versions
 

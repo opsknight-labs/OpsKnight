@@ -367,17 +367,29 @@ describe('offline-queue', () => {
     expect(queue[1]).toMatchObject({ state: 'PENDING', retryCount: 0 });
   });
 
-  it('blocks dependent RESOLVE when its ACK conflicts with newer incident state', async () => {
+  it('does not let a CONFLICT block the rest of its incident lane, and expires it later', async () => {
     await enqueueAckThenResolve();
-    vi.mocked(global.fetch).mockResolvedValueOnce(response(409, { error: 'Incident changed' }));
+    vi.mocked(global.fetch)
+      .mockResolvedValueOnce(response(409, { error: 'Incident changed' }))
+      .mockResolvedValueOnce(response(200));
 
     await flushQueuedRequests();
-    await flushQueuedRequests();
 
-    expect(vi.mocked(global.fetch)).toHaveBeenCalledTimes(1);
-    const queue = await listQueuedRequests();
-    expect(queue[0].state).toBe('CONFLICT');
-    expect(queue[1]).toMatchObject({ state: 'PENDING', retryCount: 0 });
+    // The server's verdict on the ACK is final; RESOLVE is replayed instead of waiting forever.
+    expect(vi.mocked(global.fetch)).toHaveBeenCalledTimes(2);
+    let queue = await listQueuedRequests();
+    expect(queue[0]).toMatchObject({ state: 'CONFLICT' });
+    expect(queue[0].completedAt).toBeTruthy();
+    expect(queue[1].state).toBe('SUCCEEDED');
+
+    // A conflict written before CONFLICT was terminal has no completedAt: it still expires.
+    requestStore.set(queue[0].id, { ...queue[0], completedAt: null });
+    const realNow = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(realNow + 25 * 60 * 60 * 1000);
+    await flushQueuedRequests();
+    clock.mockRestore();
+    queue = await listQueuedRequests();
+    expect(queue).toHaveLength(0);
   });
 
   it('allows an unrelated incident lane to progress while another incident backs off', async () => {

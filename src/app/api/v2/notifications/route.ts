@@ -10,7 +10,8 @@ import {
   formatCursorPagination,
   parsePaginationParams,
 } from '@/lib/api-v2';
-import { authorize, AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
+import { actorHasCapability, AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
+import { CAPABILITIES } from '@/lib/authorization';
 import { NotificationChannel, NotificationStatus, type Prisma } from '@prisma/client';
 import { z } from 'zod/v3';
 import { withV2Observability } from '@/lib/api-v2/observability';
@@ -20,11 +21,10 @@ export const GET = withV2Observability(async function GET(req: NextRequest) {
     const { apiKey, actor } = await authenticateV2Request(req);
     const rlHeaders = await enforceV2RateLimit(apiKey.id, 'READ');
     enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.NOTIFICATION_READ);
-    // Policy: delivery history is operator data. ADMIN/RESPONDER (global) see delivery
-    // detail; AUDITOR (resource-scoped read) sees delivery metadata only. USER has no
-    // access through the API at all, so there is deliberately no "own notifications" branch.
-    const decision = authorize({ actor, action: AUTHORIZATION_ACTIONS.NOTIFICATION_READ });
-    const canReadDeliveryDetail = decision.allowed && decision.scope === 'global';
+    // Policy (least privilege): message bodies and recipient addresses are personal data, so only
+    // an administrator sees them for other users. Every other reader (RESPONDER, AUDITOR) gets
+    // delivery metadata for other users' rows and full detail only for their own notifications.
+    const canReadAllDeliveryDetail = actorHasCapability(actor, CAPABILITIES.ADMIN_MANAGE);
 
     const { searchParams } = new URL(req.url);
     const { limit, cursor } = parsePaginationParams(searchParams);
@@ -76,20 +76,17 @@ export const GET = withV2Observability(async function GET(req: NextRequest) {
       },
     });
 
-    const visible = canReadDeliveryDetail
-      ? notifications
-      : notifications.map(
-          ({
-            message: _message,
-            recipientId: _recipientId,
-            recipientDisplay: _display,
-            user,
-            ...rest
-          }) => ({
-            ...rest,
-            user: user ? { id: user.id, name: user.name } : null,
-          })
-        );
+    const visible = notifications.map(notification => {
+      if (canReadAllDeliveryDetail || notification.userId === actor.id) return notification;
+      const {
+        message: _message,
+        recipientId: _recipientId,
+        recipientDisplay: _display,
+        user,
+        ...rest
+      } = notification;
+      return { ...rest, user: user ? { id: user.id, name: user.name } : null };
+    });
 
     const result = formatCursorPagination(visible, limit);
 

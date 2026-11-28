@@ -381,7 +381,9 @@ export const CircuitBreakers = {
     getCircuitBreaker('push', {
       failureThreshold: 10, // Push can have many transient failures
       resetTimeout: 30000,
-      timeout: 5000, // 5 seconds for push
+      // One push is sent to each of the user's devices in turn, and each send may take up to 15s
+      // (src/lib/web-push-subscription.ts). A shorter limit parks a slow but working push as UNKNOWN.
+      timeout: 60_000,
     }),
 
   whatsapp: () =>

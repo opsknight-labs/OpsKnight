@@ -114,16 +114,6 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
           orderBy: { createdAt: 'desc' },
           take: 15,
         },
-        auditLogs: {
-          select: {
-            id: true,
-            action: true,
-            createdAt: true,
-            details: true,
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 15,
-        },
       },
     }),
     getUserPermissions(),
@@ -160,7 +150,7 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
       )
     : null;
 
-  // Transform auditLogs.details to match UserDetailProfile type
+  // Only fields the tabs render are sent to the client (no audit rows or raw `details`).
   const transformedUser = {
     id: user.id,
     name: user.name,
@@ -184,15 +174,6 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
     layerAssignments: user.layerAssignments,
     escalationRules: user.escalationRules,
     assignedIncidents: user.assignedIncidents,
-    auditLogs: user.auditLogs.map(log => ({
-      ...log,
-      details:
-        log.details === null
-          ? null
-          : typeof log.details === 'object'
-            ? (log.details as Record<string, unknown>)
-            : JSON.stringify(log.details),
-    })),
   };
 
   return (

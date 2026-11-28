@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { CAPABILITIES } from '@/lib/authorization';
-import { deriveScheduleUICapabilities } from '@/lib/schedules/capabilities';
+import {
+  assertCanManageScheduleOverrides,
+  deriveScheduleUICapabilities,
+} from '@/lib/schedules/capabilities';
 
 describe('schedule UI capability contract', () => {
   it('allows administrators to manage rotation, settings, and overrides', () => {
@@ -38,9 +41,26 @@ describe('schedule UI capability contract', () => {
   it.each([
     ['assigned schedule member', true, false],
     ['owning team lead', false, true],
-  ])('allows %s to manage overrides without rotation settings', (_label, assigned, owner) => {
+  ])('allows an operator who is %s to manage overrides', (_label, assigned, owner) => {
     const capabilities = deriveScheduleUICapabilities({
-      capabilities: [],
+      capabilities: [CAPABILITIES.OPERATIONS_MANAGE],
+      isAdmin: false,
+      isAssignedMember: assigned,
+      isOwningTeamLead: owner,
+      hasScopedView: assigned,
+    });
+
+    expect(capabilities.canViewSchedule).toBe(true);
+    expect(capabilities.canCreateOverride).toBe(true);
+    expect(capabilities.canDeleteOverride).toBe(true);
+  });
+
+  it.each([
+    ['assigned schedule member', true, false],
+    ['owning team lead', false, true],
+  ])('keeps a %s without operator rights read-only (an auditor in a layer)', (_label, assigned, owner) => {
+    const capabilities = deriveScheduleUICapabilities({
+      capabilities: [CAPABILITIES.SCHEDULE_READ_ALL],
       isAdmin: false,
       isAssignedMember: assigned,
       isOwningTeamLead: owner,
@@ -49,8 +69,8 @@ describe('schedule UI capability contract', () => {
 
     expect(capabilities.canViewSchedule).toBe(true);
     expect(capabilities.canManageRotation).toBe(false);
-    expect(capabilities.canCreateOverride).toBe(true);
-    expect(capabilities.canDeleteOverride).toBe(true);
+    expect(capabilities.canCreateOverride).toBe(false);
+    expect(capabilities.canDeleteOverride).toBe(false);
   });
 
   it('leaves an unrelated viewer without schedule actions', () => {
@@ -70,5 +90,40 @@ describe('schedule UI capability contract', () => {
       canDeleteOverride: false,
       canDeleteSchedule: false,
     });
+  });
+});
+
+describe('assertCanManageScheduleOverrides (API v2 callers)', () => {
+  type Db = Parameters<typeof assertCanManageScheduleOverrides>[0];
+  const relationDb = (onSchedule: boolean): Db =>
+    ({
+      onCallSchedule: {
+        findUnique: async () => ({
+          layers: [{ users: onSchedule ? [{ id: 'lu1' }] : [] }],
+          overrides: [],
+          escalationRules: [],
+        }),
+      },
+    }) as unknown as Db;
+
+  it('refuses a responder who is not on the schedule, as the UI does', async () => {
+    await expect(
+      assertCanManageScheduleOverrides(relationDb(false), 'sch', { id: 'u1', role: 'RESPONDER' })
+    ).rejects.toMatchObject({ code: 'SCHEDULE_OVERRIDE_ACCESS_DENIED' });
+  });
+
+  it('refuses an auditor who is on the schedule', async () => {
+    await expect(
+      assertCanManageScheduleOverrides(relationDb(true), 'sch', { id: 'u1', role: 'AUDITOR' })
+    ).rejects.toMatchObject({ code: 'SCHEDULE_OVERRIDE_ACCESS_DENIED' });
+  });
+
+  it('allows a responder on the schedule and any administrator', async () => {
+    await expect(
+      assertCanManageScheduleOverrides(relationDb(true), 'sch', { id: 'u1', role: 'RESPONDER' })
+    ).resolves.toBeUndefined();
+    await expect(
+      assertCanManageScheduleOverrides(relationDb(false), 'sch', { id: 'u2', role: 'ADMIN' })
+    ).resolves.toBeUndefined();
   });
 });

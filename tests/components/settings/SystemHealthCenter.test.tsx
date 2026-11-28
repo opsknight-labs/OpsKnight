@@ -1,7 +1,8 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import SystemHealthCenter from '@/components/settings/SystemHealthCenter';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import SystemHealthCenter, { formatHistoryHour } from '@/components/settings/SystemHealthCenter';
 import type { AdminHealthReport } from '@/lib/admin-health';
+import { notify } from '@/lib/toast';
 
 vi.mock('@/app/(app)/settings/system/actions', () => ({
   refreshAdminHealthAction: vi.fn(),
@@ -12,6 +13,7 @@ vi.mock('@/lib/toast', () => ({
   notify: {
     success: vi.fn(),
     error: vi.fn(),
+    info: vi.fn(),
   },
 }));
 
@@ -189,6 +191,15 @@ const mockReport: AdminHealthReport = {
   ],
 };
 
+describe('formatHistoryHour', () => {
+  it('shows the bucket start in the viewer time zone with the zone named', () => {
+    const label = formatHistoryHour('2026-09-05T14:00:00.000Z', 'Asia/Kolkata');
+    expect(label).toContain('19:30');
+    expect(label).toMatch(/GMT\+5:30|IST/);
+    expect(formatHistoryHour('2026-09-05T14:00:00.000Z', 'UTC')).toContain('14:00');
+  });
+});
+
 describe('SystemHealthCenter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -234,6 +245,46 @@ describe('SystemHealthCenter', () => {
     };
     render(<SystemHealthCenter initialReport={perfectReport} />);
     expect(screen.getByText('• 100% Signal Score')).toBeInTheDocument();
+  });
+
+  it('scores the trend only from hours that were read, so an unreadable hour does not drag it down', () => {
+    const report: AdminHealthReport = {
+      ...mockReport,
+      overall: 'healthy',
+      history: [
+        {
+          timestamp: '2026-09-02T10:00:00.000Z',
+          hourLabel: '10:00 UTC',
+          status: 'unknown',
+          scorePercent: 0,
+          reason: '1 historical evidence source(s) unavailable',
+        },
+        {
+          timestamp: '2026-09-02T11:00:00.000Z',
+          hourLabel: '11:00 UTC',
+          status: 'healthy',
+          scorePercent: 100,
+        },
+      ],
+    };
+    render(<SystemHealthCenter initialReport={report} />);
+    expect(screen.getByText('• 100% Signal Score')).toBeInTheDocument();
+  });
+
+  it('says there is no trend score when no hour could be read', () => {
+    const report: AdminHealthReport = {
+      ...mockReport,
+      history: [
+        {
+          timestamp: '2026-09-02T11:00:00.000Z',
+          hourLabel: '11:00 UTC',
+          status: 'unknown',
+          scorePercent: 0,
+        },
+      ],
+    };
+    render(<SystemHealthCenter initialReport={report} />);
+    expect(screen.getByText('• No signal score')).toBeInTheDocument();
   });
 
   it('renders visual telemetry gauges, latency pills, and queue distribution bars', () => {
@@ -360,6 +411,34 @@ describe('SystemHealthCenter', () => {
 
     expect(screen.getByLabelText('Refresh countdown')).toBeInTheDocument();
     expect(screen.getByText('30s')).toBeInTheDocument();
+  });
+
+  describe('live refresh', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    async function liveTick(overall: AdminHealthReport['overall']) {
+      const { refreshAdminHealthAction } = await import('@/app/(app)/settings/system/actions');
+      vi.mocked(refreshAdminHealthAction).mockResolvedValue({ report: { ...mockReport, overall } });
+      render(<SystemHealthCenter initialReport={mockReport} />);
+      fireEvent.click(screen.getByRole('switch', { name: /toggle live 30s refresh/i }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+      expect(refreshAdminHealthAction).toHaveBeenCalledTimes(1);
+    }
+
+    it('stays quiet when the status did not change', async () => {
+      await liveTick(mockReport.overall);
+      expect(notify.success).not.toHaveBeenCalled();
+      expect(notify.info).not.toHaveBeenCalled();
+    });
+
+    it('announces only an actual status change', async () => {
+      await liveTick('unhealthy');
+      expect(notify.success).not.toHaveBeenCalled();
+      expect(notify.info).toHaveBeenCalledWith('System status is now unhealthy');
+    });
   });
 
   it('re-tests a single health check when clicking its Re-test button', async () => {

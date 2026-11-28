@@ -10,14 +10,14 @@ const layerValuesSchema = z
     end: z.string().datetime().nullable(),
     rotationLengthHours: z
       .number()
-      .int()
-      .min(1)
-      .max(24 * 365),
+      .int('Rotation length must be a whole number of hours.')
+      .min(1, 'Rotation length must be at least 1 hour.')
+      .max(24 * 365, 'Rotation length cannot exceed one year (8760 hours).'),
     shiftLengthHours: z
       .number()
-      .int()
-      .min(1)
-      .max(24 * 365)
+      .int('Shift length must be a whole number of hours.')
+      .min(1, 'Shift length must be at least 1 hour.')
+      .max(24 * 365, 'Shift length cannot exceed one year (8760 hours).')
       .nullable(),
     restrictions: z
       .object({

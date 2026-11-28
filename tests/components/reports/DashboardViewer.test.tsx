@@ -25,13 +25,32 @@ vi.mock('@/components/reports/DashboardGrid', () => ({
     widgets,
     isEditing,
     onRemoveWidget,
+    onAddWidget,
+    onConfigureWidget,
   }: {
-    widgets: Array<{ id: string }>;
+    widgets: Array<{ id: string; position: { x: number; y: number; w: number; h: number } }>;
     isEditing: boolean;
     onRemoveWidget: (id: string) => void;
+    onAddWidget?: () => void;
+    onConfigureWidget?: (id: string) => void;
   }) => (
     <div data-testid="dashboard-grid">
       <span>{widgets.length} widgets in grid</span>
+      <span data-testid="grid-layout">
+        {widgets
+          .map(w => `${w.id}:${w.position.x},${w.position.y},${w.position.w},${w.position.h}`)
+          .join(' ')}
+      </span>
+      {onConfigureWidget && (
+        <button data-testid="configure-first-btn" onClick={() => onConfigureWidget(widgets[0].id)}>
+          Configure First
+        </button>
+      )}
+      {onAddWidget && (
+        <button data-testid="grid-add-widget-btn" onClick={onAddWidget}>
+          Add from empty state
+        </button>
+      )}
       {isEditing && (
         <button
           data-testid="remove-widget-btn"
@@ -42,6 +61,24 @@ vi.mock('@/components/reports/DashboardGrid', () => ({
       )}
     </div>
   ),
+}));
+
+vi.mock('@/components/reports/WidgetConfigModal', () => ({
+  default: ({
+    widget,
+    onSave,
+  }: {
+    widget: { position: { x: number; y: number; w: number; h: number } } | null;
+    onSave: (widget: unknown) => void;
+  }) =>
+    widget ? (
+      <button
+        data-testid="widget-config-widen"
+        onClick={() => onSave({ ...widget, position: { ...widget.position, w: 4 } })}
+      >
+        Widen to full width
+      </button>
+    ) : null,
 }));
 
 describe('DashboardViewer Component', () => {
@@ -93,6 +130,8 @@ describe('DashboardViewer Component', () => {
     currentUserId: 'user-1',
     isTemplate: false,
     dashboardId: 'dash-123',
+    canManage: true,
+    isOwner: true,
   };
 
   beforeEach(() => {
@@ -193,6 +232,42 @@ describe('DashboardViewer Component', () => {
         })
       );
     });
+  });
+
+  it('treats a saved rename as the new baseline: no unsaved changes, and Cancel keeps it', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        success: true,
+        dashboard: {
+          id: 'dash-123',
+          widgets: mockWidgets,
+          name: 'Renamed Operations',
+          description: 'High level reliability overview',
+        },
+      }),
+    });
+    render(<DashboardViewer {...defaultProps} />);
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Dashboard settings' }), {
+      button: 0,
+    });
+    fireEvent.click(await screen.findByText(/Edit Dashboard/i));
+    fireEvent.change(screen.getByPlaceholderText('Dashboard title'), {
+      target: { value: 'Renamed Operations' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() => expect(screen.queryByText(/Editing mode/i)).toBeNull());
+
+    // The props still carry the old name until the server re-renders; edit again.
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Dashboard settings' }), {
+      button: 0,
+    });
+    fireEvent.click(await screen.findByText(/Edit Dashboard/i));
+
+    expect(screen.queryByText('Unsaved changes')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+    expect(screen.getByText('Renamed Operations')).toBeDefined();
   });
 
   it('restores saved baseline and title when Cancel is clicked in edit mode', async () => {
@@ -334,5 +409,78 @@ describe('DashboardViewer Component', () => {
     );
     expect(screenHeader).not.toBeNull();
     expect(screenHeader?.className).toContain('print:hidden');
+  });
+
+  describe('without report.manage', () => {
+    it('hides edit and delete in the dashboard settings menu', async () => {
+      render(<DashboardViewer {...defaultProps} canManage={false} />);
+
+      fireEvent.pointerDown(screen.getByRole('button', { name: 'Dashboard settings' }), {
+        button: 0,
+      });
+
+      // Read actions stay; every write action is gone.
+      expect(await screen.findByText(/Export as PDF/i)).toBeDefined();
+      expect(screen.queryByText(/Edit Dashboard/i)).toBeNull();
+      expect(screen.queryByText(/Delete Dashboard/i)).toBeNull();
+    });
+
+    it('does not offer to clone a template', () => {
+      const { rerender } = render(<DashboardViewer {...defaultProps} isTemplate canManage />);
+      expect(screen.getByRole('button', { name: /Clone Dashboard/i })).toBeDefined();
+
+      rerender(<DashboardViewer {...defaultProps} isTemplate canManage={false} />);
+      expect(screen.queryByRole('button', { name: /Clone Dashboard/i })).toBeNull();
+    });
+  });
+
+  it('re-flows the rows when a widget is resized so nothing overlaps or overflows', async () => {
+    render(<DashboardViewer {...defaultProps} />);
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Dashboard settings' }), {
+      button: 0,
+    });
+    fireEvent.click(await screen.findByText(/Edit Dashboard/i));
+    expect(screen.getByTestId('grid-layout').textContent).toBe('w-1:0,0,1,1 w-2:1,0,2,2');
+
+    fireEvent.click(screen.getByTestId('configure-first-btn'));
+    fireEvent.click(await screen.findByTestId('widget-config-widen'));
+
+    // w-1 now fills the first row, so w-2 moves down instead of overlapping it.
+    expect(screen.getByTestId('grid-layout').textContent).toBe('w-1:0,0,4,1 w-2:0,1,2,2');
+  });
+
+  describe('who can edit', () => {
+    const openSettings = () =>
+      fireEvent.pointerDown(screen.getByRole('button', { name: 'Dashboard settings' }), {
+        button: 0,
+      });
+
+    it('hides edit and delete from a user who does not own the saved dashboard', async () => {
+      render(<DashboardViewer {...defaultProps} isOwner={false} />);
+      openSettings();
+
+      expect(await screen.findByText(/Export as PDF/i)).toBeDefined();
+      expect(screen.queryByText(/Edit Dashboard/i)).toBeNull();
+      expect(screen.queryByText(/Delete Dashboard/i)).toBeNull();
+    });
+
+    it('still lets a report manager play with a template without owning it', async () => {
+      render(
+        <DashboardViewer {...defaultProps} isTemplate dashboardId={undefined} isOwner={false} />
+      );
+      openSettings();
+
+      expect(await screen.findByText(/Edit Dashboard/i)).toBeDefined();
+    });
+
+    it('offers the grid empty-state Add widget only while editing', async () => {
+      render(<DashboardViewer {...defaultProps} />);
+      expect(screen.queryByTestId('grid-add-widget-btn')).toBeNull();
+
+      openSettings();
+      fireEvent.click(await screen.findByText(/Edit Dashboard/i));
+
+      expect(await screen.findByTestId('grid-add-widget-btn')).toBeDefined();
+    });
   });
 });

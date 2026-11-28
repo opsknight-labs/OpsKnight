@@ -47,8 +47,9 @@ describe('scopes a role can actually exercise', () => {
 
   it('gives the read-only auditor views only, apart from what its role already allows', () => {
     const changes = usable('AUDITOR').filter(scope => !isMcpViewScope(scope));
-    // Both follow from the action policy: saved report views and SLO evaluation are read-level.
-    expect(changes).toEqual(['reports:write', 'service-objectives:evaluate']);
+    // Follows from the action policy: SLO evaluation is read-level. Saved reports and dashboards
+    // are not (report.manage), so the auditor cannot use reports:write.
+    expect(changes).toEqual(['service-objectives:evaluate']);
     expect(mcpScopesUsableByRole('AUDITOR').has('audit:read')).toBe(true);
     expect(mcpScopesUsableByRole('AUDITOR').has('incidents:write')).toBe(false);
     expect(mcpScopesUsableByRole('AUDITOR').has('runbooks:execute')).toBe(false);

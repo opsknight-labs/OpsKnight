@@ -3,7 +3,9 @@ import 'server-only';
 import { jsonError } from '@/lib/api-response';
 import { AppError, isAppErrorCode } from '@/lib/errors';
 import { ZodError } from 'zod/v3';
-import { authenticateAgentRequest } from './agent-auth';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/client-ip';
+import { preauthenticateAgentRequest, verifyAgentRequestSignature } from './agent-auth';
 import {
   RunbookPreExecutionFenceError,
   RunbookAgentLeaseExpiredError,
@@ -75,9 +77,49 @@ export async function readBoundedRequestBody(request: Request, maxBytes: number)
   return new TextDecoder().decode(combined);
 }
 
+export class RunbookAgentRateLimitedError extends Error {
+  constructor(
+    public readonly retryAfterSeconds: number,
+    /** The counter store failed; the agent is not over any quota. */
+    public readonly unavailable = false
+  ) {
+    super('Too many agent requests.');
+    this.name = 'RunbookAgentRateLimitedError';
+  }
+}
+
+/** Per-minute budget for one agent from one address; ~20 requests a second is far above any real agent. */
+const AGENT_REQUESTS_PER_MINUTE = 1200;
+/** Enrollment is unauthenticated by design (the one-time token is in the body), so cap it per address. */
+const AGENT_ENROLL_PER_MINUTE = 20;
+
+export async function enforceAgentRateLimit(key: string, limit: number) {
+  const result = await checkRateLimit(key, limit, 60_000);
+  if (!result.allowed) {
+    throw result.unavailable
+      ? new RunbookAgentRateLimitedError(5, true)
+      : new RunbookAgentRateLimitedError(
+          Math.max(1, Math.ceil((result.resetAt - Date.now()) / 1000))
+        );
+  }
+}
+
+export const enforceAgentEnrollRateLimit = (request: Request) =>
+  enforceAgentRateLimit(
+    `runbook-agent-enroll:${getClientIp(request.headers)}`,
+    AGENT_ENROLL_PER_MINUTE
+  );
+
 export async function authenticatedAgentJson(request: Request, maxBytes: number = 64 * 1024) {
+  // Check headers, clock and agent state, and spend a rate-limit hit, before buffering the body:
+  // an unauthenticated caller must not be able to make the server hold up to maxBytes per request.
+  const pre = await preauthenticateAgentRequest(request);
+  await enforceAgentRateLimit(
+    `runbook-agent:${getClientIp(request.headers)}:${pre.agent.id}`,
+    AGENT_REQUESTS_PER_MINUTE
+  );
   const rawBody = await readBoundedRequestBody(request, maxBytes);
-  const agent = await authenticateAgentRequest(request, rawBody);
+  const agent = await verifyAgentRequestSignature(request, rawBody, pre);
   let json: unknown = {};
   if (rawBody) {
     try {
@@ -112,6 +154,16 @@ export function agentApiError(error: unknown) {
     message.startsWith('Payload exceeds maximum allowed size')
   ) {
     return jsonError('Payload too large.', 413);
+  }
+
+  if (error instanceof RunbookAgentRateLimitedError || name === 'RunbookAgentRateLimitedError') {
+    const limited = error as RunbookAgentRateLimitedError;
+    const retryAfter = String(limited.retryAfterSeconds ?? 60);
+    return limited.unavailable
+      ? jsonError('Rate limiting is temporarily unavailable.', 503, undefined, {
+          'Retry-After': retryAfter,
+        })
+      : jsonError('Too many agent requests.', 429, undefined, { 'Retry-After': retryAfter });
   }
 
   if (

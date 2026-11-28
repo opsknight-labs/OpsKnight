@@ -11,7 +11,7 @@ const SENDING_LEASE_MS = 60 * 1000;
 const MAX_BACKOFF_MS = 5 * 60 * 1000;
 const MAX_PARALLEL_LANES = 4;
 const MAX_OPERATIONS_PER_FLUSH = 32;
-const TERMINAL_QUEUE_STATES = new Set(['SUCCEEDED', 'FAILED', 'FORBIDDEN']);
+const TERMINAL_QUEUE_STATES = new Set(['SUCCEEDED', 'FAILED', 'FORBIDDEN', 'CONFLICT']);
 const EXECUTOR_ID = `sw:${randomId()}`;
 
 function randomId() {
@@ -354,7 +354,7 @@ const flushQueuedRequests = async () => {
       const queue = await listQueuedRequests(principal);
       const now = Date.now();
       const candidates = firstPerLane(queue).filter(item => {
-        if (item.state === 'AUTH_REQUIRED' || item.state === 'CONFLICT') return false;
+        if (item.state === 'AUTH_REQUIRED') return false;
         if (item.state === 'SENDING') return (item.leaseUntil || 0) <= now;
         return item.state === 'PENDING' && (item.nextAttemptAt == null || item.nextAttemptAt <= now);
       });
@@ -428,11 +428,21 @@ const normalizePushPayload = raw => {
   };
 };
 
+// Only the responder shell (/m) may be reused: a desktop tab on the same origin can hold unsaved work.
+const isMobileShellWindow = client => {
+  try {
+    const url = new URL(client.url);
+    return url.origin === self.location.origin && (url.pathname === '/m' || url.pathname.startsWith('/m/'));
+  } catch {
+    return false;
+  }
+};
+
 const focusOrOpen = async path => {
   const safePath = safeAppPath(path, '/m');
   const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
   for (const client of windowClients) {
-    if (!client.url.startsWith(self.location.origin)) continue;
+    if (!isMobileShellWindow(client)) continue;
     if ('focus' in client) await client.focus();
     if ('navigate' in client) return client.navigate(safePath);
     return client;

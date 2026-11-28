@@ -38,6 +38,7 @@ describe('admin health guide links', () => {
 
 vi.mock('@/lib/prisma', () => ({
   default: {
+    $queryRaw: vi.fn().mockResolvedValue([]),
     incident: { findMany: vi.fn().mockResolvedValue([]) },
     backgroundJob: { findMany: vi.fn().mockResolvedValue([]) },
     inboundDelivery: { findMany: vi.fn().mockResolvedValue([]) },
@@ -298,8 +299,24 @@ describe('generate24HourHistory', () => {
     expect(samples).toHaveLength(24);
     expect(samples.every(s => s.status === 'healthy')).toBe(true);
     expect(samples.every(s => s.scorePercent === 100)).toBe(true);
-    const expectedHour = `${now.getHours().toString().padStart(2, '0')}:00`;
-    expect(samples[23].hourLabel).toBe(expectedHour);
+    expect(samples[23].hourLabel).toBe('12:00 UTC');
+  });
+
+  it('uses fixed clock-hour buckets instead of rolling windows ending at now', async () => {
+    const prisma = (await import('@/lib/prisma')).default;
+    vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
+      { hour: new Date('2026-09-05T13:00:00.000Z'), failures: 2 },
+    ] as unknown as never);
+    const now = new Date('2026-09-05T14:37:00.000Z');
+
+    const samples = await generate24HourHistory(mockBaseChecks, 'healthy', now);
+
+    // The 13:20 failure belongs to the 13:00 bucket, not to a "14:00" bar covering 13:37-14:37.
+    expect(samples[22].timestamp).toBe('2026-09-05T13:00:00.000Z');
+    expect(samples[22].hourLabel).toBe('13:00 UTC');
+    expect(samples[22].status).toBe('degraded');
+    expect(samples[23].timestamp).toBe('2026-09-05T14:00:00.000Z');
+    expect(samples[0].timestamp).toBe('2026-09-04T15:00:00.000Z');
   });
 
   it('reflects live advisory degradation in current hour without painting all 24 prior hours red', async () => {
@@ -324,6 +341,76 @@ describe('generate24HourHistory', () => {
     const priorHours = samples.slice(0, 23);
     expect(priorHours.every(s => s.status === 'healthy')).toBe(true);
     expect(priorHours.every(s => s.scorePercent === 100)).toBe(true);
+  });
+
+  it('buckets a failed job by when it failed, and counts in SQL instead of loading rows', async () => {
+    const prisma = (await import('@/lib/prisma')).default;
+    vi.mocked(prisma.$queryRaw).mockClear();
+    vi.mocked(prisma.backgroundJob.findMany).mockClear();
+    const now = new Date('2026-09-05T14:37:00.000Z');
+
+    await generate24HourHistory(mockBaseChecks, 'healthy', now);
+
+    const sql = vi
+      .mocked(prisma.$queryRaw)
+      .mock.calls.map(call => (call[0] as unknown as TemplateStringsArray).join('?'));
+    expect(sql).toHaveLength(3);
+    const jobs = sql.find(text => text.includes('"BackgroundJob"'));
+    expect(jobs).toContain('"failedAt"');
+    expect(jobs).not.toContain('"createdAt"');
+    expect(sql.every(text => text.includes('GROUP BY'))).toBe(true);
+    expect(prisma.backgroundJob.findMany).not.toHaveBeenCalled();
+  });
+
+  it('marks hours unknown, not healthy, when a history query fails', async () => {
+    const prisma = (await import('@/lib/prisma')).default;
+    vi.mocked(prisma.$queryRaw)
+      .mockResolvedValueOnce([] as unknown as never)
+      .mockRejectedValueOnce(new Error('inbound table unreadable'));
+
+    const samples = await generate24HourHistory(
+      mockBaseChecks,
+      'healthy',
+      new Date('2026-09-05T14:37:00.000Z')
+    );
+
+    expect(samples.slice(0, 23).every(sample => sample.status === 'unknown')).toBe(true);
+    expect(samples[23].status).toBe('healthy');
+  });
+
+  it('shows the worse of the live status and this hour failures in the current bar', async () => {
+    const prisma = (await import('@/lib/prisma')).default;
+    vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
+      { hour: new Date('2026-09-05T14:00:00.000Z'), failures: 1 },
+    ] as unknown as never);
+    const criticalChecks: AdminHealthCheck[] = mockBaseChecks.map(check =>
+      check.id === 'encryption'
+        ? { ...check, status: 'unhealthy', summary: 'Encryption key is invalid.' }
+        : check
+    );
+    const now = new Date('2026-09-05T14:37:00.000Z');
+
+    const samples = await generate24HourHistory(criticalChecks, 'unhealthy', now);
+
+    expect(samples[23].status).toBe('unhealthy');
+    expect(samples[23].reason).toBe('Encryption key is invalid.');
+    expect(samples[23].scorePercent).toBeLessThanOrEqual(90);
+  });
+
+  it('keeps this hour failures when the live status is healthy', async () => {
+    const prisma = (await import('@/lib/prisma')).default;
+    vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
+      { hour: new Date('2026-09-05T14:00:00.000Z'), failures: 1 },
+    ] as unknown as never);
+
+    const samples = await generate24HourHistory(
+      mockBaseChecks,
+      'healthy',
+      new Date('2026-09-05T14:37:00.000Z')
+    );
+
+    expect(samples[23].status).toBe('degraded');
+    expect(samples[23].reason).toBe('1 background job failure(s)');
   });
 
   it('does not classify customer incidents as OpsKnight platform-health failures', async () => {

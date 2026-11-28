@@ -209,7 +209,7 @@ export const ERASURE_DOMAIN_POLICY: readonly ErasureDomain[] = [
     blocking: false,
     manualReviewRequired: true,
     notes:
-      'Note content preserved; author reference nulled (DB-level SetNull). Free-text content may still name the subject — matches the "incident-content" PARTIAL disposition in src/lib/privacy/registry.ts.',
+      'Note content preserved; author reference nulled (DB-level SetNull). The subject\'s email, name and phone number are replaced with "[erased]" in the notes they wrote and in timeline lines that name them on incidents they took part in (bounded per run; see the privacy docs). Notes written by others that name the subject are not attributable and may still do so — matches the "incident-content" PARTIAL disposition in src/lib/privacy/registry.ts.',
   },
   {
     id: 'postmortemsAuthored',
@@ -227,7 +227,7 @@ export const ERASURE_DOMAIN_POLICY: readonly ErasureDomain[] = [
     blocking: false,
     manualReviewRequired: true,
     notes:
-      'DB-level SetNull. Template body text may still name the subject — matches the "incident-content" PARTIAL disposition.',
+      'Ownership moves to the administrator who runs the erasure, or to the first active administrator when the operator lacks ADMIN_MANAGE. Template body text may still name the subject — matches the "incident-content" PARTIAL disposition.',
   },
   {
     id: 'actionItemsOwned',
@@ -298,7 +298,7 @@ export const ERASURE_DOMAIN_POLICY: readonly ErasureDomain[] = [
     blocking: false,
     manualReviewRequired: true,
     notes:
-      'actorEmail/actorName/targetEmail are denormalized PII snapshots that outlive actorId (which is already DB-level SetNull). Erasure scrubs these three columns in place; the audit row, action, and timestamps are preserved. The free-text `details` JSON payload and any external/application log copies (outside the AuditLog table) are not scrubbed — matches the "audit-and-application-logs" PARTIAL disposition.',
+      'The subject\'s own audit rows (performed by them, keyed by their email, or about their account) are pseudonymised in place and never deleted: IP is cleared, and their email, name, phone number and the IP addresses seen on those rows are replaced with "[erased]" inside the `details` JSON (structure, action, entity type and timestamps stay). actorEmail/actorName/targetEmail are denormalized PII snapshots that outlive actorId (which is already DB-level SetNull); erasure scrubs those three columns, and clears entityId where it holds the subject email (failed sign-ins for an unrecognised account are keyed by the typed address). Rows a legal hold on another user protects are left untouched, and a hold on the subject blocks the erasure. Limits: rows where the subject only appears inside someone else\'s free text, `details` values the identifiers do not match (misspellings, other formats), and external/application log copies (outside the AuditLog table) are not attributable and are not scrubbed — matches the "audit-and-application-logs" PARTIAL disposition.',
   },
 
   // --- Unsearchable residual surface: unconditional manual review ---
@@ -309,7 +309,7 @@ export const ERASURE_DOMAIN_POLICY: readonly ErasureDomain[] = [
     blocking: false,
     manualReviewRequired: true,
     notes:
-      'Includes IngestionReceipt event/provider payloads and results, including dead letters and receipts orphaned by service deletion; these require explicit manual export/minimization and audited terminal disposition with accepted-work acknowledgement. Includes operator-defined Automation context and responder snapshots in IncidentAutomationDecision, AutomationTrace and AutomationContextObservation; these have no verified subject relation and require explicit export/minimization review while preserving immutable routing evidence. Covers names/emails embedded in incident notes, postmortems and templates written by others (not captured by the author-count domains above), Notification message bodies / encrypted payloads / provider-side copies, AuditLog details JSON, and application/external log sinks. These surfaces are undiscoverable by ID — every erasure therefore requires explicit operator acknowledgement that any remaining free-text/log/external copies have been reviewed before the request is closed. See incident-content / audit-and-application-logs / notifications PARTIAL dispositions in src/lib/privacy/registry.ts.',
+      'Includes IngestionReceipt event/provider payloads and results, including dead letters and receipts orphaned by service deletion; these require explicit manual export/minimization and audited terminal disposition with accepted-work acknowledgement. Includes operator-defined Automation context and responder snapshots in IncidentAutomationDecision, AutomationTrace and AutomationContextObservation; these have no verified subject relation and require explicit export/minimization review while preserving immutable routing evidence. Covers names/emails embedded in incident notes, postmortems and templates written by others (not captured by the author-count domains above), Notification message bodies / encrypted payloads / provider-side copies, AuditLog details JSON of rows that are not the subject\'s own (the subject\'s own rows are pseudonymised), and application/external log sinks. These surfaces are undiscoverable by ID — every erasure therefore requires explicit operator acknowledgement that any remaining free-text/log/external copies have been reviewed before the request is closed. See incident-content / audit-and-application-logs / notifications PARTIAL dispositions in src/lib/privacy/registry.ts.',
   },
 
   // --- Retention holds: REVIEW (blocking if active holds exist) ---

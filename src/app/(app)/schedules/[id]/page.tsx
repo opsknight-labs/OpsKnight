@@ -25,6 +25,7 @@ import {
   moveLayerUser,
   moveLayerPrecedence,
   removeLayerUser,
+  previewLayerUserRemoval,
   updateLayer,
   updateSchedule,
 } from '../actions';
@@ -65,11 +66,13 @@ async function getScheduleDetails(id: string) {
     where: { id },
     select: {
       id: true,
+      revision: true,
       name: true,
       timeZone: true,
       layers: {
         select: {
           id: true,
+          revision: true,
           name: true,
           start: true,
           end: true,
@@ -533,6 +536,7 @@ export default async function ScheduleDetailPage({
               key={layer.id}
               layer={{
                 id: layer.id,
+                revision: layer.revision,
                 name: layer.name,
                 start: new Date(layer.start),
                 end: layer.end ? new Date(layer.end) : null,
@@ -555,6 +559,7 @@ export default async function ScheduleDetailPage({
               addLayerUser={addLayerUser}
               moveLayerUser={moveLayerUser}
               removeLayerUser={removeLayerUser}
+              previewLayerUserRemoval={previewLayerUserRemoval}
               moveLayerPrecedence={moveLayerPrecedence}
               colorIndex={index}
               layerPosition={index}
@@ -699,6 +704,7 @@ export default async function ScheduleDetailPage({
           scheduleId={schedule.id}
           currentName={schedule.name}
           currentTimeZone={schedule.timeZone}
+          currentRevision={schedule.revision}
           updateSchedule={updateSchedule}
           canManageSchedules={capabilities.canManageScheduleSettings}
         />

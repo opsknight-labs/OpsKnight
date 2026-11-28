@@ -129,6 +129,11 @@ export const CAPABILITY_CATALOG: Record<Capability, CapabilityInfo> = {
     group: 'administration',
     risk: 'high',
   },
+  [C.REPORT_MANAGE]: {
+    label: 'Create, edit, share and delete reports and dashboards',
+    group: 'reporting',
+    risk: 'medium',
+  },
   [C.REPORT_EXPORT]: {
     label: 'Export reports and analytics',
     group: 'reporting',
