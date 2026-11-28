@@ -38,6 +38,8 @@ export const en = {
   'business.nested': '{count} nested',
   'incidents.activeRecent': 'Active & recent',
   'incidents.history': 'View incident history',
+  'incidents.activeTitle': 'Active incidents',
+  'incidents.pastTitle': 'Past incidents',
   'incidents.recentOnly': 'Show recent only',
   'incidents.filterByService': 'Filter incidents by service',
   'incidents.details': 'Incident details',

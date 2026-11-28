@@ -39,6 +39,8 @@ export const de: Record<I18nKey, string> = {
   'business.nested': '{count} verschachtelt',
   'incidents.activeRecent': 'Aktiv und kürzlich',
   'incidents.history': 'Vorfallverlauf anzeigen',
+  'incidents.activeTitle': 'Aktive Vorfälle',
+  'incidents.pastTitle': 'Vergangene Vorfälle',
   'incidents.recentOnly': 'Nur aktuelle anzeigen',
   'incidents.filterByService': 'Vorfälle nach Dienst filtern',
   'incidents.details': 'Vorfalldetails',

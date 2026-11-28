@@ -468,15 +468,16 @@ describe('StatusPageV3', () => {
   });
 
   describe('incident placement', () => {
+    // Recent, so the resolved one is in the main feed rather than behind "Incident history".
     const incident = (status: 'OPEN' | 'RESOLVED') => ({
       id: `inc-${status}`,
       title: `${status} incident`,
       status,
-      createdAt: '2026-09-09T10:00:00.000Z',
-      resolvedAt: status === 'RESOLVED' ? '2026-09-09T11:00:00.000Z' : null,
+      createdAt: new Date(Date.now() - 3_600_000).toISOString(),
+      resolvedAt: status === 'RESOLVED' ? new Date(Date.now() - 1_800_000).toISOString() : null,
       service: { id: 'svc-1', name: 'Checkout API' },
     });
-    const incidentsBeforeServices = (incidents: ReturnType<typeof incident>[]) => {
+    const sectionsAround = (incidents: ReturnType<typeof incident>[]) => {
       render(
         <StatusPageV3
           snapshot={snapshotOf([service()], {
@@ -484,17 +485,33 @@ describe('StatusPageV3', () => {
           })}
         />
       );
-      const section = document.getElementById('incidents') as Element;
       const services = screen.getByRole('heading', { name: 'Services' });
-      return Boolean(section.compareDocumentPosition(services) & Node.DOCUMENT_POSITION_FOLLOWING);
+      const before = (id: string) => {
+        const section = document.getElementById(id);
+        return section
+          ? Boolean(section.compareDocumentPosition(services) & Node.DOCUMENT_POSITION_FOLLOWING)
+          : null;
+      };
+      return { active: before('incidents'), past: before('incident-history') };
     };
 
     it('keeps an active incident above the service bars', () => {
-      expect(incidentsBeforeServices([incident('OPEN')])).toBe(true);
+      expect(sectionsAround([incident('OPEN')])).toEqual({ active: true, past: null });
     });
 
     it('lists resolved-only incidents below the service bars', () => {
-      expect(incidentsBeforeServices([incident('RESOLVED')])).toBe(false);
+      expect(sectionsAround([incident('RESOLVED')])).toEqual({ active: null, past: false });
+    });
+
+    it('shows only the active incident above and the resolved ones below', () => {
+      expect(sectionsAround([incident('OPEN'), incident('RESOLVED')])).toEqual({
+        active: true,
+        past: false,
+      });
+      expect(screen.getByRole('heading', { name: 'Active incidents' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Past incidents' })).toBeInTheDocument();
+      expect(screen.getAllByText('OPEN incident')).toHaveLength(1);
+      expect(screen.getAllByText('RESOLVED incident')).toHaveLength(1);
     });
   });
 

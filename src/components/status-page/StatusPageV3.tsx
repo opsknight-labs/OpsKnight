@@ -187,14 +187,17 @@ export default function StatusPageV3({
   const incidentHref = hasSlugRoutes
     ? (id: string) => `${statusPagePath}/incidents/${encodeURIComponent(id)}`
     : undefined;
-  // Live trouble stays above the service bars; a page with only resolved incidents lists them
-  // below, so a quiet history does not push the services off the first screen.
-  const incidentsBelow =
-    showIncidents &&
-    !snapshot.incidents.some(item => item.status === 'OPEN' || item.status === 'ACKNOWLEDGED');
-  const incidentsSection = showIncidents ? (
+  // Only live trouble goes above the service bars; resolved and recent incidents follow them, so
+  // the services stay on the first screen.
+  const isActiveIncident = (item: { status: string }) =>
+    item.status === 'OPEN' || item.status === 'ACKNOWLEDGED';
+  const hasActiveIncidents = showIncidents && snapshot.incidents.some(isActiveIncident);
+  const hasPastIncidents =
+    showIncidents && snapshot.incidents.some(item => !isActiveIncident(item));
+  const incidentsSection = (mode: 'active' | 'past') => (
     <IncidentsV3
       incidents={snapshot.incidents}
+      mode={mode}
       timeZone={timeZone}
       historyDays={snapshot.retention?.requestedHistoryDays ?? snapshot.historyDays}
       permalinkHref={incidentHref}
@@ -205,7 +208,7 @@ export default function StatusPageV3({
           : undefined
       }
     />
-  ) : null;
+  );
   return (
     <StatusLocaleProvider locale={locale}>
       <div
@@ -262,7 +265,7 @@ export default function StatusPageV3({
           {showAnnouncements && (
             <AnnouncementsV3 announcements={snapshot.announcements} timeZone={timeZone} />
           )}
-          {!incidentsBelow && incidentsSection}
+          {hasActiveIncidents && incidentsSection('active')}
           {showRegions && <RegionHealthV3 regions={snapshot.regions} />}
           {showServices && (
             <ServiceHealthV3
@@ -290,7 +293,7 @@ export default function StatusPageV3({
               }
             />
           )}
-          {incidentsBelow && incidentsSection}
+          {hasPastIncidents && incidentsSection('past')}
           {showChangelog && <ChangelogV3 changelog={snapshot.changelog} timeZone={timeZone} />}
         </div>
 
