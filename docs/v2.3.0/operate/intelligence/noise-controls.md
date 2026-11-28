@@ -99,6 +99,24 @@ same way automation rule sets are:
   captured the same way. Until a scope is captured its decisions record no version; evaluation itself is
   unaffected.
 
+## Choose what noise controls do
+
+Open **Settings, Intelligence, Noise controls**, pick **All services** or one service, and choose one of three
+cards:
+
+- **Off** changes nothing; every alert pages as before.
+- **Watch only** (SHADOW) records what would have been merged, held back or grouped, without changing
+  anything. Start here.
+- **On** applies the controls before anyone is paged.
+
+Under the cards, switch **Merge repeat alerts**, **Quiet flapping alerts** and **Group alert storms** on or off;
+**Fine-tune** under each holds its numbers. **Advanced** holds **Run before automation** and **Let dedup,
+flapping and storms touch HIGH urgency** (leave it off and high-urgency alerts always page). Select
+**Publish new version**; the page then shows the version and mode that went live, and the service's
+**Intelligence** tab shows the same mode.
+
+Choosing **On** without enough watching evidence asks you to confirm before it saves.
+
 ## Test before you turn it on
 
 _Test against history_ replays the saved controls over the last N days of alerts, read-only, and reports
