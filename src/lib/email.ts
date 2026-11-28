@@ -143,27 +143,10 @@ async function sendWithSingleProvider(
     options.headers && Object.keys(options.headers).length ? options.headers : undefined;
   if (emailConfig.provider === 'resend') {
     try {
-      const resendModule = await import('resend');
-      const ResendClass = (resendModule.Resend ||
-        resendModule.default?.Resend ||
-        resendModule.default) as unknown as new (key: string) => {
-        emails: {
-          send: (
-            payload: Record<string, unknown>,
-            options?: { idempotencyKey?: string }
-          ) => Promise<{
-            error?: {
-              message?: string;
-              statusCode?: number;
-              status?: number;
-              name?: string;
-              code?: string;
-            };
-            data?: { id?: string };
-          }>;
-        };
-      };
-      const resend = new ResendClass(emailConfig.apiKey || '');
+      const { Resend } = await import('resend');
+      if (!emailConfig.fromEmail?.trim())
+        return { success: false, error: 'Resend from email is not configured' };
+      const resend = new Resend(emailConfig.apiKey || '');
       const payload = {
         from: emailConfig.fromEmail,
         to: options.to,
@@ -178,13 +161,20 @@ async function sendWithSingleProvider(
           })
         : await resend.emails.send(payload);
       if (result.error) {
-        const statusCode = Number(result.error.statusCode || result.error.status) || undefined;
+        const { error } = result;
+        const statusCode =
+          Number(error.statusCode || ('status' in error ? error.status : undefined)) || undefined;
+        const legacyCode =
+          'code' in error && typeof error.code === 'string' ? error.code : undefined;
         return {
           success: false,
-          error: result.error.message || 'Resend API error',
+          error: error.message || 'Resend API error',
           statusCode,
-          errorCode: result.error.name || result.error.code,
-          retryAfterMs: statusCode === 429 ? 60_000 : undefined,
+          errorCode: error.name || legacyCode,
+          retryAfterMs:
+            statusCode === 429
+              ? (retryAfterMs(result.headers?.['retry-after']) ?? 60_000)
+              : undefined,
         };
       }
       logger.info('Email sent via Resend', { id: result.data?.id });

@@ -91,19 +91,23 @@ describe('Resend Provider Transport Contract', () => {
     );
 
     expect(result.success).toBe(true);
-    expect(mockResendSend).toHaveBeenCalledWith(
-      expect.anything(),
-      { idempotencyKey: 'custom-idemp-key-xyz' }
-    );
+    expect(mockResendSend).toHaveBeenCalledWith(expect.anything(), {
+      idempotencyKey: 'custom-idemp-key-xyz',
+    });
   });
 
-  it('handles 429 rate limit with statusCode 429 and retryAfterMs', async () => {
+  it.each([
+    [undefined, 60_000],
+    [{ 'retry-after': '120' }, 120_000],
+    [{ 'retry-after': 'unknown' }, 60_000],
+  ])('handles a 429 rate limit with response headers %j', async (headers, expectedDelay) => {
     mockResendSend.mockResolvedValueOnce({
       error: {
         statusCode: 429,
         name: 'rate_limit_exceeded',
         message: 'Too many requests',
       },
+      headers,
     });
 
     const result = await sendEmail(
@@ -118,8 +122,45 @@ describe('Resend Provider Transport Contract', () => {
     expect(result.success).toBe(false);
     expect(result.statusCode).toBe(429);
     expect(result.errorCode).toBe('rate_limit_exceeded');
-    expect(result.retryAfterMs).toBe(60_000);
+    expect(result.retryAfterMs).toBe(expectedDelay);
     expect(result.error).toBe('Too many requests');
+  });
+
+  it('preserves message headers and idempotency through the installed SDK', async () => {
+    const { Resend } = await vi.importActual<typeof import('resend')>('resend');
+    const sdk = new Resend(config.apiKey);
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(Response.json({ id: 'resend-msg-wire' }));
+    try {
+      mockResendSend.mockImplementationOnce(sdk.emails.send.bind(sdk.emails));
+      const headers = { 'List-Unsubscribe': '<https://example.com/unsubscribe>' };
+      const result = await sendEmail(
+        {
+          to: 'oncall@example.com',
+          subject: 'Incident Alert',
+          html: '<p>Alert</p>',
+          idempotencyKey: 'incident-alert-wire',
+          headers,
+        },
+        config
+      );
+
+      expect(result).toMatchObject({ success: true, providerMessageId: 'resend-msg-wire' });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, request] = fetchMock.mock.calls[0];
+      expect(new URL(String(url)).pathname).toBe('/emails');
+      expect(new Headers(request?.headers).get('Idempotency-Key')).toBe('incident-alert-wire');
+      expect(JSON.parse(String(request?.body))).toMatchObject({
+        from: config.fromEmail,
+        to: 'oncall@example.com',
+        html: '<p>Alert</p>',
+        text: 'Alert',
+        headers,
+      });
+    } finally {
+      fetchMock.mockRestore();
+    }
   });
 
   it('handles API errors with status code and error code', async () => {
@@ -144,6 +185,25 @@ describe('Resend Provider Transport Contract', () => {
     expect(result.statusCode).toBe(403);
     expect(result.errorCode).toBe('forbidden');
     expect(result.error).toBe('Domain not verified');
+  });
+
+  it('preserves status and code aliases in API error bodies', async () => {
+    mockResendSend.mockResolvedValueOnce({
+      error: { status: 429, code: 'rate_limit_exceeded', message: 'Too many requests' },
+      headers: { 'retry-after': '2' },
+    });
+
+    await expect(
+      sendEmail(
+        { to: 'oncall@example.com', subject: 'Incident Alert', html: '<p>Alert</p>' },
+        config
+      )
+    ).resolves.toMatchObject({
+      success: false,
+      statusCode: 429,
+      errorCode: 'rate_limit_exceeded',
+      retryAfterMs: 2_000,
+    });
   });
 
   it('captures network/exception errors cleanly', async () => {

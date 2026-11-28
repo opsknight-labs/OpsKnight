@@ -249,7 +249,7 @@
     "@aws-sdk/client-sns": "^3.1149.0",
     "@sendgrid/mail": "^8.1.6",
     "nodemailer": "10.1.4",
-    "resend": "^4.0.0",
+    "resend": "^6.41.0",
     "twilio": "^5.13.1"
   },
   "devDependencies": {
