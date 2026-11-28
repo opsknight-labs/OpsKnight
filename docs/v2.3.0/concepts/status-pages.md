@@ -12,13 +12,14 @@ verification:
 
 # Status pages
 
-## 2.0.0 support boundary
+## Support boundary
 
-Supported: one status page per installation, service/component mapping,
+Supported: up to two status pages per installation, service/component mapping,
 controlled incident projection, subscribers, and the configured custom-domain
-flow. Not supported: multiple independently administered status pages in one
-installation. A database model or internal route does not expand this public
-support boundary.
+flow. Exactly one page is the default and serves `/status`; the second page has
+its own unique slug and is served at `/status/{slug}`. Custom domains are per
+page and unique. Not supported: more than two pages. A database model or
+internal route does not expand this public support boundary.
 
 Status pages publish deliberately scoped service and incident information.
 Their audience, subscriptions, custom domains, and projections are separate

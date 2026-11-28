@@ -6,11 +6,11 @@ import { emitAuditEvent } from '@/lib/audit';
 import { logger } from '@/lib/logger';
 import { getStatusPageServingStore } from './serving-store';
 import { rebuildStatusPageSnapshot } from './snapshot';
+import { MAX_STATUS_PAGES } from './limits';
 
 const STATUS_PAGE_LIFECYCLE_LOCK = 'opsknight:status-pages:lifecycle:v1';
 
-/** Maximum number of status pages any account may create. */
-export const MAX_STATUS_PAGES = 1;
+export { MAX_STATUS_PAGES };
 
 export class StatusPageAdminError extends Error {
   constructor(
@@ -61,7 +61,7 @@ export async function createStatusPage(
     if (count >= MAX_STATUS_PAGES) {
       throw new StatusPageAdminError(
         'STATUS_PAGE_LIMIT_REACHED',
-        `OpsKnight doesn't allow multiple status pages. Contact OpsKnight if you want more pages.`
+        `You have reached the limit of ${MAX_STATUS_PAGES} status pages. Delete a page before creating another.`
       );
     }
 
@@ -142,11 +142,22 @@ function defaultRouteClassification({ gained }: { gained: boolean }) {
   };
 }
 
-export async function deleteStatusPage(statusPageId: string, replacementDefaultId?: string) {
+export async function deleteStatusPage(statusPageId: string, requestedReplacementId?: string) {
   const { page, replacementId } = await prisma.$transaction(async tx => {
     await lockLifecycle(tx);
     const page = await requireStatusPageForAdmin(statusPageId, tx);
     const count = await tx.statusPage.count();
+
+    let replacementDefaultId = requestedReplacementId;
+    if (page.isDefault && count === 2 && !replacementDefaultId) {
+      // Only one page remains, so there is nothing to choose: promote it.
+      replacementDefaultId = (
+        await tx.statusPage.findFirstOrThrow({
+          where: { id: { not: statusPageId } },
+          select: { id: true },
+        })
+      ).id;
+    }
 
     if (page.isDefault && count > 1) {
       if (!replacementDefaultId) {

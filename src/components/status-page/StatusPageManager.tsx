@@ -15,6 +15,7 @@ import {
   DialogFooter,
 } from '@/components/ui/shadcn/dialog';
 import { cn } from '@/lib/utils';
+import { MAX_STATUS_PAGES } from '@/lib/status-pages/limits';
 
 export function StatusPageManager({
   className,
@@ -88,14 +89,15 @@ export function StatusPageManager({
         }}
         size="sm"
         data-variant={variant}
-        className={cn('gap-2', className)}
+        aria-disabled={!canCreate}
+        className={cn('gap-2', className, !canCreate && 'opacity-60')}
       >
         {canCreate ? (
           <Plus className="h-4 w-4" aria-hidden="true" />
         ) : (
           <Lock className="h-4 w-4" aria-hidden="true" />
         )}
-        <span>Create status page</span>
+        <span>{canCreate ? 'Create status page' : 'Status page limit reached'}</span>
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -197,8 +199,8 @@ export function StatusPageManager({
               <DialogTitle className="text-lg font-bold">Page Limit Reached</DialogTitle>
             </div>
             <DialogDescription className="text-sm text-muted-foreground leading-relaxed">
-              OpsKnight doesn&apos;t allow multiple status pages. Contact OpsKnight if you want more
-              pages.
+              You have reached the limit of {MAX_STATUS_PAGES} status pages. Delete a page you no
+              longer need to create another, or contact OpsKnight if you need more.
             </DialogDescription>
           </DialogHeader>
 

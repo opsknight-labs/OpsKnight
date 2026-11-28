@@ -4,7 +4,19 @@ import { isStatusPageSlug } from '@/lib/validation';
 import { StatusPageCreateV2Schema, StatusPageUpdateV2Schema } from '@/lib/api-v2/validation';
 
 describe('v2 status page slug', () => {
-  const rejected = ['-a--b-', 'a--b', '-ab', 'ab-', 'a'.repeat(81), 'Upper', 'under_score'];
+  const rejected = [
+    'verify',
+    'postmortems',
+    'default',
+    'rss',
+    '-a--b-',
+    'a--b',
+    '-ab',
+    'ab-',
+    'a'.repeat(81),
+    'Upper',
+    'under_score',
+  ];
   const accepted = ['ab', 'status-page-1', 'a'.repeat(80)];
 
   it.each(rejected)('rejects %s on create and update, as the console does', slug => {

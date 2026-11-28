@@ -95,7 +95,10 @@ export default async function SettingsOverviewPage() {
       ? prisma.notificationProvider.count({ where: { enabled: true } })
       : Promise.resolve(0),
     permissions.isAdmin
-      ? prisma.statusPage.findFirst({ select: { enabled: true, privacyMode: true } })
+      ? prisma.statusPage.findFirst({
+          select: { enabled: true, privacyMode: true },
+          orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+        })
       : Promise.resolve(null),
     permissions.isAdmin ? prisma.customField.count() : Promise.resolve(0),
   ]);

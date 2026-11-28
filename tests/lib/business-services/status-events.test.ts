@@ -75,6 +75,23 @@ describe('emitBusinessServiceStatusChanges', () => {
     );
   });
 
+  it('drafts for every page that shows the service, not only the default', async () => {
+    mocks.findMany.mockResolvedValue([
+      {
+        ...row('OPERATIONAL'),
+        statusPages: [
+          { statusPageId: 'p1', displayName: null },
+          { statusPageId: 'p2', displayName: 'Checkout (partners)' },
+        ],
+      },
+    ]);
+    await emitBusinessServiceStatusChanges();
+    expect(mocks.drafts.mock.calls[0][0].pages).toEqual([
+      { statusPageId: 'p1', displayName: null },
+      { statusPageId: 'p2', displayName: 'Checkout (partners)' },
+    ]);
+  });
+
   it('does not record the change when drafting fails, so the next run retries it', async () => {
     mocks.findMany.mockResolvedValue([row('OPERATIONAL')]);
     mocks.drafts.mockRejectedValueOnce(new Error('db down'));

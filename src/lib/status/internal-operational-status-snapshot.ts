@@ -129,6 +129,7 @@ async function calculate(
       await Promise.all([
         prisma.statusPage.findFirst({
           where: { enabled: true },
+          orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
           select: {
             name: true,
             announcements: {

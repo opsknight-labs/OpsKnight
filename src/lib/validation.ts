@@ -81,7 +81,28 @@ function isHostname(value: string): boolean {
   });
 }
 
+/** Served by static routes under /status/* and /api/status/*, or otherwise taken. */
+const RESERVED_STATUS_PAGE_SLUGS = new Set([
+  'admin',
+  'api',
+  'auth',
+  'default',
+  'history',
+  'internal',
+  'manage',
+  'postmortems',
+  'rss',
+  'settings',
+  'subscribe',
+  'subscriptions',
+  'unsubscribe',
+  'uptime-export',
+  'users',
+  'verify',
+]);
+
 export function isStatusPageSlug(value: string): boolean {
+  if (RESERVED_STATUS_PAGE_SLUGS.has(value)) return false;
   if (value.length < 1 || value.length > 80 || value.startsWith('-') || value.endsWith('-')) {
     return false;
   }

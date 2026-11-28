@@ -214,6 +214,10 @@ describe('createStatusPage', () => {
     expect(await audits()).toBe(1);
     expect(await markers(runId)).toBe(1);
 
+    // Two pages are allowed; fill the second slot so the next create hits the limit.
+    await db.statusPage.create({
+      data: { name: `Second ${randomUUID()}`, slug: `s2-${randomUUID().slice(0, 8)}` },
+    });
     const rejectedRun = randomUUID();
     const second = markingGuard(rejectedRun, async () => true);
     const rejected = await call(
@@ -229,7 +233,7 @@ describe('createStatusPage', () => {
     expect((await rejected.json()).code).toBe('STATUS_PAGE_LIMIT_REACHED');
     expect(second.calls).toHaveLength(1);
     expect(await markers(rejectedRun)).toBe(0);
-    expect(await db.statusPage.count()).toBe(1);
+    expect(await db.statusPage.count()).toBe(2);
     expect(await audits()).toBe(1);
   });
 
@@ -240,9 +244,11 @@ describe('createStatusPage', () => {
     expect(res.status).toBe(201);
     expect((await res.json()).data).toMatchObject({ ...input, isDefault: true, enabled: false });
     const second = await call(createStatusPage, token, 'POST', '/api/v2/status-pages', {}, body());
-    expect(second.status).toBe(403);
-    expect(await db.statusPage.count()).toBe(1);
-    expect(await audits()).toBe(1);
+    expect(second.status).toBe(201);
+    const third = await call(createStatusPage, token, 'POST', '/api/v2/status-pages', {}, body());
+    expect(third.status).toBe(403);
+    expect(await db.statusPage.count()).toBe(2);
+    expect(await audits()).toBe(2);
   });
 });
 
