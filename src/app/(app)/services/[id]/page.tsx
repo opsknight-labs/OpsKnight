@@ -110,6 +110,7 @@ import ServiceGeneralSettings from '@/components/service/ServiceGeneralSettings'
 import ServiceNotificationSettings from '@/components/service/ServiceNotificationSettings';
 import JiraServiceMappingSettings from '@/components/service/JiraServiceMappingSettings';
 import ChatOpsWarRoomSettings from '@/components/service/ChatOpsWarRoomSettings';
+import { SERVICE_ACCOUNT_DOMAIN } from '@/lib/service-account-identity';
 import WarRoomAutoAddCard from '@/components/service/WarRoomAutoAddCard';
 import ServiceVisibilitySettings from '@/components/service/ServiceVisibilitySettings';
 import ServiceResponsePolicyHub from '@/components/service/ServiceResponsePolicyHub';
@@ -431,14 +432,25 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   const service = serviceRaw;
   // Only people who can edit the service see (and need) the directory; the picker searches the rest.
   const autoAddSelect = { id: true, name: true, email: true } as const;
+  // Previously saved machine identities (or deactivated users) are neither shown nor kept selected.
+  const autoAddSelected = canManageService
+    ? await prisma.user.findMany({
+        where: {
+          id: { in: service.warRoomAutoAddUserIds ?? [] },
+          status: 'ACTIVE',
+          NOT: { email: { endsWith: `@${SERVICE_ACCOUNT_DOMAIN}`, mode: 'insensitive' } },
+        },
+        select: autoAddSelect,
+      })
+    : [];
   const autoAddPeople = canManageService
     ? [
+        ...autoAddSelected,
         ...(await prisma.user.findMany({
-          where: { id: { in: service.warRoomAutoAddUserIds ?? [] } },
-          select: autoAddSelect,
-        })),
-        ...(await prisma.user.findMany({
-          where: { status: 'ACTIVE' },
+          where: {
+            status: 'ACTIVE',
+            NOT: { email: { endsWith: `@${SERVICE_ACCOUNT_DOMAIN}`, mode: 'insensitive' } },
+          },
           select: autoAddSelect,
           orderBy: { name: 'asc' },
           take: 30,
@@ -1198,7 +1210,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               serviceId={id}
               teamName={service.team?.name ?? null}
               initialTeam={service.warRoomAutoAddTeam}
-              initialUserIds={service.warRoomAutoAddUserIds ?? []}
+              initialUserIds={autoAddSelected.map(person => person.id)}
               people={autoAddPeople}
               canManage={canManageService}
             />
