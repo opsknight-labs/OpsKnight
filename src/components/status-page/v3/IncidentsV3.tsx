@@ -411,7 +411,8 @@ const IncidentCard = memo(function IncidentCard({
  * already-sanitized snapshot payload.
  */
 export default function IncidentsV3({
-  incidents,
+  incidents: allIncidents,
+  mode = 'all',
   timeZone,
   postmortemHref,
   permalinkHref,
@@ -419,6 +420,8 @@ export default function IncidentsV3({
   historyDays,
 }: {
   incidents: PublicIncident[];
+  /** `active` lists only open incidents, `past` only resolved ones, `all` both. */
+  mode?: 'all' | 'active' | 'past';
   timeZone: string;
   postmortemHref?: (postmortemId: string) => string;
   permalinkHref?: (incidentId: string) => string;
@@ -426,6 +429,25 @@ export default function IncidentsV3({
   historyDays?: number;
 }) {
   const t = useT();
+  const incidents = useMemo(
+    () =>
+      mode === 'all'
+        ? allIncidents
+        : allIncidents.filter(
+            item =>
+              (item.status === 'OPEN' || item.status === 'ACKNOWLEDGED') === (mode === 'active')
+          ),
+    [allIncidents, mode]
+  );
+  // Two instances can share a page, so each keeps its own anchor and heading id.
+  const sectionId = mode === 'past' ? 'incident-history' : 'incidents';
+  const headingId = `status-v3-${sectionId}-heading`;
+  const title =
+    mode === 'active'
+      ? t('incidents.activeTitle')
+      : mode === 'past'
+        ? t('incidents.pastTitle')
+        : 'Incidents';
   const [service, setService] = useState('all');
   const [visible, setVisible] = useState(INITIAL_VISIBLE);
   const [showHistory, setShowHistory] = useState(false);
@@ -488,18 +510,11 @@ export default function IncidentsV3({
 
   if (incidents.length === 0) {
     return (
-      <section
-        className="status-v3-incidents-inline"
-        id="incidents"
-        aria-labelledby="status-v3-incidents-heading"
-      >
+      <section className="status-v3-incidents-inline" id={sectionId} aria-labelledby={headingId}>
         <div className="status-v3-incidents-inline__head">
           <div className="status-v3-incidents-inline__title-wrap">
-            <h2
-              id="status-v3-incidents-heading"
-              className="status-section-title status-v3-incidents-inline__title"
-            >
-              Incidents
+            <h2 id={headingId} className="status-section-title status-v3-incidents-inline__title">
+              {title}
             </h2>
             <span className="status-v3-incidents-inline__subtitle">
               {t('incidents.activeRecent')}
@@ -522,21 +537,18 @@ export default function IncidentsV3({
     : recentPast.length;
 
   return (
-    <section
-      className="status-v3-incidents-inline"
-      id="incidents"
-      aria-labelledby="status-v3-incidents-heading"
-    >
+    <section className="status-v3-incidents-inline" id={sectionId} aria-labelledby={headingId}>
       <div className="status-v3-incidents-inline__head">
         <div className="status-v3-incidents-inline__title-wrap">
-          <h2
-            id="status-v3-incidents-heading"
-            className="status-section-title status-v3-incidents-inline__title"
-          >
-            Incidents
+          <h2 id={headingId} className="status-section-title status-v3-incidents-inline__title">
+            {title}
           </h2>
           <span className="status-v3-incidents-inline__subtitle">
-            {windowLabel} · {active.length} active · {subtitlePastCount} resolved
+            {mode === 'active'
+              ? `${active.length} active`
+              : mode === 'past'
+                ? `${windowLabel} · ${subtitlePastCount} resolved`
+                : `${windowLabel} · ${active.length} active · ${subtitlePastCount} resolved`}
             {hiddenOlderCount > 0 && !showHistory ? ` · +${hiddenOlderCount} in history` : ''}
           </span>
         </div>

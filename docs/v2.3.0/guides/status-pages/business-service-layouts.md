@@ -49,9 +49,10 @@ flips to **Hide services**. A row with active incidents shows a chip such as "1 
 the incidents section. Technical services that are in no business service on the page appear under
 **Other services**.
 
-While an incident is active, the incidents section stays above the services. A page with only
-resolved incidents lists them below the services, so a quiet history does not push the services off
-the first screen.
+Only **Active incidents** appear above the services, so an outage is the first thing a visitor
+reads. **Past incidents** (resolved ones from the last 14 days, with older ones behind **View
+incident history**) are listed below the services, so a long history never pushes the services off
+the first screen. A page with no active incident has no section above the services.
 
 With the expandable layout, **Expand groups by default (affected groups always open)** opens every
 row when the page loads. Off (the default), only affected rows start open.
