@@ -39,6 +39,8 @@ export const ja: Record<I18nKey, string> = {
   'business.nested': 'ネスト {count} 件',
   'incidents.activeRecent': '進行中・最近',
   'incidents.history': 'インシデント履歴を表示',
+  'incidents.activeTitle': 'アクティブなインシデント',
+  'incidents.pastTitle': '過去のインシデント',
   'incidents.recentOnly': '最近のみ表示',
   'incidents.filterByService': 'サービスでインシデントを絞り込む',
   'incidents.details': 'インシデントの詳細',

@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useActionState, useId, useState } from 'react';
+import { useActionState, useId, useState, type ReactNode } from 'react';
 import {
   createHeartbeatAction,
   createRuleAction,
@@ -143,6 +143,148 @@ export function KpiTiles({ kpis }: { kpis: NoiseControlKpis }) {
   );
 }
 
+type NoiseMode = 'OFF' | 'SHADOW' | 'ON';
+
+const MODE_CHOICES: ReadonlyArray<{ value: NoiseMode; title: string; body: string }> = [
+  { value: 'OFF', title: 'Off', body: 'Nothing changes. Every alert pages as it does today.' },
+  {
+    value: 'SHADOW',
+    title: 'Watch only',
+    body: 'Records what would be merged or held back, without changing anything. The safe way to start.',
+  },
+  {
+    value: 'ON',
+    title: 'On',
+    body: 'Merges repeats, quiets flapping alerts and groups storms before anyone is paged.',
+  },
+];
+
+/**
+ * The three modes as cards, with the evidence for turning ON shown only when it matters. It lives inside the
+ * keyed form, so it starts from the saved mode again after every publish.
+ */
+function ModeChoices({ initial, readiness }: { initial: NoiseMode; readiness: NoiseReadiness }) {
+  const [mode, setMode] = useState<NoiseMode>(initial);
+  const needsAcknowledgement = mode === 'ON' && initial !== 'ON' && !readiness.ready;
+  const wrong = Math.round(readiness.falsePositiveRate * 100);
+  const allowed = Math.round(readiness.maxFalsePositiveRate * 100);
+  return (
+    <fieldset className="space-y-3">
+      <legend className={labelClass}>What should noise controls do here?</legend>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {MODE_CHOICES.map(choice => (
+          <label
+            key={choice.value}
+            className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-card p-4 has-[input:checked]:border-primary has-[input:checked]:bg-primary/5 has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-ring"
+          >
+            <input
+              type="radio"
+              name="mode"
+              value={choice.value}
+              checked={mode === choice.value}
+              onChange={() => setMode(choice.value)}
+              className="mt-1"
+            />
+            <span>
+              <span className="block text-sm font-semibold">{choice.title}</span>
+              <span className="block text-sm text-muted-foreground">{choice.body}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+      <div className="text-sm text-muted-foreground">
+        Evidence from watching: {readiness.shadowDecisions} of {readiness.minimumShadowDecisions}{' '}
+        decisions in the last {readiness.windowDays} days, {wrong}% marked wrong (up to {allowed}%
+        is fine).{' '}
+        {readiness.ready ? (
+          <Badge>Enough to turn on</Badge>
+        ) : (
+          <Badge variant="secondary">Keep watching</Badge>
+        )}
+      </div>
+      {needsAcknowledgement && (
+        <div role="note" className="space-y-2 rounded-md border border-border bg-muted p-3 text-sm">
+          <p>
+            There is not enough evidence yet. Watching first shows what would be hidden before
+            anyone is affected. You can still turn it on now.
+          </p>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" name="acknowledgeReadiness" /> I understand: turn ON without the
+            shadow evidence above
+          </label>
+        </div>
+      )}
+    </fieldset>
+  );
+}
+
+/** One thing noise controls can do: a switch with a plain sentence, and the numbers behind it folded away. */
+function NoiseFeature({
+  name,
+  title,
+  body,
+  defaultChecked,
+  children,
+}: {
+  name: string;
+  title: string;
+  body: string;
+  defaultChecked: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border border-border">
+      <label className="flex cursor-pointer items-start gap-3 p-4">
+        <input type="checkbox" name={name} defaultChecked={defaultChecked} className="mt-1" />
+        <span>
+          <span className="block text-sm font-medium">{title}</span>
+          <span className="block text-sm text-muted-foreground">{body}</span>
+        </span>
+      </label>
+      <details className="border-t border-border px-4 py-3">
+        <summary className="cursor-pointer text-sm text-muted-foreground">Fine-tune</summary>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">{children}</div>
+      </details>
+    </div>
+  );
+}
+
+function NumberField({
+  label,
+  name,
+  value,
+  min,
+  max,
+}: {
+  label: string;
+  name: string;
+  value: number;
+  min: number;
+  max: number;
+}) {
+  return (
+    <label className="text-sm">
+      {label}
+      <input
+        type="number"
+        name={name}
+        defaultValue={value}
+        min={min}
+        max={max}
+        className={fieldClass}
+      />
+    </label>
+  );
+}
+
+function CheckField({ label, name, checked }: { label: string; name: string; checked: boolean }) {
+  return (
+    <label className="flex items-center gap-2 text-sm">
+      <input type="checkbox" name={name} defaultChecked={checked} /> {label}
+    </label>
+  );
+}
+
 export function NoisePolicyForm({
   policy,
   readiness,
@@ -195,185 +337,164 @@ export function NoisePolicyForm({
             </a>
           ))}
       </div>
-      <div className="text-sm text-muted-foreground">
-        Readiness for ON: {readiness.shadowDecisions}/{readiness.minimumShadowDecisions} shadow
-        decisions in {readiness.windowDays} days, {Math.round(readiness.falsePositiveRate * 100)}%
-        marked wrong (max {readiness.maxFalsePositiveRate * 100}%).{' '}
-        {readiness.ready ? <Badge>Ready</Badge> : <Badge variant="secondary">Keep shadowing</Badge>}
-      </div>
-      {/* Keyed by scope: the fields are uncontrolled, so another service's policy needs a fresh form. */}
-      <form key={selectedServiceId ?? 'global'} action={action} className="grid gap-4">
+      {/* Keyed by scope and revision: the fields are uncontrolled, so another service's policy, or the policy
+          just published, needs a fresh form. Without the revision the form was reset to the values it was first
+          rendered with, so a saved ON showed as OFF and publishing again quietly put it back. */}
+      <form
+        key={`${selectedServiceId ?? 'global'}:${policy.revision}`}
+        action={action}
+        className="grid gap-5"
+      >
         <input type="hidden" name="expectedRevision" value={policy.revision} />
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="space-y-1">
-            <label htmlFor={`${id}-service`} className={labelClass}>
-              Service
-            </label>
-            {/* The select only navigates. It is not submitted: until the page for the chosen scope has
-                loaded, this form still carries the scope and revision it was rendered with, together. */}
-            <input type="hidden" name="serviceId" value={selectedServiceId ?? ''} />
-            <ServiceSelect
-              id={`${id}-service`}
-              services={services}
-              allowAll="All services (global)"
-              defaultValue={selectedServiceId ?? ''}
-              // The revision above belongs to the policy on screen. Picking another service here and
-              // publishing sent that revision for a service with no row yet ("modified since it was read"),
-              // so the page reloads for the chosen scope instead.
-              onChange={value =>
-                router.push(
-                  value
-                    ? `/settings/intelligence/noise-controls?service=${encodeURIComponent(value)}`
-                    : '/settings/intelligence/noise-controls'
-                )
-              }
-            />
-          </div>
-          <div className="space-y-1">
-            <label htmlFor={`${id}-mode`} className={labelClass}>
-              Mode
-            </label>
-            <select id={`${id}-mode`} name="mode" className={fieldClass} defaultValue={policy.mode}>
-              <option value="OFF">OFF</option>
-              <option value="SHADOW">SHADOW (record only)</option>
-              <option value="ON">ON (apply)</option>
-            </select>
-          </div>
-          <div className="space-y-1">
-            <label htmlFor={`${id}-pipeline`} className={labelClass}>
-              Run before automation
-            </label>
-            <select
-              id={`${id}-pipeline`}
-              name="pipelineOrder"
-              aria-describedby={`${id}-pipeline-help`}
-              className={fieldClass}
-              defaultValue={policy.pipelineOrder}
-            >
-              <option value="OFF">OFF (automation first)</option>
-              <option value="SHADOW">SHADOW (record the difference)</option>
-              <option value="ON">ON (noise controls first)</option>
-            </select>
-            <p id={`${id}-pipeline-help`} className="text-xs text-muted-foreground">
-              Noise controls first: automation sees transformed severity, urgency and labels, skips
-              dropped and appended alerts, and orchestration reroutes and runbook attachments apply.
-            </p>
-          </div>
-          <label className="flex items-end gap-2 pb-2 text-sm">
-            <input type="checkbox" name="allowHighUrgency" defaultChecked={d.allowHighUrgency} />
-            Let dedup, flapping and storms touch HIGH urgency
+        <div className="max-w-md space-y-1">
+          <label htmlFor={`${id}-service`} className={labelClass}>
+            Service
           </label>
+          {/* The select only navigates. It is not submitted: until the page for the chosen scope has
+              loaded, this form still carries the scope and revision it was rendered with, together. */}
+          <input type="hidden" name="serviceId" value={selectedServiceId ?? ''} />
+          <ServiceSelect
+            id={`${id}-service`}
+            services={services}
+            allowAll="All services (global)"
+            defaultValue={selectedServiceId ?? ''}
+            // The revision above belongs to the policy on screen. Picking another service here and
+            // publishing sent that revision for a service with no row yet ("modified since it was read"),
+            // so the page reloads for the chosen scope instead.
+            onChange={value =>
+              router.push(
+                value
+                  ? `/settings/intelligence/noise-controls?service=${encodeURIComponent(value)}`
+                  : '/settings/intelligence/noise-controls'
+              )
+            }
+          />
         </div>
-        <fieldset className="grid gap-3 rounded-md border border-border p-3 sm:grid-cols-3">
-          <legend className="px-1 text-sm font-medium">Content dedup</legend>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              name="contentDedupEnabled"
-              defaultChecked={d.contentDedup.enabled}
-            />{' '}
-            Enabled
-          </label>
-          <label className="text-sm">
-            Window (s)
-            <input
-              type="number"
+        <ModeChoices initial={policy.mode} readiness={readiness} />
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold">What it does</h3>
+          <NoiseFeature
+            name="contentDedupEnabled"
+            title="Merge repeat alerts"
+            body="An alert with the same content as an open incident on this service joins that incident instead of opening a new one."
+            defaultChecked={d.contentDedup.enabled}
+          >
+            <NumberField
+              label="Count as a repeat within (seconds)"
               name="contentDedupWindowSeconds"
-              defaultValue={d.contentDedup.windowSeconds}
+              value={d.contentDedup.windowSeconds}
               min={60}
               max={86400}
-              className={fieldClass}
             />
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
+            <CheckField
+              label="Only when the labels match too"
               name="contentDedupRequireLabelSubset"
-              defaultChecked={d.contentDedup.requireLabelSubset}
-            />{' '}
-            Require label subset
-          </label>
-        </fieldset>
-        <fieldset className="grid gap-3 rounded-md border border-border p-3 sm:grid-cols-4">
-          <legend className="px-1 text-sm font-medium">Flapping</legend>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="flappingEnabled" defaultChecked={d.flapping.enabled} />{' '}
-            Enabled
-          </label>
-          <label className="text-sm">
-            Window (s)
-            <input
-              type="number"
+              checked={d.contentDedup.requireLabelSubset}
+            />
+          </NoiseFeature>
+          <NoiseFeature
+            name="flappingEnabled"
+            title="Quiet flapping alerts"
+            body="An alert that keeps opening and closing is held as a suppressed incident, visible but paging nobody, until it settles."
+            defaultChecked={d.flapping.enabled}
+          >
+            <NumberField
+              label="Look back (seconds)"
               name="flappingWindowSeconds"
-              defaultValue={d.flapping.windowSeconds}
+              value={d.flapping.windowSeconds}
               min={30}
               max={3600}
-              className={fieldClass}
             />
-          </label>
-          <label className="text-sm">
-            Transitions
-            <input
-              type="number"
+            <NumberField
+              label="Open-and-close cycles that count as flapping"
               name="flappingThreshold"
-              defaultValue={d.flapping.threshold}
+              value={d.flapping.threshold}
               min={2}
               max={50}
-              className={fieldClass}
             />
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
+            <CheckField
+              label="Also match on alert content"
               name="flappingKeyOnFingerprint"
-              defaultChecked={d.flapping.keyOnFingerprint}
-            />{' '}
-            Also key on content
-          </label>
-        </fieldset>
-        <fieldset className="grid gap-3 rounded-md border border-border p-3 sm:grid-cols-5">
-          <legend className="px-1 text-sm font-medium">Storm grouping</legend>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="stormEnabled" defaultChecked={d.storm.enabled} /> Enabled
-          </label>
-          <label className="text-sm">
-            Incidents
-            <input
-              type="number"
+              checked={d.flapping.keyOnFingerprint}
+            />
+          </NoiseFeature>
+          <NoiseFeature
+            name="stormEnabled"
+            title="Group alert storms"
+            body="When many incidents open on this service in a short time, the later ones attach under the first so one person is paged, not many."
+            defaultChecked={d.storm.enabled}
+          >
+            <NumberField
+              label="Incidents that make a storm"
               name="stormThreshold"
-              defaultValue={d.storm.threshold}
+              value={d.storm.threshold}
               min={2}
               max={1000}
-              className={fieldClass}
             />
-          </label>
-          <label className="text-sm">
-            Window (s)
-            <input
-              type="number"
+            <NumberField
+              label="Within (seconds)"
               name="stormWindowSeconds"
-              defaultValue={d.storm.windowSeconds}
+              value={d.storm.windowSeconds}
               min={10}
               max={3600}
-              className={fieldClass}
             />
-          </label>
-          <label className="text-sm">
-            Hold (s, max 60)
-            <input
-              type="number"
+            <NumberField
+              label="Wait before paging (seconds, max 60)"
               name="stormHoldSeconds"
-              defaultValue={d.storm.holdSeconds}
+              value={d.storm.holdSeconds}
               min={0}
               max={60}
-              className={fieldClass}
             />
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="stormTopology" defaultChecked={d.storm.topology} /> Across
-            dependencies
-          </label>
-        </fieldset>
+            <CheckField
+              label="Also group across dependent services"
+              name="stormTopology"
+              checked={d.storm.topology}
+            />
+          </NoiseFeature>
+        </div>
+        <details
+          className="rounded-lg border border-border p-4"
+          open={d.allowHighUrgency || policy.pipelineOrder !== 'OFF'}
+        >
+          <summary className="cursor-pointer text-sm font-medium">Advanced</summary>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1">
+              <label htmlFor={`${id}-pipeline`} className={labelClass}>
+                Run before automation
+              </label>
+              <select
+                id={`${id}-pipeline`}
+                name="pipelineOrder"
+                aria-describedby={`${id}-pipeline-help`}
+                className={fieldClass}
+                defaultValue={policy.pipelineOrder}
+              >
+                <option value="OFF">OFF (automation first)</option>
+                <option value="SHADOW">SHADOW (record the difference)</option>
+                <option value="ON">ON (noise controls first)</option>
+              </select>
+              <p id={`${id}-pipeline-help`} className="text-xs text-muted-foreground">
+                Noise controls first: automation sees transformed severity, urgency and labels,
+                skips dropped and appended alerts, and orchestration reroutes and runbook
+                attachments apply.
+              </p>
+            </div>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                name="allowHighUrgency"
+                defaultChecked={d.allowHighUrgency}
+                className="mt-1"
+              />
+              <span>
+                Let dedup, flapping and storms touch HIGH urgency
+                <span className="block text-xs text-muted-foreground">
+                  Leave this off and high-urgency alerts always page.
+                </span>
+              </span>
+            </label>
+          </div>
+        </details>
         <OrchestrationRulesBuilder
           key={`${policy.scopeKey}:${policy.revision}`}
           name="orchestration"
@@ -383,16 +504,24 @@ export function NoisePolicyForm({
           serviceId={selectedServiceId}
           canManage={canManage}
         />
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" name="acknowledgeReadiness" /> I understand: turn ON without the
-          shadow evidence above
-        </label>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button type="submit" disabled={pending || !canManage}>
             {pending ? 'Publishing…' : 'Publish new version'}
           </Button>
           <Status state={state} />
+          {state.ok && selectedServiceId && (
+            <a
+              href={`/services/${selectedServiceId}?tab=intelligence`}
+              className="text-sm underline"
+            >
+              View on the service page
+            </a>
+          )}
         </div>
+        <p className="text-xs text-muted-foreground">
+          Every publish is saved as a version. Compare versions or roll back under Orchestration
+          versions.
+        </p>
       </form>
     </div>
   );

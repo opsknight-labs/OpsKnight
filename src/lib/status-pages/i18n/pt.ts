@@ -39,6 +39,8 @@ export const pt: Record<I18nKey, string> = {
   'business.nested': '{count} aninhados',
   'incidents.activeRecent': 'Ativos e recentes',
   'incidents.history': 'Ver histórico de incidentes',
+  'incidents.activeTitle': 'Incidentes ativos',
+  'incidents.pastTitle': 'Incidentes anteriores',
   'incidents.recentOnly': 'Mostrar apenas recentes',
   'incidents.filterByService': 'Filtrar incidentes por serviço',
   'incidents.details': 'Detalhes do incidente',

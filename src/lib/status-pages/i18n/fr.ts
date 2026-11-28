@@ -39,6 +39,8 @@ export const fr: Record<I18nKey, string> = {
   'business.nested': '{count} imbriqués',
   'incidents.activeRecent': 'Actifs et récents',
   'incidents.history': "Voir l'historique des incidents",
+  'incidents.activeTitle': 'Incidents actifs',
+  'incidents.pastTitle': 'Incidents passés',
   'incidents.recentOnly': 'Afficher uniquement les récents',
   'incidents.filterByService': 'Filtrer les incidents par service',
   'incidents.details': "Détails de l'incident",
