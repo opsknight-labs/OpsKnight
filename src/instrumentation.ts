@@ -90,6 +90,10 @@ export async function register() {
     }
 
     // Validate production environment variables at startup
+    if (process.env.NEXT_RUNTIME === 'nodejs') {
+      (await import('./lib/peer-ip')).installPeerIpStamp();
+    }
+
     const { validateProductionEnv } = await import('./lib/env-validation');
     validateProductionEnv();
 

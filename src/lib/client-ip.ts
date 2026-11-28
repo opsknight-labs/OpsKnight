@@ -155,6 +155,15 @@ export function getClientIp(
     }
   }
 
+  // The server stamps the real TCP peer on every request (src/lib/peer-ip.ts). The header is only
+  // believed when that stamp is installed, because otherwise a client could send it itself.
+  if (
+    !detectedSocketIp &&
+    (globalThis as { opsknightPeerIpStamped?: boolean }).opsknightPeerIpStamped
+  ) {
+    detectedSocketIp = validIp(readHeader(headers, 'x-opsknight-peer-ip'));
+  }
+
   const trusted = isProxyTrusted(detectedSocketIp, options?.trustProxy);
 
   // If proxy headers are untrusted (e.g. self-hosted without trusted reverse proxy),
