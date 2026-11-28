@@ -17,7 +17,7 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
 }
 
 /**
- * Wallboard tile with the last 24 hours of pre-paging noise KPIs (Workstream C): pages avoided, alert
+ * Wallboard tile with the last 24 hours of pre-paging noise KPIs (Workstream C): pages prevented, alert
  * compression, grouping and how often grouping was wrong. When noise controls are off it says so, and only
  * an administrator is told where to turn them on.
  */
@@ -56,7 +56,7 @@ export default function WallboardNoiseTile({ tile }: { tile: TileData }) {
       ) : (
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2" aria-live="polite">
           <Stat
-            label={tile.shadowOnly ? 'Would avoid (shadow)' : 'Pages avoided'}
+            label={tile.shadowOnly ? 'Would prevent (watching)' : 'Pages prevented'}
             value={formatNumber(tile.shadowOnly ? tile.shadowWouldAvoid : tile.pagesAvoided)}
             hint={
               !tile.shadowOnly && tile.shadowWouldAvoid > 0

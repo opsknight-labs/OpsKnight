@@ -23,7 +23,7 @@ export default function IntelligenceOverviewError({
   return (
     <ErrorState
       variant="page"
-      title="The AIOps overview couldn't load"
+      title="The Intelligence overview couldn't load"
       message={<>{getUserFacingErrorMessage(error)} Paging and escalation are not affected.</>}
       errorCode={error.digest}
       onRetry={reset}

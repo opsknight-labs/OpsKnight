@@ -26,7 +26,7 @@ documentation can help locate a topic, but it is never authoritative.
 
 ## New in 2.3.0
 
-- **OpsKnight Intelligence (AIOps):** pre-paging noise controls (maintenance windows, suppression rules, content dedup, storm grouping, heartbeats), correlation, root cause and triage suggestions, operations insights. Start with the [AIOps overview](./guides/intelligence/aiops-overview) and [Noise controls](./operate/intelligence/noise-controls).
+- **OpsKnight Intelligence (AIOps):** pre-paging noise controls (maintenance windows, suppression rules, content dedup, storm grouping, heartbeats), correlation, root cause and triage suggestions, operations insights. Start with the [Intelligence overview](./guides/intelligence/aiops-overview) and [Noise controls](./operate/intelligence/noise-controls).
 - **Squire:** the OpsKnight assistant in the web app, Slack, Teams and MCP, in basic mode without AI or with your own provider. See [Squire everywhere](./guides/intelligence/squire-everywhere).
 - **Read-only connections** for Squire, including GitHub Actions, GitLab CI, Azure DevOps, Argo CD and base14 Scout: [Observability connections](./operate/intelligence/observability-connections).
 
@@ -68,7 +68,7 @@ automation in this release is [per-service automation](./guides/services/service
 ## Intelligence (AIOps)
 
 - [Use suggestions](./guides/intelligence/use-suggestions.md) and [basic-mode questions](./guides/intelligence/basic-mode.md)
-- [AIOps overview](./guides/intelligence/aiops-overview.md), [alerts and changes lists](./guides/intelligence/alerts-and-changes-lists.md), [intelligence on incidents and lists](./guides/intelligence/incidents-and-lists.md)
+- [Intelligence overview](./guides/intelligence/aiops-overview.md), [alerts and changes lists](./guides/intelligence/alerts-and-changes-lists.md), [intelligence on incidents and lists](./guides/intelligence/incidents-and-lists.md)
   and [noise-control builders](./guides/intelligence/noise-control-builders.md)
 - [Intelligence on services, teams and dashboards](./guides/intelligence/services-teams-and-dashboards.md)
 - Operating: [production guide](./operate/intelligence/production.md)

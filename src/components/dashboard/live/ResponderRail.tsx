@@ -276,7 +276,7 @@ const ATTENTION_TONE: Record<'rose' | 'amber' | 'violet', string> = {
 /**
  * Ops Pulse: what needs the viewer next, beside the live feed. Every section is derived from the
  * same authorized live snapshot, so it costs no extra queries. `aiops` is an optional server-rendered
- * row (the AIOps pulse tile); the page omits it when there is nothing to show.
+ * row (the Intelligence pulse tile); the page omits it when there is nothing to show.
  */
 export function OpsPulsePanel({ aiops }: { aiops?: ReactNode } = {}) {
   const { snapshot, now, currentUserId, query, setQuery } = useLiveDashboard();

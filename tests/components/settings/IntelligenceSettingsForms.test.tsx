@@ -59,10 +59,10 @@ describe('IntelligencePolicyForm', () => {
 
   it('keeps AUTO unselectable until it is certified', () => {
     render(<IntelligencePolicyForm {...props} autoAvailable={false} />);
-    const auto = screen.getByRole('option', { name: /Automatic/ });
+    const auto = screen.getByRole('radio', { name: /Automatic/ });
     expect(auto).toBeDisabled();
-    expect(auto).toHaveTextContent('not available until certified');
-    expect(screen.getByLabelText('Mode')).toHaveValue('SHADOW');
+    expect(auto.closest('label')).toHaveTextContent('Not available until it has been certified');
+    expect(screen.getByRole('radio', { name: /^Watch only/ })).toBeChecked();
   });
 
   it('carries the head version so concurrent edits are detected', () => {
@@ -73,7 +73,7 @@ describe('IntelligencePolicyForm', () => {
   it('is read-only for non-managers', () => {
     render(<IntelligencePolicyForm {...props} canManage={false} autoAvailable={false} />);
     expect(screen.queryByRole('button', { name: 'Publish new version' })).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Mode')).toBeDisabled();
+    expect(screen.getByRole('radio', { name: /^Suggest/ })).toBeDisabled();
   });
 });
 

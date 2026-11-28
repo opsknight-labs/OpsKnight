@@ -94,6 +94,7 @@ export default async function AiUsageSpendSections({
       </SettingsSection>
 
       <SettingsSection
+        id="ai-spend"
         title="Spend and budgets"
         description="Dollar spend by team, capability and model, with optional daily budgets per team or capability."
       >
@@ -113,9 +114,7 @@ export default async function AiUsageSpendSections({
             <AiBudgetsForm budgets={cost.budgets} teams={cost.teams} canManage={canManage} />
           </>
         ) : (
-          <p id="ai-spend" className="scroll-mt-24 py-3 text-sm text-muted-foreground">
-            Spend is unavailable right now.
-          </p>
+          <p className="py-3 text-sm text-muted-foreground">Spend is unavailable right now.</p>
         )}
       </SettingsSection>
 

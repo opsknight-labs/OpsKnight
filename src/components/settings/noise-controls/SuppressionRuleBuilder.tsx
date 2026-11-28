@@ -28,6 +28,7 @@ import {
   useFormatAt,
   type Option,
 } from './shared';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 
 const EXPIRY_PRESETS = [
   { id: '1d', label: 'In 1 day', days: 1 },
@@ -224,19 +225,15 @@ export default function SuppressionRuleBuilder({
           <label htmlFor={`${id}-service`} className={labelClass}>
             Service
           </label>
-          <select
+          <SearchableSelect
             id={`${id}-service`}
+            options={services.map(service => ({ value: service.id, label: service.name }))}
             value={serviceId}
-            onChange={event => setServiceId(event.target.value)}
-            className={fieldClass}
-          >
-            <option value="">Any service</option>
-            {services.map(service => (
-              <option key={service.id} value={service.id}>
-                {service.name}
-              </option>
-            ))}
-          </select>
+            onChange={setServiceId}
+            clearLabel="Any service"
+            searchPlaceholder="Search services…"
+            noun="services"
+          />
         </div>
         <div className="space-y-1 sm:col-span-4">
           <label htmlFor={`${id}-description`} className={labelClass}>
@@ -348,23 +345,26 @@ export default function SuppressionRuleBuilder({
             </select>
           </div>
         )}
-        <CoversCriticalField id={`${id}-cc`} checked={coversCritical} onChange={setCoversCritical} />
+        <CoversCriticalField
+          id={`${id}-cc`}
+          checked={coversCritical}
+          onChange={setCoversCritical}
+        />
         <div className="space-y-1">
           <label htmlFor={`${id}-owner`} className={labelClass}>
             Owner
           </label>
-          <select
+          <SearchableSelect
             id={`${id}-owner`}
+            options={owners.map(owner => ({
+              value: owner.id,
+              label: owner.id === currentUserId ? `${owner.name} (you)` : owner.name,
+            }))}
             value={ownerId}
-            onChange={event => setOwnerId(event.target.value)}
-            className={fieldClass}
-          >
-            {owners.map(owner => (
-              <option key={owner.id} value={owner.id}>
-                {owner.id === currentUserId ? `${owner.name} (you)` : owner.name}
-              </option>
-            ))}
-          </select>
+            onChange={setOwnerId}
+            searchPlaceholder="Search people…"
+            noun="people"
+          />
         </div>
         <div className="space-y-1">
           <label htmlFor={`${id}-expiry`} className={labelClass}>

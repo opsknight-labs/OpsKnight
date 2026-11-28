@@ -405,8 +405,8 @@ test.describe.serial('intelligence on the service, service list and team pages',
     const tile = page.getByTestId('team-noise-load').filter({ visible: true });
     await expect(tile).toBeVisible();
     await expect(tile.getByText('Incidents created')).toBeVisible();
-    await expect(tile.getByText('Pages avoided')).toBeVisible();
-    await expect(tile.getByRole('link', { name: 'AIOps overview' })).toHaveAttribute(
+    await expect(tile.getByText('Pages prevented')).toBeVisible();
+    await expect(tile.getByRole('link', { name: 'Intelligence overview' })).toHaveAttribute(
       'href',
       '/intelligence#overview-noise'
     );

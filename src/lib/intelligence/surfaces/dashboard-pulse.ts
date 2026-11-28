@@ -10,7 +10,7 @@ import { incidentReadableSql } from '../incident-ux/readable-sql';
 import { getWorkBacklog } from '../jobs/work-queue';
 
 /**
- * Small, bounded reads behind two glanceable surfaces: the "AIOps pulse" tile on the home dashboard and
+ * Small, bounded reads behind two glanceable surfaces: the "Intelligence pulse" tile on the home dashboard and
  * the "largest open group" tile on the wallboard. Both are gated on INTELLIGENCE_READ, scoped to what the
  * actor may read, and fail soft: a broken probe contributes nothing and never breaks the dashboard.
  */
@@ -97,7 +97,7 @@ export async function getAiopsPulse(
   };
 
   const [avoided, openGroups, triage, quarantined] = await Promise.all([
-    pagesAvoided().catch(failed('pages avoided')),
+    pagesAvoided().catch(failed('pages prevented')),
     client.incident
       .count({
         where: {

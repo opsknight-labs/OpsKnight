@@ -46,6 +46,10 @@ export async function resolveMicrosoftTeamsUser(identity: TeamsUserIdentity) {
     return { linkId: link.id, userId: link.user.id, displayName: link.user.name };
   }
 
+  // An explicit unlink is final until the person links again through the signed-in challenge; the
+  // directory auto-link below would otherwise clear revokedAt on their very next click.
+  if (link?.revokedAt) return null;
+
   // Zero-touch auto-linking: match organisation users by Entra ID (aadObjectId)
   if (identity.aadObjectId) {
     const directoryMatches = await prisma.scimIdentity.findMany({

@@ -327,6 +327,9 @@ export default function SquireComposer({
           {value.length}/{maxLength}
         </span>
       </p>
+      <p className="px-1 pt-1 text-center text-2xs font-normal text-muted-foreground">
+        AI can be wrong. Check answers before you act on them.
+      </p>
     </form>
   );
 }

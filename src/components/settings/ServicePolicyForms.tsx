@@ -1,11 +1,12 @@
 'use client';
 
-import { useActionState, useId } from 'react';
+import { useActionState, useId, useRef } from 'react';
 import {
   clearServiceOverrideAction,
   saveServicePolicyAction,
   type ServicePolicyActionState,
 } from '@/app/(app)/settings/intelligence/services/actions';
+import ConfirmButton from '@/components/ui/ConfirmButton';
 import { Button } from '@/components/ui/shadcn/button';
 import type { IntelligenceModeValue } from '@/lib/intelligence/contract';
 import Link from 'next/link';
@@ -42,7 +43,7 @@ export function ServicePolicyForm({
       <input type="hidden" name="expectedHeadVersion" value={row.headVersion} />
       <div className="space-y-1">
         <label htmlFor={`${id}-mode`} className="text-sm font-medium">
-          Mode for this service
+          What Intelligence does for this service
         </label>
         <select
           id={`${id}-mode`}
@@ -51,9 +52,9 @@ export function ServicePolicyForm({
           disabled={disabled}
           className={fieldClass}
         >
-          <option value="OFF">Off — no analysis</option>
-          <option value="SHADOW">Shadow — analyze and record only</option>
-          <option value="SUGGEST">Suggest — show suggestions to responders</option>
+          <option value="OFF">Off: no analysis</option>
+          <option value="SHADOW">Watch only: learns and records, responders see nothing</option>
+          <option value="SUGGEST">Suggest: responders see suggestions</option>
           <option value="AUTO" disabled={!row.autoAvailable}>
             Automatic grouping — certified services only
           </option>
@@ -109,7 +110,7 @@ export function ServicePolicyForm({
       </div>
       <div className="space-y-1">
         <label htmlFor={`${id}-reason`} className="text-sm font-medium">
-          Reason (recorded in the audit log)
+          Why you are changing it (recorded in the audit log)
         </label>
         <input
           id={`${id}-reason`}
@@ -143,19 +144,22 @@ export function ClearOverrideButton({
   serviceId: string;
   serviceName: string;
 }) {
-  const [state, action, pending] = useActionState(clearServiceOverrideAction, initial);
+  const [state, action] = useActionState(clearServiceOverrideAction, initial);
+  const formRef = useRef<HTMLFormElement>(null);
   return (
-    <form action={action} className="inline-flex items-center gap-2">
+    <form ref={formRef} action={action} className="inline-flex items-center gap-2">
       <input type="hidden" name="serviceId" value={serviceId} />
-      <Button
-        type="submit"
+      <ConfirmButton
         size="sm"
         variant="ghost"
-        disabled={pending}
-        aria-label={`Use the global policy for ${serviceName}`}
+        aria-label={`Use the all-services setting for ${serviceName}`}
+        title={`Use the all-services setting for ${serviceName}?`}
+        description={`${serviceName} stops having its own setting and follows the one for all services. The history of its own setting is kept.`}
+        confirmLabel="Use all-services setting"
+        onConfirm={() => formRef.current?.requestSubmit()}
       >
-        Use global policy
-      </Button>
+        Use all-services setting
+      </ConfirmButton>
       <Status state={state} />
     </form>
   );

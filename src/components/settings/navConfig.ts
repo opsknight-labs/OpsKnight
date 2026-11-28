@@ -153,6 +153,24 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         ],
       },
       {
+        id: 'intelligence-setup',
+        label: 'Get started with Intelligence',
+        description:
+          'A three-minute guide: start watching, connect alerts, add an AI model. Nothing changes for your team until you decide',
+        href: '/settings/intelligence/setup',
+        icon: 'activity',
+        keywords: [
+          'setup',
+          'get started',
+          'onboarding',
+          'start',
+          'turn on',
+          'guide',
+          'intelligence',
+          'wizard',
+        ],
+      },
+      {
         id: 'squire-action-history',
         label: 'Squire Action History',
         description: 'Every action confirmed from a Squire card, who confirmed it, and its outcome',

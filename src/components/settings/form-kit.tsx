@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { Check } from 'lucide-react';
 import { notify } from '@/lib/toast';
 
 /**
@@ -27,16 +28,46 @@ export function ActionMessage({ state }: { state: { message: string; ok: boolean
     toasted.current = state;
     notify.success(success);
   }, [state, success]);
+  // A conflict ("changed since you opened the page") or a failed save is fixed by reloading: offer it.
+  const stale = /refresh|reload/i.test(failure);
   return (
     <>
-      <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+      {/* Always mounted so screen readers announce it, and visible so a save is never easy to miss. */}
+      <p
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className={success ? 'flex items-center gap-1.5 text-sm text-muted-foreground' : 'sr-only'}
+      >
+        {success && <Check className="h-4 w-4 shrink-0" aria-hidden="true" />}
         {success}
       </p>
       {failure && (
-        <p role="alert" className="text-sm text-destructive">
-          {failure}
+        <p role="alert" className="flex flex-wrap items-center gap-x-3 text-sm text-destructive">
+          <span>{failure}</span>
+          {stale && (
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="min-h-11 rounded-md px-2 font-medium underline sm:min-h-8"
+            >
+              Reload the page
+            </button>
+          )}
         </p>
       )}
     </>
+  );
+}
+
+/**
+ * Shown to people who can read a settings page but not change it. Controls stay visible so they can see how
+ * it is set up; this says why they do nothing and who can change it.
+ */
+export function ViewOnlyNotice({ what = 'these settings' }: { what?: string }) {
+  return (
+    <p role="note" className="rounded-md border border-border bg-muted p-3 text-sm text-foreground">
+      You can look at {what} but not change them. Ask an administrator to make a change.
+    </p>
   );
 }

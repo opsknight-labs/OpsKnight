@@ -20,8 +20,13 @@ import {
 } from '@/app/(app)/settings/intelligence/noise-controls/actions';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
+import ChoiceCards, { type Choice } from '@/components/ui/ChoiceCards';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 import OrchestrationRulesBuilder from '@/components/settings/noise-controls/OrchestrationRulesBuilder';
-import { highUrgencyNote } from '@/components/settings/noise-controls/shared';
+import {
+  highUrgencyNote,
+  RowAction as RowButton,
+} from '@/components/settings/noise-controls/shared';
 import type { NoiseControlKpis } from '@/lib/intelligence/noise-controls/kpis';
 import type {
   MaintenanceWindowView,
@@ -45,35 +50,6 @@ function formatAt(value: Date | string | null | undefined) {
   return `${date.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
 }
 
-function RowButton({
-  action,
-  fields,
-  label,
-  variant,
-}: {
-  action: (state: NoiseActionState, form: FormData) => Promise<NoiseActionState>;
-  fields: Record<string, string>;
-  label: string;
-  variant?: 'outline' | 'ghost' | 'destructive';
-}) {
-  const [state, formAction, pending] = useActionState(action, initial);
-  return (
-    <form action={formAction} className="inline-flex items-center gap-2">
-      {Object.entries(fields).map(([name, value]) => (
-        <input key={name} type="hidden" name={name} value={value} />
-      ))}
-      <Button type="submit" size="sm" variant={variant ?? 'outline'} disabled={pending}>
-        {label}
-      </Button>
-      {state.message && !state.ok && (
-        <span role="alert" className="text-xs text-destructive">
-          {state.message}
-        </span>
-      )}
-    </form>
-  );
-}
-
 function ServiceSelect({
   id,
   name,
@@ -91,26 +67,17 @@ function ServiceSelect({
   onChange?: (value: string) => void;
 }) {
   return (
-    <select
+    <SearchableSelect
       id={id}
       name={name}
-      className={fieldClass}
+      options={services.map(service => ({ value: service.id, label: service.name }))}
       defaultValue={defaultValue ?? ''}
-      onChange={onChange ? event => onChange(event.target.value) : undefined}
-    >
-      {allowAll !== undefined ? (
-        <option value="">{allowAll}</option>
-      ) : (
-        <option value="" disabled>
-          Select a service
-        </option>
-      )}
-      {services.map(service => (
-        <option key={service.id} value={service.id}>
-          {service.name}
-        </option>
-      ))}
-    </select>
+      onChange={onChange}
+      clearLabel={allowAll}
+      placeholder="Select a service"
+      searchPlaceholder="Search services…"
+      noun="services"
+    />
   );
 }
 
@@ -118,7 +85,7 @@ export function KpiTiles({ kpis }: { kpis: NoiseControlKpis }) {
   const tiles = [
     { label: `Alerts per incident (${kpis.days}d)`, value: kpis.compressionRatio.toFixed(2) },
     {
-      label: 'Pages avoided',
+      label: 'Pages prevented',
       value: String(kpis.pagesAvoided),
       hint: `${kpis.shadowWouldAvoid} more in shadow`,
     },
@@ -145,7 +112,7 @@ export function KpiTiles({ kpis }: { kpis: NoiseControlKpis }) {
 
 type NoiseMode = 'OFF' | 'SHADOW' | 'ON';
 
-const MODE_CHOICES: ReadonlyArray<{ value: NoiseMode; title: string; body: string }> = [
+const MODE_CHOICES: ReadonlyArray<Choice<NoiseMode>> = [
   { value: 'OFF', title: 'Off', body: 'Nothing changes. Every alert pages as it does today.' },
   {
     value: 'SHADOW',
@@ -169,29 +136,14 @@ function ModeChoices({ initial, readiness }: { initial: NoiseMode; readiness: No
   const wrong = Math.round(readiness.falsePositiveRate * 100);
   const allowed = Math.round(readiness.maxFalsePositiveRate * 100);
   return (
-    <fieldset className="space-y-3">
-      <legend className={labelClass}>What should noise controls do here?</legend>
-      <div className="grid gap-3 sm:grid-cols-3">
-        {MODE_CHOICES.map(choice => (
-          <label
-            key={choice.value}
-            className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-card p-4 has-[input:checked]:border-primary has-[input:checked]:bg-primary/5 has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-ring"
-          >
-            <input
-              type="radio"
-              name="mode"
-              value={choice.value}
-              checked={mode === choice.value}
-              onChange={() => setMode(choice.value)}
-              className="mt-1"
-            />
-            <span>
-              <span className="block text-sm font-semibold">{choice.title}</span>
-              <span className="block text-sm text-muted-foreground">{choice.body}</span>
-            </span>
-          </label>
-        ))}
-      </div>
+    <div className="space-y-3">
+      <ChoiceCards
+        name="mode"
+        legend="What should noise controls do here?"
+        choices={MODE_CHOICES}
+        value={mode}
+        onChange={setMode}
+      />
       <div className="text-sm text-muted-foreground">
         Evidence from watching: {readiness.shadowDecisions} of {readiness.minimumShadowDecisions}{' '}
         decisions in the last {readiness.windowDays} days, {wrong}% marked wrong (up to {allowed}%
@@ -214,7 +166,7 @@ function ModeChoices({ initial, readiness }: { initial: NoiseMode; readiness: No
           </label>
         </div>
       )}
-    </fieldset>
+    </div>
   );
 }
 
@@ -711,7 +663,15 @@ export function MaintenanceWindowList({
           {canManage && !window.endedAt && (
             <div className="flex items-center gap-2">
               {window.active && (
-                <RowButton action={endWindowAction} fields={{ id: window.id }} label="End now" />
+                <RowButton
+                  action={endWindowAction}
+                  fields={{ id: window.id }}
+                  label="End now"
+                  confirm={{
+                    title: 'End this maintenance window now?',
+                    description: 'Alerts for these services page normally again straight away.',
+                  }}
+                />
               )}
               <RowButton
                 action={toggleWindowAction}
@@ -933,6 +893,12 @@ export function SuppressionRuleList({
                 action={deleteRuleAction}
                 fields={{ id: rule.id }}
                 label="Delete"
+                confirm={{
+                  title: 'Delete this suppression rule?',
+                  description:
+                    'Alerts it matched will page normally again. You can create the rule again, but this one is gone.',
+                  confirmLabel: 'Delete rule',
+                }}
                 variant="ghost"
               />
             </div>
@@ -1073,6 +1039,12 @@ export function HeartbeatList({
                 action={deleteHeartbeatAction}
                 fields={{ id: monitor.id }}
                 label="Delete"
+                confirm={{
+                  title: 'Delete this heartbeat monitor?',
+                  description:
+                    'Its ping address stops working and you will no longer be told if the job goes quiet.',
+                  confirmLabel: 'Delete monitor',
+                }}
                 variant="ghost"
               />
             </div>
@@ -1198,6 +1170,16 @@ export function DecisionList({
               action={reverseDecisionAction}
               fields={{ id: decision.id }}
               label={decision.applied ? 'Reverse and page' : 'Mark wrong'}
+              confirm={
+                decision.applied
+                  ? {
+                      title: 'Reverse this decision and page?',
+                      description:
+                        'The alert is sent through again and pages whoever is on call. Use Mark wrong on an unapplied decision to only record the mistake.',
+                      confirmLabel: 'Reverse and page',
+                    }
+                  : undefined
+              }
             />
           )}
         </li>

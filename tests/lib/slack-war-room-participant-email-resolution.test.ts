@@ -120,4 +120,47 @@ describe('Slack war-room participants resolve by email when no identity link exi
       data: expect.objectContaining({ state: 'SKIPPED', lastErrorCode: 'IDENTITY_NOT_LINKED' }),
     });
   });
+
+  describe('re-projection', () => {
+    const room = {
+      id: 'room-1',
+      provider: 'SLACK',
+      providerTenantId: 'T1',
+      incident: { serviceId: 'svc-1', assigneeId: 'u1', roleAssignments: [], watchers: [] },
+    };
+    const existing = (state: string) => ({
+      id: 'p1',
+      userId: 'u1',
+      source: 'ASSIGNEE',
+      providerUserId: 'USLACK1',
+      providerObjectId: 'USLACK1',
+      state,
+    });
+
+    it.each(['PRESENT', 'PENDING', 'PROCESSING'])(
+      'keeps a %s person in that state when nothing about them changed',
+      async state => {
+        db.incidentWarRoom.findUnique.mockResolvedValue(room);
+        db.tx.warRoomParticipant.findFirst.mockResolvedValue(existing(state));
+        await projectIncidentWarRoomParticipants('room-1');
+        const data = db.tx.warRoomParticipant.update.mock.calls[0][0].data;
+        expect(data.state).toBe(state);
+        expect(data.desiredVersion).toBeUndefined();
+      }
+    );
+
+    it('still retries a FAILED person', async () => {
+      db.incidentWarRoom.findUnique.mockResolvedValue(room);
+      db.tx.warRoomParticipant.findFirst.mockResolvedValue(existing('FAILED'));
+      await projectIncidentWarRoomParticipants('room-1');
+      expect(db.tx.warRoomParticipant.update.mock.calls[0][0].data.state).toBe('DESIRED');
+    });
+
+    it('removes people who are no longer wanted, including ones that were skipped as unlinked', async () => {
+      db.incidentWarRoom.findUnique.mockResolvedValue(room);
+      await projectIncidentWarRoomParticipants('room-1');
+      const where = db.tx.warRoomParticipant.updateMany.mock.calls[0][0].where;
+      expect(where.state.in).toEqual(expect.arrayContaining(['SKIPPED', 'PRESENT']));
+    });
+  });
 });

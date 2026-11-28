@@ -71,6 +71,24 @@ describe('Microsoft Teams war-room lifecycle contract', () => {
     expect(secondAttempted).toBeGreaterThan(safeFailure);
   });
 
+  it('lifts the create gate when Graph rejected the create before doing anything, and sets it only after the capacity scan', () => {
+    const teams = readFileSync('src/lib/war-room/providers/microsoft-teams/provision.ts', 'utf8');
+    const capacity = teams.indexOf('await teamsChannelCapacity(');
+    const fence = teams.indexOf('data: { createAttemptedAt: new Date(), createOperationId: operationId }');
+    const post = teams.indexOf('const created = await createChannel(');
+    // A crash during the (slow) capacity scan must not leave a gate that forces a 15 minute wait and a failed room.
+    expect(capacity).toBeGreaterThan(-1);
+    expect(fence).toBeGreaterThan(capacity);
+    expect(post).toBeGreaterThan(fence);
+    // 429 / token failure / transient read mean nothing was created: the retry must be allowed to POST again.
+    const rejected = teams.indexOf("created.code === 'GRAPH_TOKEN_FAILED'");
+    const clear = teams.indexOf('data: { createAttemptedAt: null, createOperationId: null }', rejected);
+    const retry = teams.indexOf('throw new WarRoomRetryableError(created.message, created.retryAfterMs)', clear);
+    expect(rejected).toBeGreaterThan(post);
+    expect(clear).toBeGreaterThan(rejected);
+    expect(retry).toBeGreaterThan(clear);
+  });
+
   it('makes final external-channel adoption incident-state aware', () => {
     const repository = readFileSync('src/lib/war-room/repository.ts', 'utf8');
     expect(repository).toContain("const resolved = current.incident.status === 'RESOLVED'");

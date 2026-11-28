@@ -159,7 +159,7 @@ function NoiseStatus({
       : n.modes.shadow > 0
         ? {
             tone: 'info' as const,
-            label: 'Shadow mode',
+            label: 'Watch-only mode',
             detail:
               n.shadowWouldAvoid > 0
                 ? `Would have held back ${count(n.shadowWouldAvoid, 'page')}`

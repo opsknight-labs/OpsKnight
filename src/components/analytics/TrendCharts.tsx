@@ -19,7 +19,7 @@ const AXIS = { fontSize: 11, fill: 'hsl(var(--ui-muted-foreground))' };
 // The charts are decorative beside an accessible table view. Recharts must not
 // insert focusable surfaces inside their aria-hidden wrappers.
 const HEIGHT = 240;
-// The comparison chart sits beside a side card on the AIOps overview, so it runs shorter.
+// The comparison chart sits beside a side card on the Intelligence overview, so it runs shorter.
 const COMPARISON_HEIGHT = 190;
 
 type Series = { key: string; label: string; color: string; dashed?: boolean };

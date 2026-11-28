@@ -6,25 +6,25 @@ const format = (value: number, cap = 999) =>
   value > cap ? `${cap}+` : new Intl.NumberFormat('en-US').format(value);
 
 /**
- * "AIOps pulse" row of the Ops Pulse panel: pages avoided, open groups, triage suggestions awaiting
+ * "Intelligence pulse" row of the Ops Pulse panel: pages prevented, open groups, triage suggestions awaiting
  * review and (administrators only) quarantined work. Only non-zero numbers are listed, and the server
  * passes no pulse at all when every number is zero, so this never renders an empty tile. The whole tile
- * is one link to the AIOps overview, where each number has its own section.
+ * is one link to the Intelligence overview, where each number has its own section.
  */
 export default function AiopsPulseTile({ pulse }: { pulse: AiopsPulse | null }) {
   if (!pulse) return null;
   const stats = [
-    { key: 'pages', label: `Pages avoided · ${pulse.windowHours} h`, value: pulse.pagesAvoided },
+    { key: 'pages', label: `Pages prevented · ${pulse.windowHours} h`, value: pulse.pagesAvoided },
     { key: 'groups', label: 'Open groups', value: pulse.openGroups },
     { key: 'triage', label: 'Triage to review', value: pulse.triageAwaitingReview },
-    { key: 'quarantined', label: 'Quarantined work', value: pulse.quarantinedWork ?? 0 },
+    { key: 'quarantined', label: 'Stuck jobs', value: pulse.quarantinedWork ?? 0 },
   ].filter(stat => stat.value > 0);
   if (stats.length === 0) return null;
   return (
     <section className="px-4 py-3" data-testid="pulse-aiops" aria-labelledby="pulse-aiops-heading">
       <Link
         href="/intelligence"
-        aria-label="AIOps pulse: open the AIOps overview"
+        aria-label="Intelligence pulse: open the Intelligence overview"
         className="block rounded-xl border border-border/70 bg-muted/20 p-3 transition-colors hover:bg-muted/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
       >
         <div className="mb-2 flex items-center gap-2">
@@ -35,7 +35,7 @@ export default function AiopsPulseTile({ pulse }: { pulse: AiopsPulse | null }) 
             <Sparkles className="h-3.5 w-3.5" />
           </span>
           <h3 id="pulse-aiops-heading" className="text-xs font-semibold text-foreground">
-            AIOps pulse
+            Intelligence pulse
           </h3>
           <span className="ml-auto text-xs font-semibold text-primary">Overview →</span>
         </div>

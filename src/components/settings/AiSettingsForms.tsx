@@ -9,6 +9,16 @@ import {
   testAiProviderAction,
   type AiActionState,
 } from '@/app/(app)/settings/intelligence/ai/actions';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/shadcn/alert-dialog';
 import { Button } from '@/components/ui/shadcn/button';
 import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 import { AI_SETTINGS_BOUNDS, type SquireLauncherStyle } from '@/lib/intelligence/ai/contract';
@@ -23,21 +33,34 @@ function Check({
   help,
   defaultChecked,
   disabled,
+  confirmOn,
 }: {
   name: string;
   label: string;
   help?: string;
   defaultChecked: boolean;
   disabled: boolean;
+  /** Turning it on asks first, in plain words; turning it off never does. */
+  confirmOn?: { title: string; description: string; confirmLabel: string };
 }) {
   const id = useId();
+  const [checked, setChecked] = useState(defaultChecked);
+  const [asking, setAsking] = useState(false);
   return (
     <div className="flex items-start gap-3">
       <input
         id={id}
         name={name}
         type="checkbox"
-        defaultChecked={defaultChecked}
+        {...(confirmOn
+          ? {
+              checked,
+              onChange: (event: React.ChangeEvent<HTMLInputElement>) => {
+                if (!event.target.checked) setChecked(false);
+                else setAsking(true);
+              },
+            }
+          : { defaultChecked })}
         disabled={disabled}
         className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
       />
@@ -45,6 +68,22 @@ function Check({
         {label}
         {help && <span className="block text-xs font-normal text-muted-foreground">{help}</span>}
       </label>
+      {confirmOn && (
+        <AlertDialog open={asking} onOpenChange={setAsking}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{confirmOn.title}</AlertDialogTitle>
+              <AlertDialogDescription>{confirmOn.description}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="h-11 sm:h-10">Cancel</AlertDialogCancel>
+              <AlertDialogAction className="h-11 sm:h-10" onClick={() => setChecked(true)}>
+                {confirmOn.confirmLabel}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 }
@@ -382,6 +421,12 @@ export function AiSettingsForm({
         help="Lets the assistant propose escalating, changing urgency, snoozing, removing related links, adding watchers, creating a Jira issue, drafting and publishing a status update, and running a bound runbook. Every action is a card the person must confirm, runs under their own permissions, and is audited. Runbook approval steps still apply."
         defaultChecked={settings.squireExtendedActions ?? false}
         disabled={disabled}
+        confirmOn={{
+          title: 'Let the assistant propose changes?',
+          description:
+            'The assistant will be able to propose escalating, changing urgency, snoozing and publishing status updates. Nothing happens until the person confirms the card, and it runs under their own permissions and is recorded.',
+          confirmLabel: 'Turn on',
+        }}
       />
       <fieldset className="space-y-3 rounded-md border border-border p-3">
         <legend className="px-1 text-sm font-medium">Assistant outside the web app</legend>

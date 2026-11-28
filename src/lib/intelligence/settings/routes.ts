@@ -51,13 +51,13 @@ export const INTELLIGENCE_SETTINGS_GROUPS = [
     href: `${INTELLIGENCE_SETTINGS_ROOT}/noise-controls`,
     summary: 'What happens to an alert before anyone is paged.',
     sections: [
-      { id: 'policy', label: 'Policy' },
+      { id: 'policy', label: 'Controls' },
       { id: 'suppression-rules', label: 'Suppression rules' },
-      { id: 'maintenance-windows', label: 'Noise maintenance rules' },
-      { id: 'policy-history', label: 'Orchestration versions' },
-      { id: 'heartbeats', label: 'Heartbeats' },
-      { id: 'simulation', label: 'Simulation' },
-      { id: 'decisions', label: 'Recent decisions' },
+      { id: 'maintenance-windows', label: 'Maintenance windows' },
+      { id: 'policy-history', label: 'Version history' },
+      { id: 'heartbeats', label: 'Heartbeat monitors' },
+      { id: 'simulation', label: 'Test' },
+      { id: 'decisions', label: 'History' },
     ],
   },
   {
@@ -80,8 +80,8 @@ export const INTELLIGENCE_SETTINGS_GROUPS = [
     href: `${INTELLIGENCE_SETTINGS_ROOT}/ai`,
     summary: 'Squire, the language models behind it and what it may read.',
     sections: [
-      { id: 'assistant', label: 'General' },
       { id: 'providers', label: 'Providers' },
+      { id: 'assistant', label: 'Assistant' },
       { id: 'model-routing', label: 'Model routing' },
       { id: 'prompts', label: 'Prompts' },
       { id: 'checks', label: 'Checks library' },
@@ -92,7 +92,7 @@ export const INTELLIGENCE_SETTINGS_GROUPS = [
   },
   {
     id: 'evaluation',
-    label: 'Evaluation & spend',
+    label: 'Results & spend',
     href: `${INTELLIGENCE_SETTINGS_ROOT}/evaluation`,
     summary: 'How good the suggestions and answers are, and what AI costs.',
     sections: [
@@ -102,6 +102,7 @@ export const INTELLIGENCE_SETTINGS_GROUPS = [
       { id: 'learned-weights', label: 'Learned weights' },
       { id: 'usage', label: 'Usage' },
       { id: 'ai-spend', label: 'Spend and budgets' },
+      { id: 'model-prices', label: 'Model prices' },
     ],
   },
 ] as const satisfies readonly IntelligenceSettingsGroup[];

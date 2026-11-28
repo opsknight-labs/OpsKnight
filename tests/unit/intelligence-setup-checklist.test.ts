@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { OPS_INSIGHT_SWITCHES } from '@/lib/intelligence/ops-insights/contract';
-import { setupChecklist, type SetupState } from '@/lib/intelligence/settings/setup-contract';
+import {
+  setupChecklist,
+  setupStage,
+  type SetupState,
+} from '@/lib/intelligence/settings/setup-contract';
 import {
   INTELLIGENCE_SETTINGS_GROUPS,
   movedIntelligenceSection,
@@ -17,6 +21,7 @@ const state = (overrides: Partial<SetupState> = {}): SetupState => ({
   policy: { version: 1, mode: 'OFF', triageEnabled: false },
   noise: { revision: 1, mode: 'OFF', detectorsOn: false },
   squireEnabled: false,
+  aiConfigured: false,
   ...overrides,
 });
 
@@ -25,7 +30,7 @@ describe('setupChecklist', () => {
     const items = setupChecklist(state());
     expect(items.map(item => [item.id, item.on, item.inPreset])).toEqual([
       ['engine', false, true],
-      ['triage', false, true],
+      ['triage', false, false],
       ['insights', false, true],
       ['helpers', false, true],
       ['noise', false, true],
@@ -47,6 +52,17 @@ describe('setupChecklist', () => {
       })
     );
     expect(on.filter(item => !item.on).map(item => item.id)).toEqual(['assistant']);
+    // Squire is on by default, but without a working AI model the AI row is still off.
+    expect(
+      setupChecklist(state({ squireEnabled: true, aiConfigured: false })).find(
+        item => item.id === 'assistant'
+      )!.on
+    ).toBe(false);
+    expect(
+      setupChecklist(state({ squireEnabled: true, aiConfigured: true })).find(
+        item => item.id === 'assistant'
+      )!.on
+    ).toBe(true);
     // Shadow with every detector off records nothing, so the preset still offers it.
     expect(
       setupChecklist(state({ noise: { revision: 2, mode: 'SHADOW', detectorsOn: false } })).find(
@@ -57,13 +73,42 @@ describe('setupChecklist', () => {
     expect(
       setupChecklist(
         state({ settings: { enabled: true, revision: 1, opsHelpersEnabled: true, ...partial } })
-      ).find(
-        item => item.id === 'insights'
-      )!.on
+      ).find(item => item.id === 'insights')!.on
     ).toBe(false);
   });
 });
 
+describe('setupStage', () => {
+  const enabled = { enabled: true, revision: 2, opsHelpersEnabled: true, ...allInsights(true) };
+  it('walks off, learning, showing, acting', () => {
+    expect(setupStage(state())).toBe('off');
+    expect(setupStage(state({ settings: enabled }))).toBe('learning');
+    expect(
+      setupStage(
+        state({ settings: enabled, policy: { version: 2, mode: 'SHADOW', triageEnabled: true } })
+      )
+    ).toBe('learning');
+    expect(
+      setupStage(
+        state({ settings: enabled, policy: { version: 3, mode: 'SUGGEST', triageEnabled: true } })
+      )
+    ).toBe('showing');
+    expect(
+      setupStage(
+        state({
+          settings: enabled,
+          policy: { version: 3, mode: 'SUGGEST', triageEnabled: true },
+          noise: { revision: 2, mode: 'ON', detectorsOn: true },
+        })
+      )
+    ).toBe('acting');
+  });
+  it('is off while the master switch is off, whatever the policy says', () => {
+    expect(
+      setupStage(state({ policy: { version: 3, mode: 'SUGGEST', triageEnabled: true } }))
+    ).toBe('off');
+  });
+});
 describe('moved intelligence settings sections', () => {
   it('sends the old Evaluation #digest link to the Engine page and nothing else', () => {
     expect(movedIntelligenceSection('evaluation', 'digest')).toBe('/settings/intelligence#digest');

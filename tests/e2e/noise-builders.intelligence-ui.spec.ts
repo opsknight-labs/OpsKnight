@@ -121,7 +121,8 @@ test.describe.serial('noise-control builders', () => {
 
     const name = `${tag} weekly patching`;
     await form.getByLabel('Name').fill(name);
-    await form.getByLabel('Service').selectOption({ label: tag });
+    await form.getByRole('combobox', { name: 'Service' }).click();
+    await page.getByRole('option', { name: tag }).click();
     // A weekly window anchored 30 minutes before the oldest alert, one hour long.
     await form
       .getByLabel('Starts (your time)')

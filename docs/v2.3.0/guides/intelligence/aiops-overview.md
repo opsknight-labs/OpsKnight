@@ -1,5 +1,5 @@
 ---
-title: Read the AIOps overview
+title: Read the Intelligence overview
 description: See what Intelligence and the noise controls did for your incidents, and fix noisy services from one page.
 type: how-to
 product_area: intelligence
@@ -22,7 +22,7 @@ verification:
     ]
 ---
 
-# Read the AIOps overview
+# Read the Intelligence overview
 
 Open **AIOps Overview** in the **Analytics** section of the main navigation, or go to `/intelligence`.
 Administrators, responders and auditors can open it. Pick a window at the top: **24h**, **7d** (the
@@ -61,7 +61,7 @@ to responders (suggest or auto mode), and only for incidents you can open.
 
 - **Alerts received** and **incidents created** in the window, and **Compression**: alerts per incident.
   Higher means more alerts were folded into fewer incidents.
-- **Pages avoided**: alerts that noise controls actually held back (suppressed, dropped, appended to an open
+- **Pages prevented**: alerts that noise controls actually held back (suppressed, dropped, appended to an open
   incident or grouped under a parent). Only controls in **On** mode count here.
 - **Would have avoided**: what controls in **Shadow** mode would have held back. Shadow mode never holds
   anything back, so these are never counted as avoided pages.

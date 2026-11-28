@@ -27,7 +27,7 @@ export default function NoisePanel({
           hint="Alerts per incident"
         />
         <StatTile
-          label="Pages avoided"
+          label="Pages prevented"
           value={formatCount(data.pagesAvoided)}
           hint={
             data.downgraded > 0
@@ -38,7 +38,7 @@ export default function NoisePanel({
         <StatTile
           label="Would have avoided"
           value={formatCount(data.shadowWouldAvoid)}
-          hint="Shadow mode only: nothing was held back"
+          hint="Watch-only mode only: nothing was held back"
         />
         <StatTile
           label="False-group rate"

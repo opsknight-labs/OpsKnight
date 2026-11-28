@@ -11,7 +11,7 @@ import type {
 import { serviceRegionBucket, serviceSearchKey } from '@/lib/status-pages/presentation';
 import { STATUS_LABEL_KEYS, type I18nKey, type Translator } from '@/lib/status-pages/i18n';
 import { useT } from '@/lib/status-pages/i18n/context';
-import { statusPresentation } from '@/lib/status-pages/status-presentation';
+import { statusPresentation, worstKnownPublicStatus } from '@/lib/status-pages/status-presentation';
 import StatusBadge from '@/components/incident/StatusBadge';
 import ServiceHistoryV3, { HistoryIncidentsContext } from './ServiceHistoryV3';
 import { BusinessServiceRowV3 } from './BusinessServiceHealthV3';
@@ -103,6 +103,9 @@ function slaGradeLabel(grade: string | undefined, t: Translator): string | undef
   const key = GRADE_KEYS.get(grade);
   return key ? t(key) : grade;
 }
+
+/** Stand-in id for the card that holds services outside every business service. */
+const OTHERS_ID = '__others__';
 
 function serviceCount(count: number, t: Translator) {
   return t(count === 1 ? 'business.serviceOne' : 'business.serviceCount', { count });
@@ -301,6 +304,9 @@ export default function ServiceHealthV3({
     ? businessServices.length + services.filter(service => !groupedIds.has(service.id)).length
     : services.length;
   const showControls = rowCount > filterThreshold;
+  const othersAffected = services.some(
+    service => !groupedIds.has(service.id) && service.status !== 'OPERATIONAL'
+  );
   // Affected business services start open so visitors see which part is down, and one that
   // becomes affected on a live refresh opens again even if the visitor closed it earlier.
   const affectedKey = [
@@ -317,6 +323,8 @@ export default function ServiceHealthV3({
           return chain;
         })
     ),
+    // Services outside every group open their card too when one of them is affected.
+    ...(expandable && businessMode && othersAffected ? [OTHERS_ID] : []),
   ].join(',');
   const initialOpen = () =>
     new Set([
@@ -707,27 +715,66 @@ export default function ServiceHealthV3({
                   {renderBusinessRows(null, 1, new Set())}
                 </div>
               )}
-              {business.others.length > 0 && (
-                <div className="status-v3-group status-v3-business-others">
-                  <div className="status-v3-group__head">
-                    <div className="status-v3-group__title-wrap">
-                      <h3 className="status-v3-group__title">{t('services.others')}</h3>
-                      <span className="status-v3-group__subtitle">
-                        {serviceCount(business.others.length, t)}
-                      </span>
-                    </div>
+              {business.others.length > 0 &&
+                (expandable ? (
+                  // Same card as a business service, so ungrouped services read as one more group.
+                  <div
+                    className="status-v3-business-others"
+                    role="list"
+                    aria-label={t('services.others')}
+                  >
+                    <BusinessServiceRowV3
+                      item={{
+                        id: OTHERS_ID,
+                        name: t('services.others'),
+                        status:
+                          worstKnownPublicStatus(business.others.map(service => service.status)) ??
+                          'OPERATIONAL',
+                        memberServiceIds: business.others.map(service => service.id),
+                        memberCount: business.others.length,
+                        activeIncidentCount: business.others.reduce(
+                          (sum, service) => sum + service.activeIncidentCount,
+                          0
+                        ),
+                        impactedServiceCount: business.others.filter(
+                          service => service.status !== 'OPERATIONAL'
+                        ).length,
+                      }}
+                      members={business.others}
+                      expandable
+                      open={query.trim() !== '' || filter !== 'all' || openIds.has(OTHERS_ID)}
+                      onToggle={() =>
+                        setOpenIds(current => {
+                          const next = new Set(current);
+                          if (next.has(OTHERS_ID)) next.delete(OTHERS_ID);
+                          else next.add(OTHERS_ID);
+                          return next;
+                        })
+                      }
+                      display={{ ...rowDisplay, onSubscribeGroup: undefined }}
+                    />
                   </div>
-                  <ServiceList
-                    services={business.others}
-                    timeZone={timeZone}
-                    showUptime={showUptime}
-                    showMetrics={showMetrics}
-                    showUptimeHistory={showUptimeHistory}
-                    showSlaMetrics={showSlaMetrics}
-                    showServiceMeta={showServiceMeta}
-                  />
-                </div>
-              )}
+                ) : (
+                  <div className="status-v3-group status-v3-business-others">
+                    <div className="status-v3-group__head">
+                      <div className="status-v3-group__title-wrap">
+                        <h3 className="status-v3-group__title">{t('services.others')}</h3>
+                        <span className="status-v3-group__subtitle">
+                          {serviceCount(business.others.length, t)}
+                        </span>
+                      </div>
+                    </div>
+                    <ServiceList
+                      services={business.others}
+                      timeZone={timeZone}
+                      showUptime={showUptime}
+                      showMetrics={showMetrics}
+                      showUptimeHistory={showUptimeHistory}
+                      showSlaMetrics={showSlaMetrics}
+                      showServiceMeta={showServiceMeta}
+                    />
+                  </div>
+                ))}
             </>
           )
         ) : filtered.length === 0 ? (

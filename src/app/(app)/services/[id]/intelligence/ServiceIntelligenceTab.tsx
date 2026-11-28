@@ -32,6 +32,10 @@ import {
   RecurringProblemsPanel,
   SloBurnPanel,
 } from '@/components/service/intelligence/ServiceIntelligencePanels';
+import Link from 'next/link';
+import { Button } from '@/components/ui/shadcn/button';
+import type { IntelligenceModeValue } from '@/lib/intelligence/contract';
+import { policyModeWord } from '@/lib/intelligence/copy';
 
 /**
  * The service page's Intelligence tab. Rendered (and its data loaded) only while the tab is selected, so
@@ -55,6 +59,19 @@ function section<T>(
       <SectionError message={result.error} />
     </OverviewSection>
   );
+}
+
+function modeMeaning(mode: IntelligenceModeValue): string {
+  switch (mode) {
+    case 'OFF':
+      return 'No analysis runs here, so responders see no suggestions.';
+    case 'SHADOW':
+      return 'It learns from incidents and records what it would suggest. Responders see nothing yet.';
+    case 'SUGGEST':
+      return 'Responders see similar incidents, likely causes and runbooks.';
+    case 'AUTO':
+      return 'It also adds reversible related links after paging.';
+  }
 }
 
 export default async function ServiceIntelligenceTab({
@@ -123,17 +140,43 @@ export default async function ServiceIntelligenceTab({
     ),
   ].filter(Boolean);
 
+  // One plain line on what Intelligence does for this service, so the tab never leaves the reader guessing.
+  const mode = gate.ok ? gate.data.mode : null;
+  const modeLine = mode && (
+    <section
+      aria-label="What Intelligence does for this service"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3 xl:col-span-2"
+    >
+      <p className="text-sm font-normal text-muted-foreground">
+        Intelligence for {service.name}:{' '}
+        <span className="font-medium text-foreground">{policyModeWord(mode)}</span>.{' '}
+        {modeMeaning(mode)}
+      </p>
+      {canManage && (
+        <Button asChild size="sm" variant="outline" className="min-h-11 sm:min-h-9">
+          <Link href={`/settings/intelligence/services?q=${encodeURIComponent(service.name)}`}>
+            {mode === 'OFF' ? 'Turn on' : 'Change'}
+          </Link>
+        </Button>
+      )}
+    </section>
+  );
+
   if (panels.length === 0)
     return (
-      <EmptyState
-        size="sm"
-        icon={<Sparkles />}
-        title="Nothing to report yet"
-        description="Dependencies, SLO burn, alert quality, changes and recurring problems appear here once there is data for this service."
-      />
+      <div className="space-y-4">
+        {modeLine}
+        <EmptyState
+          size="sm"
+          icon={<Sparkles />}
+          title="Nothing to report yet"
+          description="Dependencies, SLO burn, alert quality, changes and recurring problems appear here once there is data for this service."
+        />
+      </div>
     );
   return (
     <div data-testid="service-intelligence" className="grid gap-4 xl:grid-cols-2">
+      {modeLine}
       {panels}
     </div>
   );

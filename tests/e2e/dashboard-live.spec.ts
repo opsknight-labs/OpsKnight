@@ -807,7 +807,7 @@ test.describe.serial('dashboard live incidents', () => {
     }
   });
 
-  test('AIOps pulse and the largest open group appear only for intelligence readers with something to show', async ({}, testInfo) => {
+  test('Intelligence pulse and the largest open group appear only for intelligence readers with something to show', async ({}, testInfo) => {
     test.skip(
       testInfo.project.name.startsWith('mobile'),
       'the Ops Pulse rail and the wallboard rail are desktop layouts'
@@ -842,7 +842,7 @@ test.describe.serial('dashboard live incidents', () => {
       const tile = admin.page.getByTestId('pulse-aiops');
       await expect(tile).toBeVisible();
       await expect(tile.locator('[data-pulse-stat="groups"] dd')).toHaveText('1');
-      await expect(tile.getByRole('link', { name: /AIOps pulse/ })).toHaveAttribute(
+      await expect(tile.getByRole('link', { name: /Intelligence pulse/ })).toHaveAttribute(
         'href',
         '/intelligence'
       );

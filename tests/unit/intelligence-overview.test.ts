@@ -9,7 +9,7 @@ import {
   resolveOverviewWindow,
 } from '@/lib/intelligence/overview/window';
 
-describe('AIOps overview window', () => {
+describe('Intelligence overview window', () => {
   it('accepts only the three supported windows and defaults to 7 days', () => {
     expect(parseOverviewWindow('24h')).toBe('24h');
     expect(parseOverviewWindow(['30d', '24h'])).toBe('30d');
@@ -45,7 +45,7 @@ describe('AIOps overview window', () => {
   });
 });
 
-describe('AIOps overview navigation', () => {
+describe('Intelligence overview navigation', () => {
   it('is offered exactly to the roles that hold INTELLIGENCE_READ', () => {
     const item = NAVIGATION_ITEMS.find(entry => entry.href === '/intelligence');
     expect(item).toBeDefined();

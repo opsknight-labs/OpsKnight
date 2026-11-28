@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { Prisma } from '@prisma/client';
 import { decrypt, encrypt } from '@/lib/encryption';
 import prisma from '@/lib/prisma';
+import { AppError } from '@/lib/errors';
 import { toSlackResponseUrl } from '@/lib/slack-signature';
 import type { ChatProvider } from '@/lib/chatops/provider';
 
@@ -73,7 +74,10 @@ async function returnDuplicateIntent(
   responseMode: 'INLINE' | 'DEFERRED'
 ): Promise<{ id: string; duplicate: true }> {
   if (existing.payloadDigest && existing.payloadDigest !== payloadDigest) {
-    throw new Error('ChatOps delivery identity was reused with a different payload');
+    throw new AppError({
+      code: 'IDEMPOTENCY_KEY_CONFLICT',
+      userMessage: 'This action was already submitted with different details.',
+    });
   }
   // A prior crash or an old partially-deployed release could leave an intent
   // without a runnable executor. Repair that invariant without duplicating a
@@ -244,7 +248,11 @@ export async function processInlineChatOpsIntent(
       if (replayClaim) await completeResponse(replayClaim);
       return replay.responsePayload;
     }
-    throw new Error('ChatOps action is already processing');
+    // A redelivery while the first attempt still runs: not a failure, the first attempt will finish.
+    throw new AppError({
+      code: 'TRANSIENT_CONFLICT',
+      userMessage: 'This action is still being applied. Refresh in a moment.',
+    });
   }
   try {
     const payload = JSON.parse(await decrypt(claim.encryptedPayload)) as Record<string, unknown>;
