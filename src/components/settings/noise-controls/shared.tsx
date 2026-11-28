@@ -1,8 +1,9 @@
 'use client';
 
-import { useActionState, type ReactNode } from 'react';
+import { useActionState, useRef, type ReactNode } from 'react';
 import type { NoiseActionState } from '@/app/(app)/settings/intelligence/noise-controls/actions';
 import { Button } from '@/components/ui/shadcn/button';
+import ConfirmButton from '@/components/ui/ConfirmButton';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 import type { SimulationOutcome } from '@/lib/intelligence/noise-controls/simulation';
@@ -47,36 +48,61 @@ export function fromLocalInput(value: string): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-/** One-click server action button for list rows (end, disable, delete). */
+export interface RowConfirm {
+  title: string;
+  description: string;
+  /** Label of the button that does it; defaults to the row button's own label. */
+  confirmLabel?: string;
+}
+
+/**
+ * Server action button for list rows (end, disable, delete). With `confirm`, the button first asks, in plain
+ * words, what will happen; only the dialog's confirm button submits the form.
+ */
 export function RowAction({
   action,
   fields,
   label,
   accessibleLabel,
   variant = 'outline',
+  confirm,
 }: {
   action: (state: NoiseActionState, form: FormData) => Promise<NoiseActionState>;
   fields: Record<string, string>;
   label: string;
   accessibleLabel?: string;
   variant?: 'outline' | 'ghost' | 'destructive';
+  confirm?: RowConfirm;
 }) {
   const [state, formAction, pending] = useActionState(action, initialActionState);
+  const formRef = useRef<HTMLFormElement>(null);
+  const buttonProps = {
+    size: 'sm' as const,
+    variant,
+    disabled: pending,
+    'aria-label': accessibleLabel,
+    className: touchButton,
+  };
   return (
-    <form action={formAction} className="inline-flex items-center gap-2">
+    <form ref={formRef} action={formAction} className="inline-flex items-center gap-2">
       {Object.entries(fields).map(([name, value]) => (
         <input key={name} type="hidden" name={name} value={value} />
       ))}
-      <Button
-        type="submit"
-        size="sm"
-        variant={variant}
-        disabled={pending}
-        aria-label={accessibleLabel}
-        className={touchButton}
-      >
-        {label}
-      </Button>
+      {confirm ? (
+        <ConfirmButton
+          {...buttonProps}
+          title={confirm.title}
+          description={confirm.description}
+          confirmLabel={confirm.confirmLabel ?? label}
+          onConfirm={() => formRef.current?.requestSubmit()}
+        >
+          {label}
+        </ConfirmButton>
+      ) : (
+        <Button type="submit" {...buttonProps}>
+          {label}
+        </Button>
+      )}
       {state.message && !state.ok && (
         <span role="alert" className="text-xs text-destructive">
           {state.message}
@@ -97,7 +123,9 @@ const ACTION_LABEL = new Map<string, string>([
 ]);
 
 /** Why a replay changed nothing: its HIGH urgency incidents are exempt unless the policy allows them. */
-export function highUrgencyNote(outcome: Pick<SimulationOutcome, 'highUrgencyExempt' | 'incidentsEvaluated'>) {
+export function highUrgencyNote(
+  outcome: Pick<SimulationOutcome, 'highUrgencyExempt' | 'incidentsEvaluated'>
+) {
   if (!outcome.highUrgencyExempt) return null;
   return `${outcome.highUrgencyExempt} of ${outcome.incidentsEvaluated} incidents are HIGH urgency and exempt; enable "Let dedup, flapping and storms touch HIGH urgency" to include them.`;
 }
@@ -129,8 +157,8 @@ export function ReplaySummary({
       {outcome.guardedCritical > 0 && (
         <p className="text-xs text-muted-foreground" role="note">
           {outcome.guardedCritical} critical or HIGH-urgency incident
-          {outcome.guardedCritical === 1 ? '' : 's'} matched but would still page, because this control
-          does not cover critical alerts.
+          {outcome.guardedCritical === 1 ? '' : 's'} matched but would still page, because this
+          control does not cover critical alerts.
         </p>
       )}
       {highUrgencyNote(outcome) && (
@@ -196,8 +224,8 @@ export function CoversCriticalField({
         <span>Also hide critical and HIGH-urgency alerts</span>
       </label>
       <p id={`${id}-help`} className="text-xs text-muted-foreground">
-        Off by default: a critical alert always pages. Turn this on only when nobody should be paged for
-        anything this matches, even a real outage.
+        Off by default: a critical alert always pages. Turn this on only when nobody should be paged
+        for anything this matches, even a real outage.
       </p>
     </div>
   );

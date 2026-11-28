@@ -15,7 +15,7 @@ import { Skeleton } from '@/components/ui/shadcn/skeleton';
 import { cn } from '@/lib/utils';
 
 /**
- * Building blocks shared by the AIOps overview sections. They are plain server-renderable components:
+ * Building blocks shared by the Intelligence overview sections. They are plain server-renderable components:
  * no client JavaScript is shipped for any of them.
  *
  * Chart colour follows the dataviz emphasis form: one accent hue for the selected window and a gray for

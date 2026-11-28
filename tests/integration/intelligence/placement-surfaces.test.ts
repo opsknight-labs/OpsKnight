@@ -704,7 +704,7 @@ describe('team tiles', () => {
   });
 });
 
-describe('AIOps pulse and the wallboard largest group', () => {
+describe('Intelligence pulse and the wallboard largest group', () => {
   async function seedPulse() {
     const s = await seed();
     const now = new Date();

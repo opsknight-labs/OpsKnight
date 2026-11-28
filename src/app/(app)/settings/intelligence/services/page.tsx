@@ -15,15 +15,12 @@ import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
 import { serviceReadWhere } from '@/lib/authorization-filters';
 import { listServicePolicyOverview } from '@/lib/intelligence/settings/service';
 import { requirePageAccess } from '@/lib/access/server';
+import { ViewOnlyNotice } from '@/components/settings/form-kit';
+import { listNoiseControlPolicies } from '@/lib/intelligence/noise-controls/manage';
+import { noiseModeWord, policyModeWord, policySourceWord } from '@/lib/intelligence/copy';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-
-const SOURCE_LABEL = {
-  service: 'Own policy',
-  global: 'Follows global',
-  default: 'Not configured',
-} as const;
 
 async function loadRows(search: string) {
   try {
@@ -46,7 +43,16 @@ export default async function IntelligenceServicesPage({
   const user = await assertCapability(CAPABILITIES.INTELLIGENCE_READ);
   const canManage = hasCapability(user.role as AppRole, CAPABILITIES.INTELLIGENCE_MANAGE);
   const q = ((await searchParams)?.q ?? '').slice(0, 100);
-  const rows = await loadRows(q);
+  const [rows, noisePolicies] = await Promise.all([
+    loadRows(q),
+    listNoiseControlPolicies().catch(() => []),
+  ]);
+  // A service's own noise policy wins; otherwise it follows the one for all services, or is off.
+  const ownNoise = new Map(
+    noisePolicies.filter(row => row.serviceId).map(row => [row.serviceId, row.mode])
+  );
+  const globalNoise = noisePolicies.find(row => !row.serviceId)?.mode ?? 'OFF';
+  const noiseModeFor = (serviceId: string) => ownNoise.get(serviceId) ?? globalNoise;
 
   return (
     <div className="space-y-6">
@@ -63,6 +69,7 @@ export default async function IntelligenceServicesPage({
       >
         Per-service policies and the inputs probable-cause suggestions rely on.
       </IntelligenceGroupHeader>
+      {!canManage && <ViewOnlyNotice what="Intelligence settings" />}
 
       <SettingsSection
         id="service-policies"
@@ -139,13 +146,29 @@ export default async function IntelligenceServicesPage({
                     </span>
                     <span className="flex gap-2">
                       <Badge variant={row.effectiveMode === 'OFF' ? 'secondary' : 'default'}>
-                        {row.effectiveMode.toLowerCase()}
+                        {`Suggestions: ${policyModeWord(row.effectiveMode)}`}
                       </Badge>
-                      <Badge variant="outline">{SOURCE_LABEL[row.source]}</Badge>
+                      <Badge variant="outline">
+                        {`Noise controls: ${noiseModeWord(noiseModeFor(row.serviceId))}`}
+                      </Badge>
+                      <Badge variant="outline">{policySourceWord(row.source)}</Badge>
                     </span>
                   </summary>
                   <div className="space-y-3 border-t border-border bg-muted/20 px-3 pb-4">
                     <ServicePolicyForm row={row} canManage={canManage} />
+                    <p className="text-sm text-muted-foreground">
+                      Noise controls for {row.serviceName} are{' '}
+                      <span className="font-medium text-foreground">
+                        {noiseModeWord(noiseModeFor(row.serviceId)).toLowerCase()}
+                      </span>
+                      .{' '}
+                      <Link
+                        className="underline"
+                        href={`/settings/intelligence/noise-controls?service=${encodeURIComponent(row.serviceId)}`}
+                      >
+                        Change noise controls
+                      </Link>
+                    </p>
                     <div className="flex flex-wrap items-center gap-2">
                       {canManage && row.source === 'service' && (
                         <ClearOverrideButton

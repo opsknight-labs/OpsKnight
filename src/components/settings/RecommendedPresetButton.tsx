@@ -10,7 +10,15 @@ import { ActionMessage } from '@/components/settings/form-kit';
 const initialState: IntelligenceActionState = { message: '', ok: true };
 
 /** Applies the Recommended preset with the revisions the page showed, so a concurrent edit is refused. */
-export default function RecommendedPresetButton({ revisions }: { revisions: SetupRevisions }) {
+export default function RecommendedPresetButton({
+  revisions,
+  label = 'Turn on recommended',
+  pendingLabel = 'Turning on…',
+}: {
+  revisions: SetupRevisions;
+  label?: string;
+  pendingLabel?: string;
+}) {
   const [state, action, pending] = useActionState(applyRecommendedSetup, initialState);
   return (
     <form action={action} className="flex flex-wrap items-center gap-3">
@@ -18,7 +26,7 @@ export default function RecommendedPresetButton({ revisions }: { revisions: Setu
         <input key={name} type="hidden" name={name} value={value} />
       ))}
       <Button type="submit" disabled={pending} className="min-h-11 sm:min-h-10">
-        {pending ? 'Turning on…' : 'Turn on recommended'}
+        {pending ? pendingLabel : label}
       </Button>
       <ActionMessage state={state} />
     </form>

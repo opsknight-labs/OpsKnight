@@ -18,7 +18,7 @@ describe('WallboardNoiseTile', () => {
   it('shows the noise KPIs', () => {
     render(<WallboardNoiseTile tile={on} />);
     expect(screen.getByRole('heading', { name: 'Noise reduction' })).toBeInTheDocument();
-    expect(screen.getByText('Pages avoided')).toBeInTheDocument();
+    expect(screen.getByText('Pages prevented')).toBeInTheDocument();
     expect(screen.getByText('1,234')).toBeInTheDocument();
     expect(screen.getByText('+5 in shadow')).toBeInTheDocument();
     expect(screen.getByText('3.4×')).toBeInTheDocument();
@@ -27,7 +27,7 @@ describe('WallboardNoiseTile', () => {
 
   it('reports what shadow mode would avoid when nothing is ON yet', () => {
     render(<WallboardNoiseTile tile={{ ...on, shadowOnly: true, shadowWouldAvoid: 77 }} />);
-    expect(screen.getByText('Would avoid (shadow)')).toBeInTheDocument();
+    expect(screen.getByText('Would prevent (watching)')).toBeInTheDocument();
     expect(screen.getByText('77')).toBeInTheDocument();
   });
 

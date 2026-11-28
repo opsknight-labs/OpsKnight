@@ -85,12 +85,12 @@ export default function FeedbackPanel({
             }),
     },
     {
-      label: 'Would have avoided (shadow)',
+      label: 'Would have prevented (watching)',
       info: 'Pages that controls in shadow mode would have held back; nothing was actually suppressed.',
       ...(n ? { value: formatCount(n.shadowWouldAvoid) } : unavailable),
     },
     {
-      label: 'Pages avoided',
+      label: 'Pages prevented',
       info: 'Pages that noise controls held back while switched on; shadow decisions are never counted here.',
       ...(n
         ? {

@@ -59,11 +59,11 @@ const tile = (label: string) => {
 };
 
 describe('NoisePanel', () => {
-  it('shows compression, applied pages avoided and shadow "would have" separately', () => {
+  it('shows compression, applied pages prevented and shadow "would have" separately', () => {
     render(<NoisePanel data={noise()} windowLabel="Last 7 days" canManage={false} />);
     expect(within(tile('Alerts received')).getByText('12.9K')).toBeInTheDocument();
     expect(within(tile('Compression')).getByText('43×')).toBeInTheDocument();
-    expect(within(tile('Pages avoided')).getByText('120')).toBeInTheDocument();
+    expect(within(tile('Pages prevented')).getByText('120')).toBeInTheDocument();
     expect(within(tile('Would have avoided')).getByText('40')).toBeInTheDocument();
     expect(
       within(tile('Would have avoided')).getByText(/nothing was held back/)
@@ -86,7 +86,7 @@ describe('NoisePanel', () => {
       />
     );
     expect(screen.getByText(/Every control is in shadow mode/)).toBeInTheDocument();
-    expect(within(tile('Pages avoided')).getByText('0')).toBeInTheDocument();
+    expect(within(tile('Pages prevented')).getByText('0')).toBeInTheDocument();
   });
 
   it('tells administrators how to turn noise controls on, and only them', () => {
@@ -243,8 +243,8 @@ describe('FeedbackPanel', () => {
     expect(within(row('Suggestions accepted')).getByText('3 of 4 reviewed')).toBeInTheDocument();
     expect(within(row('Triage accepted')).getByText('50%')).toBeInTheDocument();
     expect(within(row('False-group rate')).getByText('10%')).toBeInTheDocument();
-    expect(within(row('Pages avoided')).getByText('120')).toBeInTheDocument();
-    expect(within(row('Would have avoided (shadow)')).getByText('40')).toBeInTheDocument();
+    expect(within(row('Pages prevented')).getByText('120')).toBeInTheDocument();
+    expect(within(row('Would have prevented (watching)')).getByText('40')).toBeInTheDocument();
     // Nothing rated and no heartbeats: no "—" rows, one explanation instead.
     expect(screen.queryByText('Rated helpful', { selector: 'dt span' })).toBeNull();
     expect(screen.queryByText('Heartbeat monitors', { selector: 'dt span' })).toBeNull();

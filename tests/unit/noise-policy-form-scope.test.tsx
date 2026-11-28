@@ -74,16 +74,18 @@ const sentFrom = (container: HTMLElement) =>
 describe('noise policy form scope', () => {
   it('reloads for the chosen service instead of publishing the shown policy revision to it', () => {
     renderForm();
-    const select = screen.getByLabelText('Service');
-    fireEvent.change(select, { target: { value: 'svc_checkout' } });
+    fireEvent.click(screen.getByRole('combobox', { name: 'Service' }));
+    fireEvent.click(screen.getByText('Checkout'));
     expect(push).toHaveBeenCalledWith('/settings/intelligence/noise-controls?service=svc_checkout');
-    fireEvent.change(select, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('combobox', { name: 'Service' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Clear/ }));
     expect(push).toHaveBeenLastCalledWith('/settings/intelligence/noise-controls');
   });
 
   it('submits the scope and revision it was rendered with, even while a navigation is pending', () => {
     const { container } = renderForm();
-    fireEvent.change(screen.getByLabelText('Service'), { target: { value: 'svc_checkout' } });
+    fireEvent.click(screen.getByRole('combobox', { name: 'Service' }));
+    fireEvent.click(screen.getByText('Checkout'));
     const sent = new FormData(container.querySelector('form') as HTMLFormElement);
     // Publishing before the page for Checkout has loaded must not send the global revision for Checkout.
     expect(sent.get('serviceId')).toBe('');

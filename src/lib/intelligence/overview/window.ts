@@ -1,5 +1,5 @@
 /**
- * Time windows for the AIOps overview. Pure and dependency-free so the page, its components and the
+ * Time windows for the Intelligence overview. Pure and dependency-free so the page, its components and the
  * data module agree on the same bounds; every query in the overview is limited to one of these.
  */
 

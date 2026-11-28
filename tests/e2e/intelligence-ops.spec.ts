@@ -560,7 +560,8 @@ test.describe('operations intelligence surfaces', () => {
     const form = page.getByRole('form', { name: 'New suppression rule' });
     await expect(form).toBeVisible();
     await form.getByLabel('Name').fill(`${tag} quiet disk warnings`);
-    await form.getByLabel('Service').selectOption({ label: `${tag} checkout` });
+    await form.getByRole('combobox', { name: 'Service' }).click();
+    await page.getByRole('option', { name: `${tag} checkout` }).click();
     await form.getByLabel('Field').first().selectOption('severity');
     await form.getByLabel('Value').first().fill('warning');
     await expect(form.getByTestId('live-match-preview')).toContainText(/Matches 3 of \d+ alerts/, {
@@ -590,7 +591,8 @@ test.describe('operations intelligence surfaces', () => {
     await page.goto('/settings/intelligence/noise-controls#heartbeats');
     const form = page.getByRole('form', { name: 'New heartbeat monitor' });
     await form.getByLabel('Name').fill(`${tag} nightly export`);
-    await form.getByLabel('Service').selectOption({ label: `${tag} checkout` });
+    await form.getByRole('combobox', { name: 'Service' }).click();
+    await page.getByRole('option', { name: `${tag} checkout` }).click();
     await form.getByRole('button', { name: 'Create monitor' }).click();
     await expect(form.getByTestId('heartbeat-token')).toContainText('the token is shown once');
     await expect(
@@ -599,7 +601,8 @@ test.describe('operations intelligence surfaces', () => {
     await expectAccessible(page, '#heartbeats');
 
     const simulation = page.locator('#simulation');
-    await simulation.getByLabel('Service').selectOption({ label: `${tag} checkout` });
+    await simulation.getByRole('combobox', { name: 'Service' }).click();
+    await page.getByRole('option', { name: `${tag} checkout` }).click();
     await simulation.getByRole('button', { name: 'Replay history' }).click();
     await expect(simulation.getByText(/incidents from \d+ alerts/)).toBeVisible({
       timeout: 30_000,

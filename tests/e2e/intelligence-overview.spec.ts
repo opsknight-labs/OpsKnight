@@ -4,7 +4,7 @@ import { createPrismaClient } from '../../src/lib/db/create-client';
 import bcrypt from 'bcryptjs';
 
 /**
- * Browser journey for the responder-facing AIOps overview: an administrator and a responder open
+ * Browser journey for the responder-facing Intelligence overview: an administrator and a responder open
  * /intelligence, switch the window, see each section, and the page stays accessible on a 390 px phone and
  * in dark mode. The inbox, the section drill-downs, the alerts and changes lists they lead to and the
  * mobile AIOps page are covered by the same seeded state, which is created directly and removed afterwards.
@@ -174,7 +174,7 @@ async function noHorizontalOverflow(page: Page) {
   expect(overflow).toBeLessThanOrEqual(1);
 }
 
-test.describe.serial('AIOps overview', () => {
+test.describe.serial('Intelligence overview', () => {
   test.beforeAll(async () => {
     if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test'))
       throw new Error('Dedicated test DB required');
@@ -194,7 +194,9 @@ test.describe.serial('AIOps overview', () => {
     await page.goto('/');
     await page.getByRole('link', { name: 'Intelligence', exact: true }).first().click();
     await expect(page).toHaveURL(/\/intelligence$/);
-    await expect(page.getByRole('heading', { level: 1, name: 'AIOps overview' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Intelligence overview' })
+    ).toBeVisible();
     const windows = page.getByRole('navigation', { name: 'Time window' });
     await expect(windows.locator('a[aria-current="page"]')).toHaveText(/7 days/);
     const impact = page.getByRole('region', { name: 'Impact, last 7 days', exact: true });
@@ -220,7 +222,7 @@ test.describe.serial('AIOps overview', () => {
     await expect(
       page
         .getByRole('region', { name: 'Feedback and quality', exact: true })
-        .getByText('Pages avoided', { exact: true })
+        .getByText('Pages prevented', { exact: true })
     ).toBeVisible();
 
     const changes = page.getByRole('region', { name: 'Changes', exact: true });
@@ -270,7 +272,9 @@ test.describe.serial('AIOps overview', () => {
   }) => {
     const page = await signIn(browser, responderEmail);
     await page.goto('/intelligence');
-    await expect(page.getByRole('heading', { level: 1, name: 'AIOps overview' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Intelligence overview' })
+    ).toBeVisible();
     await expect(page.getByRole('region', { name: 'Noise controls', exact: true })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Lane health', exact: true })).toHaveCount(0);
     await expect(page.getByRole('link', { name: /Create suppression rule/ })).toHaveCount(0);
@@ -477,7 +481,7 @@ test.describe.serial('AIOps overview', () => {
       inbox.getByRole('link', { name: /observed dependenc(y|ies) to review/ })
     ).toBeVisible();
     const noise = page.getByRole('region', { name: 'Noise', exact: true });
-    await expect(noise.getByText('Pages avoided')).toBeVisible();
+    await expect(noise.getByText('Pages prevented')).toBeVisible();
     await page
       .getByRole('navigation', { name: 'Time window' })
       .getByRole('link', { name: /24 hours/ })

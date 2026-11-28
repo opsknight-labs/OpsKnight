@@ -123,12 +123,12 @@ _Test against history_ replays the saved controls over the last N days of alerts
 what would have been suppressed, grouped, downgraded or held, with examples. When HIGH urgency incidents
 were left alone because **Let dedup, flapping and storms touch HIGH urgency** is off, the result says how
 many. The run is recorded as an evaluation run. Use it with SHADOW to size thresholds, then turn ON per
-service. The setup checklist's **Turn on recommended** publishes SHADOW with dedup, flapping and storm
+service. **Start watching** in the [Intelligence setup guide](../../start/intelligence-in-3-minutes) publishes SHADOW with dedup, flapping and storm
 grouping enabled, so shadow mode records decisions from the start.
 
 ## KPIs and alerts
 
-The page shows alerts per incident (compression), pages avoided (applied) and what SHADOW would have
+The page shows alerts per incident (compression), pages prevented (applied) and what SHADOW would have
 avoided, downgrades and holds, the false-group rate (reversed over applied groupings) and heartbeat
 state. Metrics: `opsknight_prepaging_decisions_total{control,action,mode}`,
 `opsknight_prepaging_fail_open_total{reason}`, `opsknight_prepaging_lookups_total{route,outcome}`

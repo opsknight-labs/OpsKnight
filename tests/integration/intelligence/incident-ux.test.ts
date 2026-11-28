@@ -567,7 +567,7 @@ describe('wallboard noise tile', () => {
     });
     const tile = await getWallboardNoiseTile(admin, {}, prisma);
     expect(tile).toMatchObject({ state: 'on', shadowOnly: false });
-    // Applied SUPPRESS + GROUP_CHILD (unreversed and reversed) in the last day count as pages avoided.
+    // Applied SUPPRESS + GROUP_CHILD (unreversed and reversed) in the last day count as pages prevented.
     expect(tile && tile.state === 'on' && tile.pagesAvoided).toBeGreaterThanOrEqual(4);
   });
 });

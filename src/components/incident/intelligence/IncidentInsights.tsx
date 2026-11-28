@@ -16,6 +16,8 @@ import IncidentTimeline from '@/components/incident/detail/IncidentTimeline';
 import InsightsInspectorHost from './InsightsInspectorHost';
 import InsightsSections, { runbookTrackRecord } from './InsightsSections';
 import IntelligenceStrip from './IntelligenceStrip';
+import IntelligenceStateNote from './IntelligenceStateNote';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/shadcn/hover-card';
 import { cn } from '@/lib/utils';
 
@@ -296,6 +298,14 @@ export default async function IncidentInsights({
           chips={stripChips}
           freshness={stripFreshness}
           touch={presentation === 'mobile'}
+        />
+      )}
+      {variant === 'card' && presentation === 'desktop' && (
+        <IntelligenceStateNote
+          incidentId={incidentId}
+          mode={insights.mode}
+          canManage={Boolean(actor && hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_MANAGE))}
+          canPostNote={insights.canPostNote}
         />
       )}
       {inspector}

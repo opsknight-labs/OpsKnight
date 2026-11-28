@@ -9,8 +9,15 @@ import {
 } from '@/lib/intelligence/ops-insights/contract';
 import { intelligenceSettingsHref } from './routes';
 
-/** Global policy modes the preset raises to SUGGEST; SUGGEST and AUTO are left alone. */
-export const RECOMMENDED_POLICY_MODES: readonly IntelligenceModeValue[] = ['OFF', 'SHADOW'];
+/** Global policy modes the preset raises to Watch only (SHADOW); SHADOW, SUGGEST and AUTO are left alone. */
+export const RECOMMENDED_POLICY_MODES: readonly IntelligenceModeValue[] = ['OFF'];
+
+/**
+ * Where an installation is on the way to value, in words a newcomer can use:
+ * off (nothing runs), learning (watching, nobody sees or feels anything), showing (responders see suggestions),
+ * acting (noise controls are applied before anyone is paged).
+ */
+export type SetupStage = 'off' | 'learning' | 'showing' | 'acting';
 
 export interface SetupState {
   settings: { enabled: boolean; revision: number; opsHelpersEnabled: boolean } & Record<
@@ -21,6 +28,8 @@ export interface SetupState {
   /** `detectorsOn`: dedup, flapping and storm grouping are all enabled, as the Recommended preset sets them. */
   noise: { revision: number; mode: 'OFF' | 'SHADOW' | 'ON'; detectorsOn: boolean };
   squireEnabled: boolean;
+  /** AI is switched on and at least one provider is enabled. Squire answers without it, from incident data. */
+  aiConfigured: boolean;
 }
 
 export interface SetupRevisions {
@@ -39,6 +48,13 @@ export interface SetupChecklistItem {
   href: string;
   /** Whether the Recommended preset turns it on. */
   inPreset: boolean;
+}
+
+export function setupStage(state: SetupState): SetupStage {
+  if (!state.settings.enabled) return 'off';
+  if (state.noise.mode === 'ON') return 'acting';
+  if (state.policy.mode === 'SUGGEST' || state.policy.mode === 'AUTO') return 'showing';
+  return 'learning';
 }
 
 export function setupRevisions(state: SetupState): SetupRevisions {
@@ -61,14 +77,15 @@ export function setupChecklist(state: SetupState): SetupChecklistItem[] {
     },
     {
       id: 'triage',
-      label: 'Triage suggestions',
+      label: 'Suggestions for your team',
       benefit:
-        'Suggests urgency, owner and duplicates from similar resolved incidents; a responder decides.',
+        'Shows responders similar incidents, likely causes and triage hints; a person always decides. Switched on after the watching period.',
       on:
         state.policy.triageEnabled &&
         (state.policy.mode === 'SUGGEST' || state.policy.mode === 'AUTO'),
       href: intelligenceSettingsHref('engine', 'triage'),
-      inPreset: true,
+      // The preset only watches; showing suggestions to responders is the person's choice (see switchOnSuggestions).
+      inPreset: false,
     },
     {
       id: 'insights',
@@ -91,9 +108,9 @@ export function setupChecklist(state: SetupState): SetupChecklistItem[] {
     },
     {
       id: 'noise',
-      label: 'Noise controls in shadow',
+      label: 'Noise controls, watching',
       benefit:
-        'Records what dedup, flapping and storm grouping would hold back, without changing any page.',
+        'Records what merging repeats, quieting flapping alerts and grouping storms would hold back, without changing any page.',
       // Shadow with every detector off records nothing, so it is not on yet.
       on: state.noise.mode === 'ON' || (state.noise.mode === 'SHADOW' && state.noise.detectorsOn),
       href: intelligenceSettingsHref('noise', 'policy'),
@@ -101,10 +118,10 @@ export function setupChecklist(state: SetupState): SetupChecklistItem[] {
     },
     {
       id: 'assistant',
-      label: 'Squire assistant',
+      label: 'AI model for Squire',
       benefit:
-        'Answers questions about incidents with an AI model you choose. Not part of the preset.',
-      on: state.squireEnabled,
+        'Lets Squire write summaries and answer in full sentences. Without a model it still answers from your incident data. Not part of the preset.',
+      on: state.squireEnabled && state.aiConfigured,
       href: intelligenceSettingsHref('assistant', 'assistant'),
       inPreset: false,
     },

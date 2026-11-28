@@ -6,8 +6,18 @@ import {
   getIntelligenceSettings,
   resolveEffectivePolicy,
 } from '@/lib/intelligence/settings/service';
-import { applyRecommendedPreset, getSetupState } from '@/lib/intelligence/settings/setup';
-import { setupChecklist, setupRevisions } from '@/lib/intelligence/settings/setup-contract';
+import { listAiProviders } from '@/lib/intelligence/ai/settings';
+import {
+  addAiModel,
+  applyRecommendedPreset,
+  getSetupState,
+  switchOnSuggestions,
+} from '@/lib/intelligence/settings/setup';
+import {
+  setupChecklist,
+  setupRevisions,
+  setupStage,
+} from '@/lib/intelligence/settings/setup-contract';
 import { createTestUser, resetDatabase, testPrisma as db } from '../../helpers/test-db';
 
 beforeEach(async () => {
@@ -30,7 +40,7 @@ describe('Recommended intelligence preset', () => {
     const before = await getSetupState();
     const changed = await applyRecommendedPreset(setupRevisions(before), actor);
     expect(changed).toEqual(
-      expect.arrayContaining(['enabled', 'opsHelpersEnabled', 'triageSuggestions', 'noiseShadow'])
+      expect.arrayContaining(['enabled', 'opsHelpersEnabled', 'triageWatching', 'noiseShadow'])
     );
 
     const settings = await getIntelligenceSettings();
@@ -38,7 +48,8 @@ describe('Recommended intelligence preset', () => {
     // eslint-disable-next-line security/detect-object-injection -- keys come from the fixed OPS_INSIGHT_SWITCHES list
     for (const key of OPS_INSIGHT_SWITCHES) expect(settings[key]).toBe(true);
     const policy = await resolveEffectivePolicy(null);
-    expect(policy.mode).toBe('SUGGEST');
+    // Watch only: responders see nothing new until the person switches on.
+    expect(policy.mode).toBe('SHADOW');
     expect(policy.definition.triage.enabled).toBe(true);
     const shadow = await getNoiseControlPolicy(null);
     expect(shadow.mode).toBe('SHADOW');
@@ -49,12 +60,13 @@ describe('Recommended intelligence preset', () => {
     expect(settings.opsHelpersEnabled).toBe(true);
 
     const after = await getSetupState();
-    // The assistant is on by default (basic mode, AI off), so nothing on the checklist is left off.
+    // Left off on purpose: showing suggestions to responders (the person switches that on) and an AI model.
     expect(
       setupChecklist(after)
         .filter(item => !item.on)
         .map(item => item.id)
-    ).toEqual([]);
+    ).toEqual(['triage', 'assistant']);
+    expect(setupStage(after)).toBe('learning');
     const audits = await db.auditLog.count({ where: { actorId: actor.actorId } });
     expect(audits).toBeGreaterThanOrEqual(3);
 
@@ -128,5 +140,88 @@ describe('Recommended intelligence preset', () => {
     });
     expect((await getIntelligenceSettings()).enabled).toBe(false);
     expect((await resolveEffectivePolicy(null)).mode).not.toBe('SUGGEST');
+  });
+
+  it('keeps a policy already in SUGGEST or AUTO where it is', async () => {
+    const actor = await setup();
+    await applyRecommendedPreset(setupRevisions(await getSetupState()), actor);
+    await switchOnSuggestions(setupRevisions(await getSetupState()), actor);
+    expect((await resolveEffectivePolicy(null)).mode).toBe('SUGGEST');
+    const changed = await applyRecommendedPreset(setupRevisions(await getSetupState()), actor);
+    expect(changed).toEqual([]);
+    expect((await resolveEffectivePolicy(null)).mode).toBe('SUGGEST');
+  });
+});
+
+describe('Switch on', () => {
+  it('shows suggestions but leaves noise controls watching while there is not enough evidence', async () => {
+    const actor = await setup();
+    await applyRecommendedPreset(setupRevisions(await getSetupState()), actor);
+    const changed = await switchOnSuggestions(setupRevisions(await getSetupState()), actor);
+    expect(changed).toEqual(['suggestions']);
+    expect((await resolveEffectivePolicy(null)).mode).toBe('SUGGEST');
+    expect((await getNoiseControlPolicy(null)).mode).toBe('SHADOW');
+    expect(setupStage(await getSetupState())).toBe('showing');
+    // Idempotent.
+    expect(await switchOnSuggestions(setupRevisions(await getSetupState()), actor)).toEqual([]);
+  });
+
+  it('does nothing while Intelligence is off', async () => {
+    const actor = await setup();
+    expect(await switchOnSuggestions(setupRevisions(await getSetupState()), actor)).toEqual([]);
+    expect((await resolveEffectivePolicy(null)).mode).toBe('OFF');
+  });
+
+  it('refuses a stale page', async () => {
+    const actor = await setup();
+    await applyRecommendedPreset(setupRevisions(await getSetupState()), actor);
+    const stale = setupRevisions(await getSetupState());
+    await db.intelligenceSettings.update({
+      where: { id: 'default' },
+      data: { revision: { increment: 1 } },
+    });
+    await expect(switchOnSuggestions(stale, actor)).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+    });
+    expect((await resolveEffectivePolicy(null)).mode).toBe('SHADOW');
+  });
+});
+
+describe('Add an AI model', () => {
+  it('stores one provider, switches AI on, reports the AI row honestly and updates on a retry', async () => {
+    const actor = await setup();
+    await applyRecommendedPreset(setupRevisions(await getSetupState()), actor);
+    const before = await getSetupState();
+    // Squire is on by default, but nothing can answer with a model yet.
+    expect(before.squireEnabled).toBe(true);
+    expect(before.aiConfigured).toBe(false);
+
+    const id = await addAiModel(
+      { kind: 'ANTHROPIC', apiKey: 'sk-ant-test-key-1234567890', incidentText: true },
+      actor
+    );
+    const after = await getSetupState();
+    expect(after.aiConfigured).toBe(true);
+    expect(setupChecklist(after).find(item => item.id === 'assistant')!.on).toBe(true);
+    const [provider] = await listAiProviders();
+    expect(provider).toMatchObject({
+      id,
+      kind: 'ANTHROPIC',
+      enabled: true,
+      isExternal: true,
+      maxDataClass: 'PERSONAL',
+      hasApiKey: true,
+    });
+    expect(JSON.stringify(provider)).not.toContain('sk-ant-test-key');
+
+    // A second try (a wrong key fixed, a different choice about incident text) updates the same provider.
+    const again = await addAiModel(
+      { kind: 'ANTHROPIC', apiKey: 'sk-ant-test-key-abcdefghij', incidentText: false },
+      actor
+    );
+    expect(again).toBe(id);
+    const providers = await listAiProviders();
+    expect(providers).toHaveLength(1);
+    expect(providers[0]!.maxDataClass).toBe('INTERNAL');
   });
 });

@@ -22,14 +22,15 @@ import type { SimulationOutcome } from '@/lib/intelligence/noise-controls/simula
 import { cn } from '@/lib/utils';
 import MatcherRows from './MatcherRows';
 import { fieldClass, ReplaySummary, touchButton, type Option } from './shared';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 
 export const ACTION_TYPES = [
-  { type: 'DROP', label: 'Drop (store nothing, never page)' },
-  { type: 'SUPPRESS', label: 'Suppress (store, never page)' },
-  { type: 'SET_URGENCY', label: 'Set urgency' },
-  { type: 'SET_SEVERITY', label: 'Set severity' },
-  { type: 'SET_LABEL', label: 'Set a label' },
-  { type: 'REROUTE_SERVICE', label: 'Route to another service' },
+  { type: 'DROP', label: 'Ignore completely (not stored, never pages)' },
+  { type: 'SUPPRESS', label: 'Hold quietly (stored, never pages)' },
+  { type: 'SET_URGENCY', label: 'Change urgency' },
+  { type: 'SET_SEVERITY', label: 'Change severity' },
+  { type: 'SET_LABEL', label: 'Add a label' },
+  { type: 'REROUTE_SERVICE', label: 'Send to another service' },
   { type: 'ATTACH_RUNBOOK', label: 'Attach a runbook' },
   { type: 'ADD_NOTE', label: 'Add a note' },
 ] as const;
@@ -206,19 +207,20 @@ function ActionRow({
             </select>
           ) : action.type === 'REROUTE_SERVICE' ||
             (action.type === 'ATTACH_RUNBOOK' && runbooks.length > 0) ? (
-            <select
+            <SearchableSelect
               id={`${id}-value`}
+              options={(action.type === 'REROUTE_SERVICE' ? services : runbooks).map(option => ({
+                value: option.id,
+                label: option.name,
+              }))}
               value={action.value}
-              onChange={event => onChange({ ...action, value: event.target.value })}
-              className={fieldClass}
-            >
-              <option value="">Select</option>
-              {(action.type === 'REROUTE_SERVICE' ? services : runbooks).map(option => (
-                <option key={option.id} value={option.id}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
+              onChange={value => onChange({ ...action, value })}
+              placeholder="Select"
+              searchPlaceholder={
+                action.type === 'REROUTE_SERVICE' ? 'Search services…' : 'Search runbooks…'
+              }
+              noun={action.type === 'REROUTE_SERVICE' ? 'services' : 'runbooks'}
+            />
           ) : (
             <input
               id={`${id}-value`}
@@ -492,7 +494,11 @@ export default function OrchestrationRulesBuilder({
                   </div>
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Rule id <code>{rule.id}</code>
+                  <span title={`Rule id ${rule.id}`}>
+                    {rule.name
+                      ? 'Matches alerts that meet all the conditions below.'
+                      : 'Give the rule a name.'}
+                  </span>
                   {replay && (
                     <>
                       {' '}

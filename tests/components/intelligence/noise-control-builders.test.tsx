@@ -42,6 +42,14 @@ const services = [
 ];
 const teams = [{ id: 'team-1', name: 'SRE' }];
 
+/** Chooses an option in one of the searchable dropdowns by what the person sees. */
+function pick(label: string, option: string) {
+  fireEvent.click(screen.getByRole('combobox', { name: label }));
+  fireEvent.click(
+    screen.getAllByRole('option').find(row => row.textContent?.startsWith(option)) as HTMLElement
+  );
+}
+
 function outcome(overrides: Partial<SimulationOutcome> = {}): SimulationOutcome {
   return {
     runId: 'run-1',
@@ -93,7 +101,7 @@ describe('MaintenanceWindowBuilder', () => {
   it('rejects windows longer than seven days and invalid custom rules', async () => {
     render(<MaintenanceWindowBuilder services={services} teams={teams} />);
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Upgrade' } });
-    fireEvent.change(screen.getByLabelText('Service'), { target: { value: 'svc-a' } });
+    pick('Service', 'Checkout');
     fireEvent.change(screen.getByLabelText('Starts (your time)'), {
       target: { value: '2026-12-01T01:00' },
     });
@@ -125,7 +133,7 @@ describe('MaintenanceWindowBuilder', () => {
     });
     render(<MaintenanceWindowBuilder services={services} teams={teams} />);
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Weekend batch' } });
-    fireEvent.change(screen.getByLabelText('Service'), { target: { value: 'svc-a' } });
+    pick('Service', 'Checkout');
     fireEvent.change(screen.getByLabelText('Starts (your time)'), {
       target: { value: '2030-01-05T01:00' },
     });
@@ -451,7 +459,7 @@ describe('SuppressionRuleBuilder', () => {
         initialServiceId="svc-b"
       />
     );
-    expect(screen.getByLabelText('Service')).toHaveValue('svc-b');
+    expect(screen.getByRole('combobox', { name: 'Service' })).toHaveTextContent('Payments');
     unmount();
     render(
       <SuppressionRuleBuilder
@@ -461,7 +469,7 @@ describe('SuppressionRuleBuilder', () => {
         initialServiceId="svc-unreadable"
       />
     );
-    expect(screen.getByLabelText('Service')).toHaveValue('');
+    expect(screen.getByRole('combobox', { name: 'Service' })).toHaveTextContent('Any service');
   });
 
   it('keeps the save-result live region mounted before the result arrives', async () => {
@@ -485,7 +493,9 @@ describe('SuppressionRuleBuilder', () => {
     fireEvent.change(screen.getByLabelText('Value'), { target: { value: '(a+)+' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add rule' }));
     expect(await screen.findByText('Give the rule a name.')).toBeInTheDocument();
-    expect(screen.getByText(/Condition 1: This pattern can backtrack catastrophically/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Condition 1: This pattern can backtrack catastrophically/)
+    ).toBeInTheDocument();
     expect(screen.getByLabelText('Value')).toHaveAttribute('aria-invalid', 'true');
     expect(actions.createRuleAction).not.toHaveBeenCalled();
   });
@@ -510,14 +520,14 @@ describe('SuppressionRuleBuilder', () => {
     });
     render(<SuppressionRuleBuilder services={services} owners={owners} currentUserId="user-1" />);
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Mute staging' } });
-    fireEvent.change(screen.getByLabelText('Service'), { target: { value: 'svc-b' } });
+    pick('Service', 'Payments');
     fireEvent.change(screen.getByLabelText('Value'), { target: { value: 'info' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
     const fields = screen.getAllByLabelText('Field');
     fireEvent.change(fields[1], { target: { value: 'label' } });
     fireEvent.change(screen.getByLabelText('Label key'), { target: { value: 'env' } });
     fireEvent.change(screen.getAllByLabelText('Value')[1], { target: { value: 'staging' } });
-    fireEvent.change(screen.getByLabelText('Owner'), { target: { value: 'user-2' } });
+    pick('Owner', 'Grace');
     fireEvent.change(screen.getByLabelText('Expires'), { target: { value: '7d' } });
 
     fireEvent.click(screen.getByRole('button', { name: 'Test against the last 7 days' }));
@@ -620,7 +630,7 @@ describe('OrchestrationRulesBuilder', () => {
     });
     fireEvent.change(screen.getByLabelText('Value'), { target: { value: 'postgres' } });
     fireEvent.change(screen.getByLabelText('Action 1'), { target: { value: 'REROUTE_SERVICE' } });
-    fireEvent.change(screen.getByLabelText('Service'), { target: { value: 'svc-b' } });
+    pick('Service', 'Payments');
     expect(screen.queryByRole('alert')).toBeNull();
     expect(posted(container)).toEqual([
       {
@@ -730,7 +740,7 @@ describe('HeartbeatPanel', () => {
       .find(node => node.getAttribute('aria-live') === 'polite' && node.textContent === '');
     expect(region).toBeDefined();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Backup' } });
-    fireEvent.change(screen.getByLabelText('Service'), { target: { value: 'svc-a' } });
+    pick('Service', 'Checkout');
     fireEvent.click(screen.getByRole('button', { name: 'Create monitor' }));
     const box = await screen.findByTestId('heartbeat-token');
     expect(region).toHaveTextContent('Heartbeat monitor created.');
@@ -794,7 +804,7 @@ describe('the critical-alert opt-in', () => {
     const checkbox = screen.getByLabelText('Also hide critical and HIGH-urgency alerts');
     expect(checkbox).not.toBeChecked();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Patching' } });
-    fireEvent.change(screen.getByLabelText('Service'), { target: { value: 'svc-a' } });
+    pick('Service', 'Checkout');
     fireEvent.change(screen.getByLabelText('Starts (your time)'), {
       target: { value: '2030-01-05T01:00' },
     });

@@ -31,16 +31,19 @@ import {
   SECTION_TITLES,
   TrendSection,
 } from './sections';
+import IntelligenceSetupChecklist from '@/components/settings/IntelligenceSetupChecklist';
+import { assessNoiseReadiness } from '@/lib/intelligence/noise-controls/manage';
+import { getSetupState } from '@/lib/intelligence/settings/setup';
+import { setupStage } from '@/lib/intelligence/settings/setup-contract';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 // Two cards side by side from lg, stretched to the same height; a lone card takes the full row.
-const PANEL_ROW =
-  'grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2 lg:[&>*:only-child]:col-span-2';
+const PANEL_ROW = 'grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2 lg:[&>*:only-child]:col-span-2';
 
 /**
- * Responder-facing AIOps overview. It answers two questions first: is Intelligence helping (the impact
+ * Responder-facing Intelligence overview. It answers two questions first: is Intelligence helping (the impact
  * card: one sentence and four headline numbers) and what needs me now (the "Needs attention" inbox). Then
  * the response trend beside feedback, and the detail sections. What Intelligence and the noise controls did
  * for the incidents the viewer can read, over a selectable window. Every fix links to the existing flow.
@@ -64,13 +67,19 @@ export default async function IntelligenceOverviewPage({
   const status = statusResult.ok
     ? statusResult.data
     : { enabled: true, mode: 'UNKNOWN', triageEnabled: true, responseEnabled: true };
+  // While Intelligence is learning or showing, say where it is and what is next, so a quiet overview never
+  // looks broken. Failing to load it must not take the page down.
+  const [setup, readiness] = await Promise.all([
+    status.enabled ? getSetupState().catch(() => null) : null,
+    status.enabled ? assessNoiseReadiness(null).catch(() => null) : null,
+  ]);
   const props = { scope, range, canManage, status };
 
   return (
     <div className="space-y-4 sm:space-y-6">
       <PageHeader
         eyebrow="AIOps"
-        title="AIOps overview"
+        title="Intelligence overview"
         icon={Brain}
         description="What Intelligence and the noise controls did for the incidents you can see."
         secondaryActions={<WindowSelector current={range.key} variant="header" />}
@@ -94,11 +103,17 @@ export default async function IntelligenceOverviewPage({
         <FeatureOff
           variant="banner"
           title="Intelligence is off"
-          adminHint="Turn it on to find similar and related incidents, possible causes, runbooks and triage suggestions. Noise controls and response metrics below work either way."
-          href="/settings/intelligence"
+          adminHint="Turn it on to find similar and related incidents, possible causes, runbooks and triage suggestions. It starts by only watching: nothing changes for your team until you decide. Noise controls and response metrics below work either way."
+          href="/settings/intelligence/setup"
+          actionLabel="Get started"
+
           canManage={canManage}
           icon={<Brain aria-hidden="true" />}
         />
+      )}
+
+      {setup && setupStage(setup) !== 'acting' && (
+        <IntelligenceSetupChecklist state={setup} canManage={canManage} readiness={readiness} />
       )}
 
       {/* Live data (no cache), so "Updated" is this render and Refresh just re-renders. */}

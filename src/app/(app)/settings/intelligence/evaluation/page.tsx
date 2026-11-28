@@ -10,6 +10,7 @@ import GroupingQualitySection from '../_sections/GroupingQualitySection';
 import InsightsSections from '../_sections/InsightsSections';
 import { requirePageAccess } from '@/lib/access/server';
 import MovedSectionRedirect from '@/components/settings/MovedSectionRedirect';
+import { ViewOnlyNotice } from '@/components/settings/form-kit';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -54,6 +55,7 @@ export default async function IntelligenceEvaluationPage({
       >
         Measure suggestions and answers before you trust them, and see what AI costs.
       </IntelligenceGroupHeader>
+      {!canManage && <ViewOnlyNotice what="Intelligence settings" />}
 
       <GroupingQualitySection
         params={{ serviceId: params?.serviceId, q: params?.q, after: params?.after }}

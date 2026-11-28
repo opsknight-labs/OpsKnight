@@ -30,7 +30,7 @@ verification:
 # Govern AI spend with prices and budgets
 
 OpsKnight counts the tokens every AI request uses and, when the model has a price, its cost in US dollars.
-The **Spend and budgets** and **Model prices** sections are under **Settings → Intelligence → Evaluation & spend** (`/settings/intelligence/evaluation#ai-spend`), next to **Usage**. Providers and model routing stay under **Assistant**.
+The **Spend and budgets** and **Model prices** sections are under **Settings → Intelligence → Results & spend** (`/settings/intelligence/evaluation#ai-spend`), next to **Usage**. Providers and model routing stay under **Assistant**.
 Anyone with Intelligence read access can see spend; changing prices or budgets needs Intelligence manage.
 
 Nothing here changes behaviour until you add a budget. Without one, only the existing global and per-person
