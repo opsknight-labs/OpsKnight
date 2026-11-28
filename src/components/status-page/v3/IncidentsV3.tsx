@@ -566,12 +566,12 @@ export default function IncidentsV3({
               <span className="status-v3-incidents-inline__dot" aria-hidden="true" />
               {subtitlePastCount} resolved
             </span>
-          ) : (
+          ) : tallyTotal > 0 ? (
             <span className="status-v3-incidents-inline__tally-pill">
               <span className="status-v3-incidents-inline__dot" aria-hidden="true" />
               {tallyTotal} total
             </span>
-          )}
+          ) : null}
           {services.length + groups.length > 1 && (
             <label className="status-v3-filter">
               <span className="sr-only">{t('incidents.filterByService')}</span>

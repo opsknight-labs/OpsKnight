@@ -66,6 +66,43 @@ describe('ServiceHealthV3 business layouts', () => {
     expect(screen.getByText('2 business services')).toBeInTheDocument();
   });
 
+  describe('services outside every group on the expandable layout', () => {
+    const renderWith = (mail: PublicStatusService) =>
+      render(
+        <ServiceHealthV3
+          services={[services[0], services[1], mail]}
+          businessServices={businessServices}
+          layout="BUSINESS_EXPANDABLE"
+          timeZone="UTC"
+          groupByRegion={false}
+          showUptimeHistory={false}
+          showMetrics={false}
+          filterThreshold={0}
+        />
+      );
+
+    it('form one closed "Other services" card that opens like a group', () => {
+      renderWith(services[2]);
+      const card = screen.getByRole('button', { name: /Other services/ });
+      expect(card).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByText('Email delivery')).not.toBeInTheDocument();
+      fireEvent.click(card);
+      expect(card).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByText('Email delivery')).toBeInTheDocument();
+      // No Subscribe action: it is not a real group a visitor can follow.
+      expect(screen.queryByRole('button', { name: /Subscribe to Other services/ })).toBeNull();
+    });
+
+    it('open by themselves when one of them is affected', () => {
+      renderWith({ ...services[2], status: 'MAJOR_OUTAGE', activeIncidentCount: 1 });
+      expect(screen.getByRole('button', { name: /Other services/ })).toHaveAttribute(
+        'aria-expanded',
+        'true'
+      );
+      expect(screen.getByText('Email delivery')).toBeInTheDocument();
+    });
+  });
+
   it('BUSINESS_EXPANDABLE opens affected rows and toggles the rest with aria-expanded', () => {
     renderLayout('BUSINESS_EXPANDABLE');
     const checkout = screen.getByRole('button', { name: /Checkout/ });
