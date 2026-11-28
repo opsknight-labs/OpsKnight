@@ -93,6 +93,8 @@ export default function UserCreateForm({ action, className = '', disabled = fals
   const [dismissed, setDismissed] = useState(false);
   const [showBackupLink, setShowBackupLink] = useState(false);
 
+  // Keyed on the state object, not on `success`: it stays true across consecutive invites, and
+  // every submission yields a new object. Otherwise the second result screen never reappears.
   useEffect(() => {
     if (state?.success) {
       formRef.current?.reset();
@@ -103,7 +105,7 @@ export default function UserCreateForm({ action, className = '', disabled = fals
       setDismissed(false);
       setShowBackupLink(false);
     }
-  }, [state?.success]);
+  }, [state]);
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;

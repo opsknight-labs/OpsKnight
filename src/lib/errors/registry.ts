@@ -535,6 +535,14 @@ export const ERROR_REGISTRY = {
     retryable: false,
     exposure: 'public',
   },
+  API_KEY_LIMIT_REACHED: {
+    status: 409,
+    category: 'conflict',
+    userMessage: 'This account already has the maximum number of active API keys.',
+    action: 'Revoke an unused key, or wait for one to expire, then create the new key.',
+    retryable: false,
+    exposure: 'public',
+  },
   SERVICE_ACCOUNT_DISABLED: {
     status: 409,
     category: 'conflict',

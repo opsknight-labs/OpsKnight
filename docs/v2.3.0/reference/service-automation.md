@@ -342,6 +342,10 @@ Known evaluator/configuration failures produce fallback diagnostics:
 classification priority and returns to service-default policy routing. Failed
 results do not hand executable automation context to Runbooks.
 
+One oversized, object-valued, or credential-bearing value is not a failure of the
+whole evaluation: that field is treated as missing (rules that read it evaluate to
+unknown, and the value is never recorded) while every other rule still runs.
+
 Database failures abort ingestion into its transaction/replay path; they are not
 silently treated as a successful default-route evaluation. Candidate evaluator
 failures are tracked separately from the active decision, allowing the active

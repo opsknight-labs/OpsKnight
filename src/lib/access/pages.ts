@@ -127,6 +127,7 @@ export const PAGE_ACCESS: readonly PageAccessRule[] = [
   { pattern: '/users/[id]', label: 'User', anyOf: [C.USER_READ_ALL], resource: 'user' },
 
   { pattern: '/reports', label: 'Reports', anyOf: [C.REPORT_READ] },
+  { pattern: '/reports/executive/new', label: 'New dashboard', anyOf: [C.REPORT_MANAGE] },
   {
     pattern: '/reports/executive/[id]',
     label: 'Executive dashboard',

@@ -29,6 +29,10 @@ For metric definitions and aggregation rules, use the [metrics reference](../../
 
 The **Reports** landing page lists dashboards owned by the signed-in user. Inside the dashboard selector, OpsKnight can also show team-visible dashboards for the user's teams and public dashboards. A private dashboard is available only to its owner. Opening an inaccessible or nonexistent dashboard returns the not-found view rather than revealing its metadata.
 
+Viewing reports and dashboards needs `report.read`. Creating, editing, sharing, scheduling and deleting them (in the console and through the API, including `reports:write` API keys and MCP) needs `report.manage`. The built-in Admin, Responder and User roles have both; the Auditor role is read-only, so the create, edit, share-settings and delete controls are hidden for auditors and the API refuses those calls. A custom role that could read reports before this change was granted `report.manage` so nothing changed for it; remove the capability in the role editor to make it read-only.
+
+The dashboard routes the Reports pages call, `/api/dashboards` and `/api/dashboards/{id}`, apply the same rules. Reading (`GET`) needs `report.read`; creating, changing and deleting (`POST`, `PUT`, `DELETE`) needs `report.manage`; a caller without it gets `403`. Each user is limited to 120 reads and 30 writes per minute, and a request over the limit gets `429` with a retry delay. Every create, update and delete is written to the audit log as `dashboard.created`, `dashboard.updated` or `dashboard.deleted` with the acting user.
+
 ## Live, share, and presentation controls
 
 Use **Live** to refresh a dashboard manually or every 30 seconds, 1 minute, or

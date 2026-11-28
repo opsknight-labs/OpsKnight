@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import UngroupButton from '../intelligence/UngroupButton';
+import { mergeLatestWithOlder } from './merge-loaded';
 import {
   INTELLIGENCE_TIMELINE_KIND_LABEL,
   formatOnsetOffset,
@@ -56,6 +57,28 @@ const FILTERS: Array<{ id: TimelineFilter; label: string }> = [
   { id: 'RUNBOOKS', label: 'Runbooks' },
   { id: 'NOTES', label: 'Notes' },
 ];
+
+// Events that record a note ("Note added by ...", "Resolution note added by ...") carry no text of
+// their own, so the row borrows it from the note written within 15s. Other COMMENT events
+// (description edits, ChatOps joins) must not take a note's text, and the nearest note wins.
+export function findNoteForEvent<T extends { id: string; time: number }>(
+  message: string,
+  eventTime: number,
+  notes: readonly T[],
+  matchedNoteIds: ReadonlySet<string>
+): T | undefined {
+  if (!/\bnote\b/i.test(message)) return undefined;
+  let best: T | undefined;
+  let bestGap = 15000;
+  for (const note of notes) {
+    const gap = Math.abs(eventTime - note.time);
+    if (!matchedNoteIds.has(note.id) && gap <= bestGap) {
+      best = note;
+      bestGap = gap;
+    }
+  }
+  return best;
+}
 
 // Best-effort categorization from the free-text event message — there's no
 // structured "category" field on IncidentEvent, so this is a heuristic filter,
@@ -292,7 +315,7 @@ export default function IncidentTimeline({
     setLoadedEvents(prev => {
       if (prev === events) return prev;
       if (prev.length === 0 && events.length === 0) return prev;
-      return events;
+      return mergeLatestWithOlder(events, prev);
     });
   }, [events]);
 
@@ -302,7 +325,7 @@ export default function IncidentTimeline({
     setLoadedNotes(prev => {
       if (prev === notes) return prev;
       if (prev.length === 0 && notes.length === 0) return prev;
-      return notes;
+      return mergeLatestWithOlder(notes, prev);
     });
   }, [notes]);
 
@@ -312,9 +335,15 @@ export default function IncidentTimeline({
     setLoadedNotifications(prev => {
       if (prev === notifications) return prev;
       if (prev.length === 0 && notifications.length === 0) return prev;
-      return notifications;
+      return mergeLatestWithOlder(notifications, prev);
     });
   }, [notifications]);
+
+  useEffect(() => {
+    // Fresh server data may have more behind it than the last "load older" found.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHasExhaustedOlder(false);
+  }, [events, notes, notifications]);
 
   const totalItemsCount =
     totalActivityCount ??
@@ -529,9 +558,11 @@ export default function IncidentTimeline({
       if (isNoteEvent) {
         eventType = 'NOTE';
         if (noteLookup.length > 0) {
-          const eventTime = new Date(event.createdAt).getTime();
-          const matchingNote = noteLookup.find(
-            n => !matchedNoteIds.has(n.id) && Math.abs(eventTime - n.time) <= 15000
+          const matchingNote = findNoteForEvent(
+            message,
+            new Date(event.createdAt).getTime(),
+            noteLookup,
+            matchedNoteIds
           );
 
           if (matchingNote) {
@@ -1099,8 +1130,8 @@ export default function IncidentTimeline({
             <div
               key={event.id}
               id={`timeline-${event.id}`}
-              className="relative flex scroll-mt-24 gap-4 group animate-in slide-in-from-left-2 fade-in duration-500 fill-mode-backwards target:rounded-lg target:bg-amber-50/60 dark:target:bg-amber-950/20"
-              style={{ animationDelay: `${index * 50}ms` }}
+              className="relative flex scroll-mt-24 gap-4 group animate-in slide-in-from-left-2 fade-in duration-500 fill-mode-backwards motion-reduce:animate-none target:rounded-lg target:bg-amber-50/60 dark:target:bg-amber-950/20"
+              style={{ animationDelay: `${Math.min(index, 8) * 50}ms` }}
             >
               {/* Node Icon */}
               <div

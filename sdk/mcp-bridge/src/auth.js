@@ -2,7 +2,17 @@
 // from `opsknight-mcp login` (OAuth device authorization, RFC 8628) kept in a 0600 file.
 // Tokens never reach stdout, stderr or error messages.
 /* eslint-disable security/detect-non-literal-fs-filename -- the only path is configPath() */
-import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import {
+  chmodSync,
+  linkSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -60,9 +70,13 @@ export function writeConfig(path, config) {
   renameSync(temp, path);
 }
 
+// A request must end well inside LOCK_STALE_MS, or a waiter would treat a live refresh as a crashed one.
+const REQUEST_TIMEOUT_MS = 15_000;
+
 async function postForm(endpoint, fields) {
   const response = await fetch(endpoint, {
     method: 'POST',
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
       accept: 'application/json',
@@ -82,6 +96,75 @@ function sameServer(base, endpoint, name) {
   return endpoint;
 }
 
+
+const LOCK_WAIT_MS = 20_000;
+const LOCK_STALE_MS = 30_000;
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * One refresh at a time across every bridge process sharing this config file. Refresh tokens rotate:
+ * a process that sent the token another had just rotated would look like token theft to the server
+ * and cost the whole sign-in. Under the lock each process reads the newest token before it sends it.
+ */
+async function withConfigLock(path, work) {
+  const lock = `${path}.lock`;
+  // Whoever holds the lock writes this into it, so a release only removes its own lock.
+  const owner = randomUUID();
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+  const deadline = Date.now() + LOCK_WAIT_MS;
+  for (;;) {
+    try {
+      writeFileSync(lock, owner, { flag: 'wx', mode: 0o600 });
+      break;
+    } catch (error) {
+      if (error?.code !== 'EEXIST') throw error;
+      try {
+        // A crashed process must not block every later one.
+        if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS) breakStaleLock(lock);
+      } catch {
+        // Released by its owner between the checks.
+      }
+      if (Date.now() > deadline) throw new BridgeError('Timed out waiting for another bridge to refresh the sign-in.');
+      await sleep(40 + Math.floor(Math.random() * 80));
+    }
+  }
+  try {
+    return await work();
+  } finally {
+    try {
+      // Another process may have broken this lock as stale and taken its own: leave that one alone.
+      if (readFileSync(lock, 'utf8') === owner) unlinkSync(lock);
+    } catch {
+      // Already removed.
+    }
+  }
+}
+
+/**
+ * Two waiters that both saw the same stale lock must not both remove it: the second would delete the
+ * fresh lock the first just created. The rename is atomic, so one waiter wins a given file, and a
+ * waiter that finds it renamed a live lock puts it back.
+ * shortcut: a third process creating the lock in the instant between the rename and the put-back wins it; the displaced holder's release then leaves it alone.
+ */
+function breakStaleLock(lock) {
+  const aside = `${lock}.${randomUUID()}.stale`;
+  try {
+    renameSync(lock, aside);
+  } catch {
+    return;
+  }
+  try {
+    if (Date.now() - statSync(aside).mtimeMs <= LOCK_STALE_MS) linkSync(aside, lock);
+  } catch {
+    // Re-created in the meantime.
+  }
+  try {
+    unlinkSync(aside);
+  } catch {
+    // Already gone.
+  }
+}
+
 /** PAT from the environment: nothing to refresh. */
 export function patAuth(token) {
   return { token: async () => token, refresh: async () => false };
@@ -96,7 +179,7 @@ export function oauthAuth(base, path, log) {
   let expiresAt = 0;
   let pending = null;
   const refresh = () =>
-    (pending ??= (async () => {
+    (pending ??= withConfigLock(path, async () => {
       // Another bridge process may have rotated the refresh token since this one loaded it.
       const entry = savedServer(readConfig(path), base);
       if (!entry?.refreshToken) {
@@ -123,9 +206,16 @@ export function oauthAuth(base, path, log) {
         saveServer(path, { ...entry, refreshToken: body.refresh_token });
       }
       return true;
-    })().finally(() => {
-      pending = null;
-    }));
+    })
+      .catch(error => {
+        // A lock timeout is a failed refresh like an unreachable server, not a crash.
+        if (!(error instanceof BridgeError)) throw error;
+        log(error.message);
+        return false;
+      })
+      .finally(() => {
+        pending = null;
+      }));
   return {
     async token() {
       if (!access || Date.now() >= expiresAt) await refresh();

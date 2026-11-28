@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/shadcn/select';
 import { cn } from '@/lib/utils';
 import { requestAccessAction } from '@/app/(app)/settings/access/actions';
-import { roleCovers, roleLabel, type AppRole } from '@/lib/authorization';
+import { permanentRoleKeepsAccess, roleCovers, roleLabel, type AppRole } from '@/lib/authorization';
 
 export const DURATION_OPTIONS: { value: string; label: string }[] = [
   { value: '60', label: '1 hour' },
@@ -148,10 +148,14 @@ export default function RequestAccessForm({
   // Identity-provider managed roles can still be raised temporarily; permanent changes belong
   // in the identity provider.
   const permanentRoleBlocked = kind === 'ORG_ROLE' && !canRequestOrgRole;
-  const durationChoices = permanentRoleBlocked
+  // A permanent role replaces the current one, so a lateral move would remove access.
+  const permanentWouldDemote =
+    kind === 'ORG_ROLE' && canRequestOrgRole && !permanentRoleKeepsAccess(currentRole, role);
+  const temporaryOnly = permanentRoleBlocked || permanentWouldDemote;
+  const durationChoices = temporaryOnly
     ? DURATION_OPTIONS.filter(option => option.value !== 'permanent')
     : DURATION_OPTIONS;
-  const effectiveDuration = permanentRoleBlocked && duration === 'permanent' ? '480' : duration;
+  const effectiveDuration = temporaryOnly && duration === 'permanent' ? '480' : duration;
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -273,6 +277,12 @@ export default function RequestAccessForm({
         <p className="rounded-md bg-muted/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
           Your role comes from your identity provider, so you can ask for temporary access here. For
           a permanent change, ask your IT team to add you to the right group.
+        </p>
+      )}
+      {permanentWouldDemote && (
+        <p className="rounded-md bg-muted/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+          Temporary access is added on top of your current role. A permanent change would replace it
+          and remove access you have today, so ask an administrator to change your role instead.
         </p>
       )}
       <div className="space-y-1.5">

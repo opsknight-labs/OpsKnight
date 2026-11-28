@@ -17,7 +17,7 @@ verification:
 
 ## Before you begin
 
-Sign in and confirm you can read the teams, services, and incidents the dashboard should summarize. Dashboard metrics respect that authorization scope; creating a dashboard does not grant access to additional operational data.
+Sign in and confirm you can read the teams, services, and incidents the dashboard should summarize. Dashboard metrics respect that authorization scope; creating a dashboard does not grant access to additional operational data. Creating a dashboard also needs the `report.manage` capability, which the Auditor role does not have.
 
 ## Open the feature
 

@@ -41,7 +41,10 @@ type Rule = {
   urgency: Urgency | null;
 };
 
-function defaultRule(severity: AlertSeverity): Omit<Rule, 'matchValue'> {
+function defaultRule(severity: AlertSeverity, scoped: boolean): Omit<Rule, 'matchValue'> {
+  // A scoped row nobody edited keeps following the workspace policy; CLEAR would block it.
+  if (scoped)
+    return { priorityMode: 'INHERIT', priority: null, urgencyMode: 'INHERIT', urgency: null };
   const classification = defaultAlertClassification(severity);
   return {
     priorityMode: classification.priority ? 'SET' : 'CLEAR',
@@ -100,7 +103,8 @@ export default function IncidentClassificationSettings({
   const [rules, setRules] = useState<Rule[]>(() =>
     ALERT_SEVERITIES.map(matchValue => ({
       matchValue,
-      ...(policy?.rules.find(rule => rule.matchValue === matchValue) ?? defaultRule(matchValue)),
+      ...(policy?.rules.find(rule => rule.matchValue === matchValue) ??
+        defaultRule(matchValue, scopeKey !== 'workspace')),
     }))
   );
   const [pending, startTransition] = useTransition();

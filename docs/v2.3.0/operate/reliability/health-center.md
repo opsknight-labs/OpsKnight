@@ -53,16 +53,40 @@ database state, an external dependency, or only the replica serving the page.
 - **Unknown**: the collector had no data or could not read it. Unknown is not
   healthy; inspect the check details and cited dependency.
 
+## Read the 24-hour trend
+
+The ribbon at the top has one bar for each of the last 24 clock hours (UTC hour
+boundaries; the last bar is the hour in progress). Hover a bar to see the hour it
+starts, shown in your browser's time zone with the zone named. A failed
+background job is counted in the hour it failed, whenever it was created. A bar
+shows the worst status that applies to its hour; the bar for the hour in
+progress also takes the live overall status, so a critical check is not shown as
+merely degraded because a job failed. If a history query fails, the hours it
+cannot vouch for show as unknown (grey) and are left out of the **Signal
+Score**, which is averaged only over the hours that were read.
+
 ## What the checks measure
 
 - **Database** tests connectivity. **Database capacity** inspects connection
   use against configured/runtime capacity; neither proves query performance.
+  Connection use counts client backends only. A transaction that has been
+  actively running for more than five minutes marks the check unhealthy. Idle
+  sessions, including idle-in-transaction ones, and transactions run by
+  `pg_dump` or `pg_basebackup` (matched by `application_name`) are ignored, so a
+  backup does not turn the card red.
 - **Migrations** compares committed and recorded migration state. Follow the
   database-migration runbook before changing `_prisma_migrations`.
 - **Scheduler** reads the singleton scheduler state and heartbeat. A current
   heartbeat proves only that its owner updated state, not that every job ran.
-- **Background jobs** summarizes durable queue state and age. Inspect pending,
-  processing, failed, and oldest work by lane before restarting workers.
+  On a replica started with `ENABLE_INTERNAL_CRON=false` (a split web/worker
+  deployment) it reads **External scheduler** and is informational: it does not
+  lower the score or degrade the page. Overdue scheduled work still degrades
+  **Background jobs**.
+- **Background jobs** summarizes durable queue state and age. A failure in the
+  last hour or pending work more than five minutes past its schedule degrades the
+  check; five or more failures in an hour, or a job processing for over ten
+  minutes, mark it unhealthy. Inspect pending, processing, failed, and oldest
+  work by lane before restarting workers.
 - **SLA query performance** uses real calculation samples from the last hour or
   24 hours. With no samples it reports unknown rather than running a synthetic
   query; p95 above 10 seconds or recent slow queries degrades the check.
@@ -70,8 +94,12 @@ database state, an external dependency, or only the replica serving the page.
 - **Paging configuration coverage** finds services without a policy or whose
   policy has no steps. It does not send a page.
 - **Notification providers** combines enabled provider configuration with
-  delivery records, including failures in 24 hours and work pending over five
-  minutes. Open Notification History for provider responses and retries.
+  delivery records, including failures in 24 hours and notifications due for
+  more than five minutes but still unsent. Notifications held to a later attempt
+  by provider backoff or quiet hours are not counted. Fewer than ten late
+  notifications degrade the check; ten or more, or an enabled provider without
+  configuration, mark it unhealthy. Open Notification History for provider
+  responses and retries.
 - **Inbound integrations** uses process-local adapter metrics. Those counters
   reset on restart and are not cluster-aggregated; durable delivery state and
   logs remain authoritative.
@@ -80,8 +108,12 @@ database state, an external dependency, or only the replica serving the page.
 - **Encryption** checks the configured encryption contract. It cannot prove
   that backed-up keys are recoverable.
 - **Version and upgrades** reports the running version/update signal exposed to
-  this replica; compare every replica and the deployed image digest.
-- **Analytics rollups** checks the latest completed daily rollup.
+  this replica; compare every replica and the deployed image digest. The latest
+  release comes from the public GitHub Releases API and is cached for six hours
+  (15 minutes after a failed lookup), so **Live (30s)** refresh does not call
+  GitHub every time. Live refresh shows a notice only when the overall status
+  changes; **Re-run Diagnostics** always confirms.
+- **Analytics rollups** checks the latest completed daily rollup. To rebuild a range by hand, an administrator calls `POST /api/admin/rollups/backfill` with `fromDate`, `toDate` (`YYYY-MM-DD`, at most 366 days) and an optional `serviceId`. It answers `status: "completed"` only when every service rollup was generated. If some failed it answers HTTP 500 with `status: "partial"`, `failedServiceRollups` and `failedDays`; those days have no complete rollup, so run the range again.
 - **Integration delivery control plane** detects stale durable external
   operations and inbound delivery leases plus recent terminal failures.
 - **Local durable-job worker** and **Realtime event control plane** are

@@ -48,8 +48,11 @@ A section that fails shows its own error with a retry; the rest of the page keep
 ## Permissions
 
 - **View** needs the `report.read` capability (`REPORT_READ`).
+- **Saved views** (save, rename, set as default, weekly email, delete) need `report.manage` (`REPORT_MANAGE`). Without it, the Views menu only opens existing views, and the Auditor role has no `report.manage`.
 - **Export CSV** needs `report.export` (`REPORT_EXPORT`); the button is hidden without it and the
-  export endpoint returns 403.
+  export endpoint returns 403. The button follows your effective capabilities, so a custom role or
+  temporary grant that includes `report.export` shows it on the dashboard and the insights pages, the
+  same as the built-in roles that have it.
 - Everything is scoped to the incidents you may read: users who are not administrators see
   incidents from services they can access, plus incidents assigned to them or that they watch. The
   page says so in a notice above the sections.

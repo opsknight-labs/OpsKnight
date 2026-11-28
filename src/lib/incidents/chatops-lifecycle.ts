@@ -19,6 +19,7 @@ import {
   type IncidentLifecycleResult,
 } from '@/lib/incidents/lifecycle';
 import { enqueueIncidentUpdateSideEffects, enqueueWarRoomSideEffects } from '@/lib/event-outbox';
+import { clipEventMessage } from '@/lib/incidents/event-message';
 import { normalizeIncidentPriority } from '@/lib/incidents/priority';
 import { authorizationActorFromUser } from '@/lib/authorization-actors';
 import { effectiveAccessSelect } from '@/lib/access/effective';
@@ -199,7 +200,10 @@ export async function executeChatOpsNote(input: {
           data: {
             incidentId: input.incidentId,
             type: 'COMMENT',
-            message: `Note added via ${label} ChatOps by ${input.actor.name}:\n${trimmed}`,
+            // The full text is on the note; the indexed timeline message is clipped.
+            message: clipEventMessage(
+              `Note added via ${label} ChatOps by ${input.actor.name}:\n${trimmed}`
+            ),
           },
         });
         return { created: true };

@@ -48,7 +48,13 @@ async function incidentWithItem(
   await db.$transaction(tx => indexIncident(incident.id, tx));
   if (!item) return { incident, itemId: null };
   const postmortem = await db.postmortem.create({
-    data: { incidentId: incident.id, title: 'PM', createdById: item.createdById },
+    // A reader without postmortem.draft.read sees only published postmortems' items.
+    data: {
+      incidentId: incident.id,
+      title: 'PM',
+      createdById: item.createdById,
+      status: 'PUBLISHED',
+    },
   });
   const action = await db.actionItem.create({
     data: {

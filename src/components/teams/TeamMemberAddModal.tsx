@@ -96,7 +96,9 @@ export default function TeamMemberAddModal({
               availableUsers={availableUsers}
               canManageMembers={canManageMembers}
               canAssignOwnerAdmin={canAssignOwnerAdmin}
-              addMember={handleAddMember}
+              // Adding many people must not close the dialog after the first one, or the rest
+              // and any per-person failures would go unseen.
+              addMember={formData => addMember(teamId, formData)}
             />
           </TabsContent>
         </Tabs>

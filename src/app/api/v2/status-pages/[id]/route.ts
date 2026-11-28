@@ -17,6 +17,7 @@ import {
 } from '@/lib/status-pages/publish-configuration';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
+import { assertStatusPageNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
 import type { Prisma } from '@prisma/client';
 import { withV2Observability } from '@/lib/api-v2/observability';
 
@@ -88,6 +89,26 @@ export const PATCH = withV2Observability(async function PATCH(
     });
 
     const validated = StatusPageUpdateV2Schema.parse(body);
+
+    // The console refuses a name another page uses; the same rule applies here.
+    if (validated.name !== undefined) {
+      try {
+        await assertStatusPageNameAvailable(validated.name, { excludeId: id });
+      } catch (error) {
+        if (!(error instanceof UniqueNameConflictError)) throw error;
+        throw new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: 'A status page with this name already exists.',
+          fields: [
+            {
+              field: 'name',
+              code: 'duplicate',
+              message: 'A status page with this name already exists.',
+            },
+          ],
+        });
+      }
+    }
 
     const isDefaultSpecified = validated.isDefault !== undefined;
     const hasConfigChanges =

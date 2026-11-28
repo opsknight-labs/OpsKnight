@@ -91,6 +91,8 @@ export default function MobileBiometricGuard({ children }: { children: React.Rea
     const handleVisibility = () => {
       if (!isAppLockEnabled()) return;
       if (document.hidden) {
+        // Without a platform authenticator there is nothing to unlock with: do not lock behind a dead button.
+        if (!isSupported) return;
         setIsLocked(true);
         setIsProtecting(true);
         setUnlockError('');
@@ -104,69 +106,68 @@ export default function MobileBiometricGuard({ children }: { children: React.Rea
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [isSupported]);
 
-  if (!isProtecting && !isLocked) return <>{children}</>;
-
+  // One stable tree in every state (lock first, children second): switching between locked and
+  // unlocked must not remount the app shell, or it loses state and repeats its heartbeats.
   return (
     <>
-      <div
-        className={cn(
-          'fixed inset-0 z-(--z-critical-overlay,80) flex flex-col items-center justify-center bg-background/95 px-6 backdrop-blur-xl',
-          !isLocked && 'pointer-events-none invisible opacity-0'
-        )}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="mobile-app-lock-title"
-        aria-describedby="mobile-app-lock-description"
-      >
-        <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 text-center shadow-2xl">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-foreground text-background">
-            <Lock className="h-7 w-7" aria-hidden="true" />
-          </div>
-          <h2
-            id="mobile-app-lock-title"
-            className="mt-5 text-xl font-bold tracking-tight text-foreground"
-          >
-            OpsKnight is locked
-          </h2>
-          <p
-            id="mobile-app-lock-description"
-            className="mt-2 text-sm leading-relaxed text-muted-foreground"
-          >
-            Verify with your device authenticator to reveal responder data. This local privacy lock
-            does not replace your OpsKnight session or server authorization.
-          </p>
-
-          {unlockError ? (
-            <div
-              className="mt-4 flex items-start gap-2 rounded-xl border border-amber-300/70 bg-amber-50 p-3 text-left text-xs text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-200"
-              role="alert"
-            >
-              <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-              <span>{unlockError}</span>
+      {isLocked ? (
+        <div
+          className="fixed inset-0 z-(--z-critical-overlay,80) flex flex-col items-center justify-center bg-background/95 px-6 backdrop-blur-xl"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="mobile-app-lock-title"
+          aria-describedby="mobile-app-lock-description"
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 text-center shadow-2xl">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-foreground text-background">
+              <Lock className="h-7 w-7" aria-hidden="true" />
             </div>
-          ) : null}
+            <h2
+              id="mobile-app-lock-title"
+              className="mt-5 text-xl font-bold tracking-tight text-foreground"
+            >
+              OpsKnight is locked
+            </h2>
+            <p
+              id="mobile-app-lock-description"
+              className="mt-2 text-sm leading-relaxed text-muted-foreground"
+            >
+              Verify with your device authenticator to reveal responder data. This local privacy
+              lock does not replace your OpsKnight session or server authorization.
+            </p>
 
-          <Button
-            type="button"
-            size="lg"
-            className="mt-5 h-11 min-h-[44px] w-full gap-2 text-sm"
-            onClick={() => void authenticate()}
-            disabled={!isSupported || authenticating}
-          >
-            <Fingerprint className="h-4 w-4" aria-hidden="true" />
-            {authenticating
-              ? 'Verifying…'
-              : isSupported
-                ? 'Unlock with device verification'
-                : 'Device verification unavailable'}
-          </Button>
+            {unlockError ? (
+              <div
+                className="mt-4 flex items-start gap-2 rounded-xl border border-amber-300/70 bg-amber-50 p-3 text-left text-xs text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-200"
+                role="alert"
+              >
+                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>{unlockError}</span>
+              </div>
+            ) : null}
+
+            <Button
+              type="button"
+              size="lg"
+              className="mt-5 h-11 min-h-[44px] w-full gap-2 text-sm"
+              onClick={() => void authenticate()}
+              disabled={!isSupported || authenticating}
+            >
+              <Fingerprint className="h-4 w-4" aria-hidden="true" />
+              {authenticating
+                ? 'Verifying…'
+                : isSupported
+                  ? 'Unlock with device verification'
+                  : 'Device verification unavailable'}
+            </Button>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div
         aria-hidden={isLocked || isProtecting}
         inert={isLocked || isProtecting ? true : undefined}
-        className={isLocked || isProtecting ? 'invisible' : ''}
+        className={cn('contents', (isLocked || isProtecting) && 'invisible')}
       >
         {children}
       </div>

@@ -10,6 +10,7 @@ import {
   getCurrentUser,
 } from '@/lib/rbac';
 import { AppError } from '@/lib/errors';
+import { requireResolutionNote } from '@/lib/incidents/resolution-note';
 import { emitAuditEvent } from '@/lib/audit';
 import { logger } from '@/lib/logger';
 import type { IdempotencyContext } from '@/lib/idempotency';
@@ -123,37 +124,7 @@ export async function resolveIncidentWithNote(
 ): Promise<{ replayed: boolean }> {
   await assertCanResolveIncident(id);
 
-  const trimmedResolution = resolution?.trim();
-  if (!trimmedResolution || trimmedResolution.length < 10) {
-    throw new AppError({
-      code: 'INCIDENT_INVALID_ARGUMENT',
-      userMessage:
-        'Resolution note must be at least 10 characters. Please provide more details about how the incident was resolved.',
-      fields: [
-        {
-          field: 'resolution',
-          code: 'too_short',
-          message: 'Resolution note must be at least 10 characters.',
-        },
-      ],
-      details: { minLength: 10 },
-    });
-  }
-  if (trimmedResolution.length > 1000) {
-    throw new AppError({
-      code: 'INCIDENT_INVALID_ARGUMENT',
-      userMessage:
-        'Resolution note must be 1000 characters or fewer. Please shorten your description.',
-      fields: [
-        {
-          field: 'resolution',
-          code: 'too_long',
-          message: 'Resolution note must be 1000 characters or fewer.',
-        },
-      ],
-      details: { maxLength: 1000 },
-    });
-  }
+  const trimmedResolution = requireResolutionNote(resolution);
 
   const user = await getCurrentUser();
   const result = await executeIdempotentIncidentLifecycleCommand(

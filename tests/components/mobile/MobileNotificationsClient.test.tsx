@@ -1,6 +1,9 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import MobileNotificationsClient from '@/components/mobile/MobileNotificationsClient';
+import { enqueueRequest } from '@/lib/offline-queue';
+
+vi.mock('@/lib/offline-queue', () => ({ enqueueRequest: vi.fn() }));
 
 const mockFetch = vi.fn();
 
@@ -11,6 +14,7 @@ describe('MobileNotificationsClient', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -83,6 +87,54 @@ describe('MobileNotificationsClient', () => {
         })
       );
     });
+  });
+
+  it('bounds an offline mark-all to the alerts the user was looking at', async () => {
+    const seenAt = '2026-11-20T10:00:00.000Z';
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          notifications: [
+            {
+              id: 'n-1',
+              title: 'API Down',
+              message: 'Payments service is down.',
+              time: '2m ago',
+              unread: true,
+              type: 'incident',
+              incidentId: 'inc-1',
+              createdAt: '2026-11-20T09:00:00.000Z',
+            },
+            {
+              id: 'n-2',
+              title: 'DB Down',
+              message: 'Primary is down.',
+              time: '1m ago',
+              unread: true,
+              type: 'incident',
+              incidentId: 'inc-2',
+              createdAt: seenAt,
+            },
+          ],
+          unreadCount: 2,
+          total: 2,
+        }),
+      })
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    vi.mocked(enqueueRequest).mockResolvedValue('queued-1');
+
+    render(<MobileNotificationsClient />);
+    await screen.findByText('API Down');
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    fireEvent.click(screen.getByText('Mark all read'));
+
+    // Replayed hours later, an unbounded mark-all would also read alerts created after this tap.
+    await waitFor(() => expect(enqueueRequest).toHaveBeenCalledTimes(1));
+    const queued = vi.mocked(enqueueRequest).mock.calls[0][0];
+    expect(queued.operation).toBe('NOTIFICATION_STATE');
+    expect(JSON.parse(queued.body as string)).toEqual({ markAllAsRead: true, readUpTo: seenAt });
+    onLine.mockRestore();
   });
 
   it('filters to unread notifications', async () => {

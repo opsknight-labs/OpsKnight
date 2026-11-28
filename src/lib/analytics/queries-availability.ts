@@ -1,5 +1,5 @@
 import prisma from '@/lib/prisma';
-import { calculateActorMultiServiceUptime } from '@/lib/actor-metrics';
+import { calculateActorMultiServiceAvailability } from '@/lib/actor-metrics';
 import { serviceObjectiveReadWhere } from '@/lib/slo/authorization';
 import type { AnalyticsScope } from './scope';
 import type { AnalyticsWindow } from './window';
@@ -7,7 +7,7 @@ import type { AnalyticsWindow } from './window';
 export type AvailabilityRow = {
   id: string;
   name: string;
-  /** Percent of the window with no open incident on the service. */
+  /** Percent of the measured period outside recorded outages (lib/uptime.ts); a new service is measured from its creation. */
   uptime: number;
   downtimeMs: number;
   /** Uptime objective in force at the window end, if the service has one. */
@@ -41,7 +41,7 @@ export async function queryAvailability(
   if (services.length === 0) return [];
   const ids = services.map(service => service.id);
   const [uptime, objectives] = await Promise.all([
-    calculateActorMultiServiceUptime(scope.actor, ids, window.start, window.end),
+    calculateActorMultiServiceAvailability(scope.actor, ids, window.start, window.end),
     prisma.serviceObjective.findMany({
       where: {
         AND: [
@@ -69,19 +69,19 @@ export async function queryAvailability(
     }
   }
 
-  const windowMs = window.end.getTime() - window.start.getTime();
   return services
     .map(service => {
-      const value = uptime[service.id] ?? 100;
+      const measured = uptime[service.id];
+      const value = measured?.uptimePercent ?? 100;
       const objective = objectiveByService.get(service.id) ?? null;
       return {
         id: service.id,
         name: service.name,
         uptime: value,
-        downtimeMs: ((100 - value) / 100) * windowMs,
+        downtimeMs: measured?.downtimeMs ?? 0,
         objective,
         budgetRemaining: objective
-          ? errorBudget(value, objective.target, windowMs).remaining
+          ? errorBudget(value, objective.target, measured?.periodMs ?? 0).remaining
           : null,
       };
     })

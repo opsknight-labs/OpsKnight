@@ -41,6 +41,8 @@ export const CAPABILITIES = {
   AUDIT_EXPORT: 'audit.export',
   POSTMORTEM_DRAFT_READ: 'postmortem.draft.read',
   REPORT_READ: 'report.read',
+  /** Create, edit, publish, share, schedule and delete reports, saved views and dashboards. */
+  REPORT_MANAGE: 'report.manage',
   REPORT_EXPORT: 'report.export',
   USER_READ_ALL: 'user.read.all',
   USER_NOTIFICATION_PREFERENCES: 'user.notification_preferences',
@@ -234,6 +236,7 @@ const RESPONDER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.SCHEDULE_READ_ALL,
   CAPABILITIES.POSTMORTEM_DRAFT_READ,
   CAPABILITIES.REPORT_READ,
+  CAPABILITIES.REPORT_MANAGE,
   CAPABILITIES.REPORT_EXPORT,
   CAPABILITIES.USER_READ_ALL,
   CAPABILITIES.POLICY_READ_ALL,
@@ -255,6 +258,7 @@ const AUDITOR_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.SCHEDULE_READ_ALL,
   CAPABILITIES.AUDIT_READ,
   CAPABILITIES.AUDIT_EXPORT,
+  // Auditors read and export reports but never create, change or delete them.
   CAPABILITIES.REPORT_READ,
   CAPABILITIES.REPORT_EXPORT,
   CAPABILITIES.USER_READ_ALL,
@@ -295,6 +299,7 @@ const USER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.METRICS_READ_SCOPED,
   CAPABILITIES.SCHEDULE_READ_SCOPED,
   CAPABILITIES.REPORT_READ,
+  CAPABILITIES.REPORT_MANAGE,
 ]);
 
 // Business-impact audience: the status dashboard (open to everyone signed in), business services
@@ -354,6 +359,11 @@ export function hasCapability(role: AppRole, capability: Capability): boolean {
   return ROLE_CAPABILITIES.get(role)?.has(capability) ?? false;
 }
 
+/** Whether a role value (an account's, or one being assigned) is a role that holds admin.manage. */
+export function isAdministratorRole(role: unknown): boolean {
+  return isAppRole(role) && hasCapability(role, CAPABILITIES.ADMIN_MANAGE);
+}
+
 /**
  * Whether `current` already includes every permission of `requested`. Built-in roles are not a
  * strict ladder (Auditors hold audit and compliance permissions Responders lack), so compare
@@ -366,6 +376,26 @@ export function roleCovers(
   if (!isAppRole(current) || !isAppRole(requested)) return false;
   const held = new Set(getRoleCapabilities(current));
   return getRoleCapabilities(requested).every(capability => held.has(capability));
+}
+
+const PERMANENT_UPGRADE_LADDER: readonly string[] = ['STAKEHOLDER', 'USER', 'RESPONDER', 'ADMIN'];
+
+/**
+ * Whether permanently replacing `current` with `requested` keeps everything the person can do.
+ * A permanent approval swaps the base role (there is no permanent additive grant), so a lateral
+ * move such as USER or RESPONDER to AUDITOR would silently strip their working permissions;
+ * those can only be granted time-boxed, where the grant is added on top of the base role.
+ * Responder's all-incident permissions supersede a User's scoped ones even though the sets differ,
+ * so a step up the operations ladder counts as safe alongside a strict permission superset.
+ */
+export function permanentRoleKeepsAccess(
+  current: string | null | undefined,
+  requested: string | null | undefined
+): boolean {
+  if (roleCovers(requested, current)) return true;
+  const from = PERMANENT_UPGRADE_LADDER.indexOf(current ?? '');
+  const to = PERMANENT_UPGRADE_LADDER.indexOf(requested ?? '');
+  return from >= 0 && to > from;
 }
 
 /** Effective permissions of a resolved user; falls back to the built-in role's permissions. */

@@ -1,6 +1,10 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { RunbookOverview, computeSuccessRate } from '@/components/runbooks/detail/RunbookOverview';
+import {
+  RunbookOverview,
+  computeSuccessRate,
+  describeSuccessRate,
+} from '@/components/runbooks/detail/RunbookOverview';
 import {
   VersionTimeline,
   type VersionTimelineItem,
@@ -108,6 +112,37 @@ describe('VersionTimeline', () => {
   });
 });
 
+describe('VersionTimeline unpublish', () => {
+  it('offers Unpublish only on the live version and asks before running it', () => {
+    const unpublishAction = vi.fn();
+    render(
+      <VersionTimeline
+        versions={[
+          {
+            ...baseVersion,
+            id: 'ver_2',
+            version: 2,
+            isCurrentPublished: true,
+            compareHref: null,
+            unpublishAction,
+          },
+          { ...baseVersion, retireAction: vi.fn() },
+        ]}
+      />
+    );
+    const items = within(screen.getByRole('list', { name: 'Version history' })).getAllByRole(
+      'listitem'
+    );
+    expect(within(items[1]).queryByRole('button', { name: 'Unpublish' })).toBeNull();
+    fireEvent.click(within(items[0]).getByRole('button', { name: 'Unpublish' }));
+    expect(screen.getByText('Unpublish version 2?')).toBeInTheDocument();
+    expect(
+      screen.getByText(/has no published version until you publish again/)
+    ).toBeInTheDocument();
+    expect(unpublishAction).not.toHaveBeenCalled();
+  });
+});
+
 describe('VersionStepDiff', () => {
   it('shows changed steps with badges and collapses unchanged steps', () => {
     const side = { summary: 'Step · MANUAL · READ_ONLY', configuration: '{}' };
@@ -171,5 +206,34 @@ describe('ImportRunbookDialog', () => {
     expect(screen.getByLabelText('Runbook file')).toHaveAttribute('name', 'file');
     expect(screen.getByLabelText('Or paste JSON')).toHaveAttribute('name', 'json');
     expect(screen.getByRole('button', { name: 'Import runbook' })).toBeInTheDocument();
+  });
+});
+
+describe('describeSuccessRate', () => {
+  it('shows no runs, not 100%, when nothing has run', () => {
+    expect(describeSuccessRate(computeSuccessRate([]), 0)).toEqual({
+      value: 'No runs',
+      window: 'No runs yet',
+    });
+  });
+
+  it('shows no finished runs when every sampled run is still in flight', () => {
+    expect(describeSuccessRate(computeSuccessRate(['RUNNING', 'PENDING']), 2).value).toBe(
+      'No finished runs'
+    );
+  });
+
+  it('names the sampled window when it covers fewer runs than the total', () => {
+    const statuses: string[] = Array.from({ length: 30 }, (_, index) =>
+      index < 27 ? 'SUCCEEDED' : 'FAILED'
+    );
+    expect(describeSuccessRate(computeSuccessRate(statuses), 350)).toEqual({
+      value: '90%',
+      window: 'Last 30 of 350 runs',
+    });
+    expect(describeSuccessRate(computeSuccessRate(['SUCCEEDED', 'FAILED']), 2)).toEqual({
+      value: '50%',
+      window: 'All 2 runs',
+    });
   });
 });

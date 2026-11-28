@@ -77,4 +77,43 @@ describe('IncidentCustomFieldsCard', () => {
     fireEvent.blur(input);
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it('shows an unsaved default as a hint, and saves it when the responder confirms the same value', async () => {
+    const withDefault = { ...textField, defaultValue: 'Multi-Tenant Enterprise' };
+    render(
+      <IncidentCustomFieldsCard
+        incidentId="inc-1"
+        customFieldValues={[]}
+        allCustomFields={[withDefault]}
+        canManage
+      />
+    );
+    const input = screen.getByPlaceholderText(
+      'Default: Multi-Tenant Enterprise (not saved)'
+    ) as HTMLInputElement;
+    // The default is not presented as stored: the field is empty until it is saved.
+    expect(input.value).toBe('');
+
+    fireEvent.change(input, { target: { value: 'Multi-Tenant Enterprise' } });
+    fireEvent.blur(input, { target: { value: 'Multi-Tenant Enterprise' } });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      customFieldId: 'cf-ticket',
+      value: 'Multi-Tenant Enterprise',
+    });
+  });
+
+  it('keeps showing a stored value over the default', () => {
+    const withDefault = { ...textField, defaultValue: 'Multi-Tenant Enterprise' };
+    render(
+      <IncidentCustomFieldsCard
+        incidentId="inc-1"
+        customFieldValues={[{ id: 'v1', value: 'Single-Tenant', customField: withDefault }]}
+        allCustomFields={[withDefault]}
+        canManage
+      />
+    );
+    expect((screen.getByLabelText('Ticket') as HTMLInputElement).value).toBe('Single-Tenant');
+  });
 });

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-const fixture = vi.hoisted(() => ({ mode: 'postgres', maxInFlightRequests: 2 }));
+const fixture = vi.hoisted(() => ({ mode: 'postgres', maxInFlightRequests: 2, requestWaitMs: 25 }));
 vi.mock('@/lib/ingestion/config', () => ({ ingestionConfig: () => fixture }));
 import { withIngestionRequestSlot } from '@/lib/ingestion/request-gate';
 
@@ -24,6 +24,7 @@ describe('asynchronous ingestion request backpressure', () => {
     vi.useFakeTimers();
     fixture.mode = 'postgres';
     fixture.maxInFlightRequests = 2;
+    fixture.requestWaitMs = 25;
     globalThis.opsknightIngestionRequestGate = undefined;
   });
   afterEach(() => {
@@ -185,6 +186,44 @@ describe('asynchronous ingestion request backpressure', () => {
     } finally {
       clock.mockRestore();
     }
+  });
+});
+
+describe('configurable request wait', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    fixture.mode = 'postgres';
+    fixture.maxInFlightRequests = 1;
+    globalThis.opsknightIngestionRequestGate = undefined;
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    fixture.requestWaitMs = 25;
+    globalThis.opsknightIngestionRequestGate = undefined;
+  });
+  it('keeps a queued request past the default 25 ms when the wait is raised', async () => {
+    fixture.requestWaitMs = 200;
+    const a = deferred();
+    const active = withIngestionRequestSlot(() => a.promise);
+    const operation = vi.fn(async () => new Response(null, { status: 202 }));
+    const queued = withIngestionRequestSlot(operation);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(operation).not.toHaveBeenCalled();
+    a.resolve(new Response());
+    await active;
+    expect((await queued).status).toBe(202);
+  });
+  it('rejects immediately with a wait of 0', async () => {
+    fixture.requestWaitMs = 0;
+    const a = deferred();
+    const active = withIngestionRequestSlot(() => a.promise);
+    const queued = withIngestionRequestSlot(async () => new Response());
+    await vi.advanceTimersByTimeAsync(1);
+    const response = await queued;
+    expect(response.status).toBe(503);
+    expect(response.headers.get('Retry-After')).toBe('5');
+    a.resolve(new Response());
+    await active;
   });
 });
 

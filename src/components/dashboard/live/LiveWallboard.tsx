@@ -30,7 +30,7 @@ import {
   getFullscreenElement,
   isFullscreenSupported,
 } from '@/lib/fullscreen';
-import { liveViewLabel } from '@/lib/dashboard/live-incidents-shared';
+import { LIVE_URL_PARAMS, liveViewLabel } from '@/lib/dashboard/live-incidents-shared';
 import { useLiveDashboard } from './LiveDashboardProvider';
 import LiveIncidentsPanel, { formatSyncAge } from './LiveIncidentsPanel';
 import { OnCallCard, SlaRiskCard } from './ResponderRail';
@@ -148,6 +148,11 @@ function readStoredScale(): number | null {
 const controlClass =
   'inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-zinc-800 outline-hidden focus-visible:ring-4 focus-visible:ring-sky-400/70';
 
+/** Auto-cycle starts on unless the URL pins the board (`?cycle=off`) or names a view (`?lview=`). */
+export function wallboardCycleDefault(params: Pick<URLSearchParams, 'get'>): boolean {
+  return params.get('cycle') !== 'off' && !params.get(LIVE_URL_PARAMS.view);
+}
+
 export default function LiveWallboard({
   timeZone,
   noiseTile,
@@ -159,8 +164,8 @@ export default function LiveWallboard({
   const { snapshot, query, setQuery, health, syncedAt, now } = useLiveDashboard();
   const searchParams = useSearchParams();
   const rootRef = useRef<HTMLDivElement | null>(null);
-  // `?cycle=off` pins a TV to one view (e.g. a team board using ?lteam=...).
-  const [cycle, setCycle] = useState(searchParams.get('cycle') !== 'off');
+  // `?cycle=off` or an explicit `?lview=` pins a TV to one view (e.g. a team board).
+  const [cycle, setCycle] = useState(() => wallboardCycleDefault(searchParams));
   const [cycleStartedAt, setCycleStartedAt] = useState(() =>
     snapshot ? Date.parse(snapshot.asOf) : 0
   );

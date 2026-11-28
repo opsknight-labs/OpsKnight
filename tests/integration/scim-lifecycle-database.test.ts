@@ -28,6 +28,9 @@ import { reconcileTeam } from '@/lib/scim/lifecycle/membership';
 import { updateUserSecurityState } from '@/lib/users/admin-invariants';
 import { createPrismaClient } from '../../src/lib/db/create-client';
 
+// A person without an uploaded photo gets a bundled knight or Squire, marked as assigned automatically.
+const DEFAULT_AVATAR = /^\/avatars\/(knight|squire)\/[\w-]+\.svg\?auto=1$/;
+
 const suite =
   process.env.SCIM_CERTIFICATION === '1' && process.env.VITEST_USE_REAL_DB === '1'
     ? describe
@@ -397,7 +400,7 @@ suite('SCIM PostgreSQL lifecycle certification', () => {
     ).toBe(200);
     expect(
       (await prisma.user.findUniqueOrThrow({ where: { id: created.id } })).avatarUrl
-    ).toContain('seed=FP');
+    ).toMatch(DEFAULT_AVATAR);
     const photo = 'https://example.test/explicit-avatar.png';
     expect(
       (
@@ -452,7 +455,7 @@ suite('SCIM PostgreSQL lifecycle certification', () => {
         (await (await call('users', 'GET', undefined, created.id)).json()).photos
       ).toBeUndefined();
       const stored = await prisma.user.findUniqueOrThrow({ where: { id: created.id } });
-      expect(stored.avatarUrl).toMatch(/^\/api\/avatar/);
+      expect(stored.avatarUrl).toMatch(DEFAULT_AVATAR);
       expect(stored.avatarUrl).not.toBe(photo);
     }
   });

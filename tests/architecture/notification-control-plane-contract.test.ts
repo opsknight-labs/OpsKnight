@@ -67,7 +67,8 @@ describe('notification control-plane architecture', () => {
       path.join(process.cwd(), 'src/app/api/admin/notifications/operations/route.ts')
     );
     expect(personal).toMatch(/userId\s*:\s*user\.id/);
-    expect(operations).toContain("user.role !== 'ADMIN' && user.role !== 'AUDITOR'");
+    expect(operations).toContain('CAPABILITIES.ADMIN_MANAGE');
+    expect(operations).toContain('CAPABILITIES.AUDIT_READ');
   });
 
   it('allows sensitive ciphertext to be removed from terminal notification rows', () => {

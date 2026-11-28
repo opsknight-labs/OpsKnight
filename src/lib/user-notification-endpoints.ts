@@ -3,6 +3,7 @@ import 'server-only';
 import crypto from 'crypto';
 import { Prisma, type NotificationChannel, type NotificationEndpointStatus } from '@prisma/client';
 import prisma from './prisma';
+import { logAudit } from './audit';
 import { getEncryptionKey } from './encryption';
 
 const UNUSABLE_ENDPOINT_STATUSES: readonly NotificationEndpointStatus[] = [
@@ -10,6 +11,53 @@ const UNUSABLE_ENDPOINT_STATUSES: readonly NotificationEndpointStatus[] = [
   'BOUNCED',
   'OPTED_OUT',
 ];
+
+const HASH_KEY_CONFIG = 'notification_endpoint_hash_key';
+
+function endpointHashKeyBytes(): Buffer {
+  const key = process.env.NEXTAUTH_SECRET?.trim() || getEncryptionKey();
+  if (!key) throw new Error('Notification encryption is not configured');
+  return /^[a-f0-9]{64}$/i.test(key)
+    ? Buffer.from(key, 'hex')
+    : crypto.createHash('sha256').update(key).digest();
+}
+
+let hashKeyChangedAtCache: Promise<Date | null> | undefined;
+
+/** Test hook: forget the cached hash-key state. */
+export function resetEndpointHashKeyStateForTests() {
+  hashKeyChangedAtCache = undefined;
+}
+
+/**
+ * When the address-hash key last changed, or null if it has not since this was first recorded.
+ * The hash key is NEXTAUTH_SECRET, so rotating it re-hashes every address; recording a key
+ * fingerprint lets a mismatch be told apart from a person genuinely changing their address.
+ */
+function hashKeyChangedAt(): Promise<Date | null> {
+  hashKeyChangedAtCache ??= (async () => {
+    const keyId = crypto
+      .createHmac('sha256', endpointHashKeyBytes())
+      .update('opsknight:endpoint-hash-key-id')
+      .digest('hex')
+      .slice(0, 16);
+    const row = await prisma.systemConfig.findUnique({ where: { key: HASH_KEY_CONFIG } });
+    const stored = row?.value as { keyId?: string; changedAt?: string | null } | null | undefined;
+    if (stored?.keyId === keyId) return stored.changedAt ? new Date(stored.changedAt) : null;
+    const changedAt = stored?.keyId ? new Date() : null;
+    const value = { keyId, changedAt: changedAt?.toISOString() ?? null };
+    await prisma.systemConfig.upsert({
+      where: { key: HASH_KEY_CONFIG },
+      create: { key: HASH_KEY_CONFIG, value },
+      update: { value },
+    });
+    return changedAt;
+  })().catch(() => {
+    hashKeyChangedAtCache = undefined; // do not cache a failed read
+    return null;
+  });
+  return hashKeyChangedAtCache;
+}
 
 function normalizedEndpointAddress(channel: NotificationChannel, address: string): string {
   const value = address.trim();
@@ -23,13 +71,8 @@ export function notificationEndpointAddressHash(
   channel: NotificationChannel,
   address: string
 ): string {
-  const key = process.env.NEXTAUTH_SECRET?.trim() || getEncryptionKey();
-  if (!key) throw new Error('Notification encryption is not configured');
-  const keyBytes = /^[a-f0-9]{64}$/i.test(key)
-    ? Buffer.from(key, 'hex')
-    : crypto.createHash('sha256').update(key).digest();
   return crypto
-    .createHmac('sha256', keyBytes)
+    .createHmac('sha256', endpointHashKeyBytes())
     .update(`${channel}\u001f${normalizedEndpointAddress(channel, address)}`)
     .digest('hex');
 }
@@ -42,6 +85,7 @@ export async function syncUserNotificationEndpoint(
   // the endpoint-health migration. Preserve delivery until the new client is live.
   if (!store.userNotificationEndpoint) return { available: true, status: 'UNVERIFIED' };
   const addressHash = notificationEndpointAddressHash(input.channel, input.address);
+  const keyChangedAt = await hashKeyChangedAt();
   const endpoint =
     typeof store.userNotificationEndpoint.upsert === 'function'
       ? await store.userNotificationEndpoint.upsert({
@@ -54,7 +98,7 @@ export async function syncUserNotificationEndpoint(
           },
           update: {},
         })
-      : (await store.userNotificationEndpoint.findUnique({
+      : ((await store.userNotificationEndpoint.findUnique({
           where: { userId_channel: { userId: input.userId, channel: input.channel } },
         })) ??
         (await store.userNotificationEndpoint.create({
@@ -64,8 +108,21 @@ export async function syncUserNotificationEndpoint(
             addressHash,
             status: 'UNVERIFIED',
           },
-        }));
+        })));
   if (endpoint.addressHash !== addressHash) {
+    // The hash key changed after this row was last written, so the mismatch is the rotation, not a
+    // new address: keep the provider's invalid, bounce or opt-out and only re-stamp the hash.
+    if (
+      UNUSABLE_ENDPOINT_STATUSES.includes(endpoint.status) &&
+      keyChangedAt &&
+      endpoint.updatedAt < keyChangedAt
+    ) {
+      await store.userNotificationEndpoint.update({
+        where: { id: endpoint.id },
+        data: { addressHash },
+      });
+      return { available: false, status: endpoint.status };
+    }
     await store.userNotificationEndpoint.update({
       where: { id: endpoint.id },
       data: {
@@ -105,7 +162,16 @@ export async function recordUserNotificationEndpointOutcome(
   if (existing) {
     if (existing.addressHash !== input.addressHash) return;
     await tx.userNotificationEndpoint.updateMany({
-      where: { id: existing.id, addressHash: input.addressHash },
+      // A late or out-of-order callback never revives (or re-labels) an INVALID, BOUNCED or OPTED_OUT
+      // endpoint; only a changed address or an explicit admin/user action clears those. A reset
+      // also fences off every outcome the provider observed before it, so a delayed callback for
+      // the old failure cannot put the endpoint straight back into the state that was reset.
+      where: {
+        id: existing.id,
+        addressHash: input.addressHash,
+        status: { notIn: [...UNUSABLE_ENDPOINT_STATUSES] },
+        OR: [{ lastResetAt: null }, { lastResetAt: { lte: input.occurredAt } }],
+      },
       data: input.delivered
         ? {
             status: 'HEALTHY',
@@ -144,4 +210,43 @@ export async function recordUserNotificationEndpointOutcome(
     // A concurrent address refresh won the unique key. Never let this older
     // provider outcome mutate it; a later matching callback can update it.
   }
+}
+
+/**
+ * Lets a person try an INVALID or BOUNCED endpoint again. OPTED_OUT is left alone: only the
+ * recipient's own opt-in may lift it. Returns false when there was nothing to reset.
+ */
+export async function resetUserNotificationEndpoint(input: {
+  userId: string;
+  channel: NotificationChannel;
+  actorId: string;
+}): Promise<boolean> {
+  return prisma.$transaction(async tx => {
+    const reset = await tx.userNotificationEndpoint.updateMany({
+      where: {
+        userId: input.userId,
+        channel: input.channel,
+        status: { in: ['INVALID', 'BOUNCED'] },
+      },
+      data: {
+        status: 'UNVERIFIED',
+        failureCount: 0,
+        lastFailureAt: null,
+        lastErrorCode: null,
+        lastResetAt: new Date(),
+      },
+    });
+    if (reset.count === 0) return false;
+    await logAudit(
+      {
+        action: 'notification.endpoint.reset',
+        entityType: 'USER',
+        entityId: input.userId,
+        actorId: input.actorId,
+        details: { channel: input.channel },
+      },
+      tx
+    );
+    return true;
+  });
 }

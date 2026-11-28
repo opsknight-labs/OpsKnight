@@ -4,7 +4,10 @@ import { GET } from '@/app/api/admin/notifications/operations/route';
 import { POST } from '@/app/api/admin/notifications/operations/[id]/retry/route';
 import { getCurrentUser } from '@/lib/rbac';
 import { getNotificationOperations } from '@/lib/notification-operations';
-import { requeueCentralNotification } from '@/lib/notification-control-plane';
+import {
+  notificationRetryBlockedReason,
+  requeueCentralNotification,
+} from '@/lib/notification-control-plane';
 
 vi.mock('@/lib/rbac', () => ({ getCurrentUser: vi.fn() }));
 vi.mock('@/lib/notification-operations', () => ({
@@ -24,6 +27,7 @@ vi.mock('@/lib/notification-operations', () => ({
 }));
 vi.mock('@/lib/notification-control-plane', () => ({
   requeueCentralNotification: vi.fn(),
+  notificationRetryBlockedReason: vi.fn().mockResolvedValue(null),
 }));
 vi.mock('@/lib/audit', () => ({ emitAuditEvent: vi.fn() }));
 vi.mock('@/lib/logger', () => ({
@@ -52,9 +56,29 @@ describe('notification operations authorization', () => {
     );
     expect(response.status).toBe(200);
     expect(getNotificationOperations).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'FAILED' })
+      expect.objectContaining({ status: 'FAILED', includeRecipients: false })
     );
     expect(response.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('shows recipients only to holders of admin.manage', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue(admin as never);
+    await GET(new NextRequest('https://example.com/api/admin/notifications/operations'));
+    expect(getNotificationOperations).toHaveBeenCalledWith(
+      expect.objectContaining({ includeRecipients: true })
+    );
+  });
+
+  it('allows a user whose custom role grants audit.read', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue({
+      ...responder,
+      role: 'USER',
+      capabilities: ['audit.read'],
+    } as never);
+    const response = await GET(
+      new NextRequest('https://example.com/api/admin/notifications/operations')
+    );
+    expect(response.status).toBe(200);
   });
 
   it('denies the workspace console to ordinary responders', async () => {
@@ -107,6 +131,21 @@ describe('notification operations authorization', () => {
     );
     expect(response.status).toBe(200);
     expect(requeueCentralNotification).toHaveBeenCalledWith('notification_abc');
+  });
+
+  it('says so when a retry is refused because the message content was purged', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue(admin as never);
+    vi.mocked(requeueCentralNotification).mockResolvedValue(false);
+    vi.mocked(notificationRetryBlockedReason).mockResolvedValue('Its message content was removed.');
+    const response = await POST(
+      new NextRequest(
+        'https://example.com/api/admin/notifications/operations/notification_abc/retry',
+        { method: 'POST', headers: { origin: 'https://example.com' } }
+      ),
+      { params: Promise.resolve({ id: 'notification_abc' }) }
+    );
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: 'Its message content was removed.' });
   });
 
   it('allows retrying historical backfilled notif_eo_ IDs for Teams operations', async () => {

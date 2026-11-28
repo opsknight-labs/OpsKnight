@@ -134,6 +134,52 @@ describe('audit event contract', () => {
     expect(serialized).toContain('[REDACTED]');
   });
 
+  it('keeps identity values readable while still redacting every credential', async () => {
+    vi.clearAllMocks();
+    await emitAuditEvent({
+      action: 'service_account.deleted',
+      source: 'UI',
+      target: { type: 'SYSTEM_CONFIG', id: 'sa-1' },
+      oldValue: { email: 'svc@example.com', sessionId: 'sess_123' },
+      newValue: { to: 'new@example.com', authType: 'OIDC', hotel: 'Grand' },
+      metadata: {
+        note: 'Contact svc@example.com',
+        password: 'p-1',
+        apiToken: 't-1',
+        apiKey: 'k-1',
+        'x-api-key': 'k-2',
+        key: 'k-3',
+        authorization: 'a-1',
+        clientSecret: 's-1',
+        sessionToken: 't-2',
+        auth: { user: 'u', pass: 'p-2' },
+        phone: '+1 555 0100',
+        nested: { header: 'Bearer abc.def.ghi' },
+      },
+    });
+
+    const details = mocks.auditCreate.mock.calls[0][0].data.details;
+    expect(details.oldValue).toEqual({ email: 'svc@example.com', sessionId: 'sess_123' });
+    expect(details.newValue).toEqual({ to: 'new@example.com', authType: 'OIDC', hotel: 'Grand' });
+    expect(details.metadata.note).toBe('Contact svc@example.com');
+    const serialized = JSON.stringify(details.metadata);
+    for (const secret of [
+      'p-1',
+      't-1',
+      'k-1',
+      'k-2',
+      'k-3',
+      'a-1',
+      's-1',
+      't-2',
+      'p-2',
+      'abc.def',
+    ]) {
+      expect(serialized).not.toContain(secret);
+    }
+    expect(serialized).not.toContain('555 0100');
+  });
+
   it('inherits the active request correlation id when none is supplied', async () => {
     await runWithContext({ requestId: 'request-from-middleware' }, () =>
       emitAuditEvent({

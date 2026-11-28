@@ -108,6 +108,24 @@ describe('deployment configuration invariants', () => {
     expect(serviceMonitor).toContain('bearerTokenSecret:');
   });
 
+  it('scrapes every non-web split role through a PodMonitor, since the Service selects only web', () => {
+    const service = read('deploy/kubernetes/helm/opsknight/templates/service.yaml');
+    const podMonitor = read('deploy/kubernetes/helm/opsknight/templates/podmonitor.yaml');
+    const split = read('deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml');
+    expect(service).toContain('app.kubernetes.io/component: web');
+    expect(podMonitor).toContain('eq .Values.runtime.mode "split"');
+    expect(podMonitor).toContain(
+      'metrics.serviceMonitor.enabled requires metrics.scrapeTokenSecret.existingSecret'
+    );
+    expect(podMonitor).toContain('bearerTokenSecret:');
+    const splitRoles = [...split.matchAll(/\(dict "name" "([a-z-]+)" "processRole"/g)].map(
+      match => match[1]
+    );
+    const scraped = [...podMonitor.matchAll(/^\s+- ([a-z-]+)$/gm)].map(match => match[1]);
+    expect(splitRoles).toContain('web');
+    expect(scraped.sort()).toEqual(splitRoles.filter(role => role !== 'web').sort());
+  });
+
   it('keeps the raw ServiceMonitor selector aligned with the application Service', () => {
     const service = read('deploy/kubernetes/kustomize/base/service.yaml');
     const serviceMonitor = read('deploy/kubernetes/kustomize/monitoring/servicemonitor.yaml');

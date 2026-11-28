@@ -27,6 +27,8 @@ Sign in with retention-management permission and open **Settings → System → 
 
 The policy controls incident, alert, audit/event history, metrics, realtime-query, completed privacy-request, expired privacy-artifact, and unsubscribed-subscriber windows. Cleanup runs asynchronously. Holds override ordinary eligibility, and a saved policy is not proof that cleanup finished.
 
+A hold on a user keeps that person's audit entries through audit-log cleanup: the entries they performed and the entries about their account. Audit entries identified only by an email address, such as failed sign-ins, carry no user and are not covered by the hold. Cleanup rechecks holds under the same lock as incident holds, so a hold placed while cleanup runs is respected.
+
 Supported boundaries include incident retention from 30–3,650 days, alert retention from 7–3,650, log retention from 1–3,650, metrics retention from 30–3,650, and realtime windows from 7–365 days. The realtime window cannot exceed metrics retention.
 
 ## Configure retention

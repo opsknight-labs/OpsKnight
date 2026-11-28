@@ -120,7 +120,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                 teams={teams}
                 canAcknowledge={canAcknowledge}
                 canAssignSelf={canAssignSelf}
-                canExport={hasCapability(actor.role, CAPABILITIES.REPORT_EXPORT)}
+                canExport={actorHasCapability(actor, CAPABILITIES.REPORT_EXPORT)}
                 currentUserName={currentUserName}
               />
             }

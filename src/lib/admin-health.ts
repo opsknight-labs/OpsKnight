@@ -146,6 +146,36 @@ type SlaPerformanceSummaryRow = {
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 
+/** Jobs this long past their schedule are late; ordinary queue latency is not. */
+const JOB_OVERDUE_GRACE_MS = 5 * MINUTE;
+/** Failures in the last hour that turn the jobs check from degraded to unhealthy. */
+export const JOB_FAILURES_UNHEALTHY_PER_HOUR = 5;
+/** Notifications due but unsent for 5+ minutes that turn the check from degraded to unhealthy. */
+export const NOTIFICATIONS_STUCK_UNHEALTHY = 10;
+
+/** One transient failure or a moment of queue latency must not flip the card; a pattern does. */
+export function backgroundJobsStatus(input: {
+  staleProcessing: number;
+  failedLastHour: number;
+  overdue: number;
+}): HealthLevel {
+  if (input.staleProcessing > 0 || input.failedLastHour >= JOB_FAILURES_UNHEALTHY_PER_HOUR) {
+    return 'unhealthy';
+  }
+  return input.failedLastHour > 0 || input.overdue > 0 ? 'degraded' : 'healthy';
+}
+
+export function notificationsStatus(input: {
+  incompleteProviders: number;
+  stuck: number;
+  failed24h: number;
+}): HealthLevel {
+  if (input.incompleteProviders > 0 || input.stuck >= NOTIFICATIONS_STUCK_UNHEALTHY) {
+    return 'unhealthy';
+  }
+  return input.stuck > 0 || input.failed24h > 0 ? 'degraded' : 'healthy';
+}
+
 function ageLabel(date: Date | null): string {
   if (!date) return 'never';
   const ageMs = Math.max(0, Date.now() - date.getTime());
@@ -207,7 +237,22 @@ function safeErrorKind(error: unknown): string {
     : 'Database error (see restricted server logs)';
 }
 
+/** Release lookups are cached so live refresh never hits GitHub (60/h/IP) or waits out a dead network. */
+const RELEASE_CACHE_TTL_MS = 6 * HOUR;
+const RELEASE_FAILURE_TTL_MS = 15 * MINUTE;
+let releaseCache: { value: string | null; expiresAt: number } | null = null;
+
 async function latestRelease(): Promise<string | null> {
+  if (releaseCache && releaseCache.expiresAt > Date.now()) return releaseCache.value;
+  const value = await fetchLatestRelease();
+  releaseCache = {
+    value,
+    expiresAt: Date.now() + (value ? RELEASE_CACHE_TTL_MS : RELEASE_FAILURE_TTL_MS),
+  };
+  return value;
+}
+
+async function fetchLatestRelease(): Promise<string | null> {
   try {
     const response = await fetch(
       'https://api.github.com/repos/opsknight-labs/OpsKnight/releases/latest',
@@ -294,36 +339,50 @@ export function overallStatus(checks: AdminHealthCheck[]): HealthLevel {
   return calculateOperationalScore(checks).overall;
 }
 
+/** Higher is worse; a bar shows the worst status that applies to its hour. */
+function healthSeverity(level: HealthLevel): number {
+  return level === 'unhealthy' ? 3 : level === 'degraded' ? 2 : level === 'unknown' ? 1 : 0;
+}
+
 export async function generate24HourHistory(
   checks: AdminHealthCheck[],
   overall: HealthLevel,
   now: Date
 ): Promise<HealthHistorySample[]> {
-  const since = new Date(now.getTime() - 24 * HOUR);
-  type FailedJob = { id: string; createdAt: Date };
-  type FailedDelivery = { id: string; createdAt: Date };
-  type FailedNotification = { id: string; startedAt: Date };
+  // Fixed clock-hour buckets (UTC); the viewer's time zone is applied in the browser from `timestamp`.
+  const currentHourStart = Math.floor(now.getTime() / HOUR) * HOUR;
+  const since = new Date(currentHourStart - 23 * HOUR);
+  // Counted per hour in SQL: a provider outage must not load every failed row on each refresh.
+  type HourlyFailures = { hour: Date; failures: number };
 
   const historyResults = await Promise.allSettled([
-    prisma.backgroundJob.findMany({
-      where: { createdAt: { gte: since }, status: 'FAILED' },
-      select: { id: true, createdAt: true },
-    }),
-    prisma.inboundDelivery.findMany({
-      where: { createdAt: { gte: since }, status: 'FAILED' },
-      select: { id: true, createdAt: true },
-    }),
-    prisma.notificationDeliveryAttempt.findMany({
-      where: { startedAt: { gte: since }, outcome: 'FAILED' },
-      select: { id: true, startedAt: true },
-    }),
+    prisma.$queryRaw<HourlyFailures[]>`
+      SELECT date_trunc('hour', "failedAt") AS hour, COUNT(*)::int AS failures
+      FROM "BackgroundJob"
+      WHERE status = 'FAILED' AND "failedAt" >= ${since}
+      GROUP BY 1`,
+    prisma.$queryRaw<HourlyFailures[]>`
+      SELECT date_trunc('hour', "createdAt") AS hour, COUNT(*)::int AS failures
+      FROM "InboundDelivery"
+      WHERE status = 'FAILED' AND "createdAt" >= ${since}
+      GROUP BY 1`,
+    prisma.$queryRaw<HourlyFailures[]>`
+      SELECT date_trunc('hour', "startedAt") AS hour, COUNT(*)::int AS failures
+      FROM "NotificationDeliveryAttempt"
+      WHERE outcome = 'FAILED' AND "startedAt" >= ${since}
+      GROUP BY 1`,
   ]);
+  const failuresPerHour = (result: PromiseSettledResult<HourlyFailures[]>) => {
+    const counts = new Map<number, number>();
+    if (result.status === 'fulfilled') {
+      for (const row of result.value) counts.set(new Date(row.hour).getTime(), row.failures);
+    }
+    return counts;
+  };
   const [jobResult, deliveryResult, notificationResult] = historyResults;
-  const failedJobs: FailedJob[] = jobResult.status === 'fulfilled' ? jobResult.value : [];
-  const failedDeliveries: FailedDelivery[] =
-    deliveryResult.status === 'fulfilled' ? deliveryResult.value : [];
-  const failedNotifications: FailedNotification[] =
-    notificationResult.status === 'fulfilled' ? notificationResult.value : [];
+  const failedJobs = failuresPerHour(jobResult);
+  const failedDeliveries = failuresPerHour(deliveryResult);
+  const failedNotifications = failuresPerHour(notificationResult);
   const unavailableSources = historyResults.filter(result => result.status === 'rejected').length;
   const {
     scorePercent: liveScorePercent,
@@ -335,49 +394,57 @@ export async function generate24HourHistory(
 
   const samples: HealthHistorySample[] = [];
   for (let i = 23; i >= 0; i--) {
-    const d = new Date(now.getTime() - i * HOUR);
-    const windowStart = new Date(d.getTime() - HOUR);
-    const windowEnd = d;
-    const hourLabel = `${d.getHours().toString().padStart(2, '0')}:00`;
-    const hourlyFailedJobs = failedJobs.filter(
-      job => job.createdAt >= windowStart && job.createdAt < windowEnd
-    );
-    const hourlyFailedDeliveries = failedDeliveries.filter(
-      delivery => delivery.createdAt >= windowStart && delivery.createdAt < windowEnd
-    );
-    const hourlyFailedNotifications = failedNotifications.filter(
-      notification => notification.startedAt >= windowStart && notification.startedAt < windowEnd
-    );
+    const windowStart = new Date(currentHourStart - i * HOUR);
+    const hourLabel = `${windowStart.getUTCHours().toString().padStart(2, '0')}:00 UTC`;
+    const hourlyFailedJobs = failedJobs.get(windowStart.getTime()) ?? 0;
+    const hourlyFailedDeliveries = failedDeliveries.get(windowStart.getTime()) ?? 0;
+    const hourlyFailedNotifications = failedNotifications.get(windowStart.getTime()) ?? 0;
 
     let status: HealthLevel = 'healthy';
     let scorePercent = 100;
     let reason = 'All systems operating normally';
-    if (hourlyFailedJobs.length > 0) {
+    let failuresSeen = true;
+    if (hourlyFailedJobs > 0) {
       status = 'degraded';
-      scorePercent = Math.max(70, 100 - hourlyFailedJobs.length * 10);
-      reason = `${hourlyFailedJobs.length} background job failure(s)`;
-    } else if (hourlyFailedDeliveries.length > 0 || hourlyFailedNotifications.length > 0) {
+      scorePercent = Math.max(70, 100 - hourlyFailedJobs * 10);
+      reason = `${hourlyFailedJobs} background job failure(s)`;
+    } else if (hourlyFailedDeliveries > 0 || hourlyFailedNotifications > 0) {
       status = 'degraded';
-      const totalErrors = hourlyFailedDeliveries.length + hourlyFailedNotifications.length;
+      const totalErrors = hourlyFailedDeliveries + hourlyFailedNotifications;
       scorePercent = Math.max(75, 100 - totalErrors * 5);
       reason = `${totalErrors} delivery error(s)`;
-    } else if (i === 0) {
-      status = overall;
-      scorePercent = liveScorePercent;
-      reason =
-        overall === 'healthy'
-          ? 'All diagnostic signals passing'
-          : topCriticalIssue ||
-            topWarningIssue ||
-            (overall === 'degraded' ? 'Operational with warnings' : 'Critical diagnostic error');
-    } else if (unavailableSources > 0) {
+    } else {
+      failuresSeen = false;
+    }
+    if (i === 0) {
+      // The hour in progress shows the worst of what failed this hour and what is true right now.
+      const liveStatus = overall;
+      if (!failuresSeen || healthSeverity(liveStatus) >= healthSeverity(status)) {
+        status = liveStatus;
+        scorePercent = failuresSeen ? Math.min(scorePercent, liveScorePercent) : liveScorePercent;
+        reason =
+          liveStatus === 'healthy'
+            ? 'All diagnostic signals passing'
+            : topCriticalIssue ||
+              topWarningIssue ||
+              (liveStatus === 'degraded'
+                ? 'Operational with warnings'
+                : 'Critical diagnostic error');
+      }
+    } else if (!failuresSeen && unavailableSources > 0) {
       status = 'unknown';
       scorePercent = 0;
       reason = `${unavailableSources} historical evidence source(s) unavailable`;
-    } else {
+    } else if (!failuresSeen) {
       reason = 'No durable job or delivery failures recorded';
     }
-    samples.push({ timestamp: d.toISOString(), hourLabel, status, scorePercent, reason });
+    samples.push({
+      timestamp: windowStart.toISOString(),
+      hourLabel,
+      status,
+      scorePercent,
+      reason,
+    });
   }
   return samples;
 }
@@ -443,12 +510,15 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
           current_database() AS "databaseName",
           pg_database_size(current_database())::bigint::text AS "sizeBytes",
           current_setting('max_connections')::int AS "maxConnections",
-          (SELECT count(*)::int FROM pg_stat_activity) AS "usedConnections",
-          (SELECT count(*)::int FROM pg_stat_activity WHERE state = 'active') AS "activeConnections",
+          (SELECT count(*)::int FROM pg_stat_activity
+            WHERE backend_type = 'client backend') AS "usedConnections",
+          (SELECT count(*)::int FROM pg_stat_activity
+            WHERE backend_type = 'client backend' AND state = 'active') AS "activeConnections",
           (SELECT count(*)::int FROM pg_stat_activity
             WHERE datname = current_database()
-              AND xact_start IS NOT NULL
-              AND xact_start < NOW() - INTERVAL '5 minutes') AS "longTransactions"
+              AND state = 'active'
+              AND xact_start < NOW() - INTERVAL '5 minutes'
+              AND application_name NOT IN ('pg_dump', 'pg_basebackup')) AS "longTransactions"
       `;
       const sizeBytesNum = capacity ? Number(capacity.sizeBytes) : 0;
       const sizeFormatted = capacity ? byteLabel(sizeBytesNum) : 'Unknown';
@@ -474,7 +544,7 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
         details: capacity
           ? [
               `Active connections: ${capacity.activeConnections}`,
-              `Transactions open longer than 5 minutes: ${capacity.longTransactions}`,
+              `Active transactions running longer than 5 minutes (backups excluded): ${capacity.longTransactions}`,
               `Database size: ${sizeFormatted}`,
               'Host CPU, memory, storage capacity, replicas, and pool wait require external telemetry.',
             ]
@@ -607,9 +677,16 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
         id: 'scheduler',
         label: 'Scheduler and workers',
         category: 'workers',
-        status: !schedulerEnabled ? 'unknown' : state?.lastError || stale ? 'unhealthy' : 'healthy',
+        // Disabled by configuration (split web/worker): an absent heartbeat here is expected. The
+        // jobs check degrades when the externally driven work is actually overdue.
+        required: schedulerEnabled,
+        status: !schedulerEnabled
+          ? 'informational'
+          : state?.lastError || stale
+            ? 'unhealthy'
+            : 'healthy',
         summary: !schedulerEnabled
-          ? 'Internal scheduler is disabled; an external worker must own scheduled work.'
+          ? 'External scheduler: the internal scheduler is disabled (ENABLE_INTERNAL_CRON=false); an external worker owns scheduled work.'
           : state?.lastError
             ? 'The scheduler recorded an error.'
             : stale
@@ -648,11 +725,19 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
 
     try {
       const since24h = new Date(now.getTime() - 24 * HOUR);
-      const [pending, processing, failed, overdue, stale] = await Promise.all([
+      const [pending, processing, failed, failedLastHour, overdue, stale] = await Promise.all([
         prisma.backgroundJob.count({ where: { status: 'PENDING' } }),
         prisma.backgroundJob.count({ where: { status: 'PROCESSING' } }),
         prisma.backgroundJob.count({ where: { status: 'FAILED', updatedAt: { gte: since24h } } }),
-        prisma.backgroundJob.count({ where: { status: 'PENDING', scheduledAt: { lt: now } } }),
+        prisma.backgroundJob.count({
+          where: { status: 'FAILED', updatedAt: { gte: new Date(now.getTime() - HOUR) } },
+        }),
+        prisma.backgroundJob.count({
+          where: {
+            status: 'PENDING',
+            scheduledAt: { lt: new Date(now.getTime() - JOB_OVERDUE_GRACE_MS) },
+          },
+        }),
         prisma.backgroundJob.count({
           where: { status: 'PROCESSING', startedAt: { lt: new Date(now.getTime() - 10 * MINUTE) } },
         }),
@@ -661,15 +746,24 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
         id: 'jobs',
         label: 'Background jobs',
         category: 'workers',
-        status: stale > 0 || failed > 0 ? 'unhealthy' : overdue > 0 ? 'degraded' : 'healthy',
+        status: backgroundJobsStatus({
+          staleProcessing: stale,
+          failedLastHour,
+          overdue,
+        }),
         summary: `${pending} pending, ${processing} processing, ${failed} failed in 24 hours.`,
-        details: [`Overdue pending: ${overdue}`, `Processing longer than 10 minutes: ${stale}`],
+        details: [
+          `Failed in the last hour: ${failedLastHour}`,
+          `Overdue pending (more than 5 minutes late): ${overdue}`,
+          `Processing longer than 10 minutes: ${stale}`,
+        ],
         telemetry: {
           queueDistribution: { pending, processing, failed, overdue, stale },
           rawPayload: {
             pendingJobs: pending,
             processingJobs: processing,
             failedJobs: failed,
+            failedJobsLastHour: failedLastHour,
             overduePending: overdue,
             staleProcessing: stale,
           },
@@ -935,8 +1029,10 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
           orderBy: { provider: 'asc' },
         }),
         prisma.notification.count({ where: { status: 'FAILED', createdAt: { gte: since } } }),
+        // Due for 5+ minutes and still unsent. A later nextAttemptAt is a deliberate hold
+        // (provider backoff, quiet hours), not a stuck queue.
         prisma.notification.count({
-          where: { status: 'PENDING', createdAt: { lt: new Date(now.getTime() - 5 * MINUTE) } },
+          where: { status: 'PENDING', nextAttemptAt: { lt: new Date(now.getTime() - 5 * MINUTE) } },
         }),
       ]);
       const enabled = providers.filter(provider => provider.enabled);
@@ -948,11 +1044,14 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
         id: 'notifications',
         label: 'Notification providers',
         category: 'alerting',
-        status:
-          incomplete.length > 0 || pending > 0 ? 'unhealthy' : failed > 0 ? 'degraded' : 'healthy',
+        status: notificationsStatus({
+          incompleteProviders: incomplete.length,
+          stuck: pending,
+          failed24h: failed,
+        }),
         summary: `${enabled.length} enabled provider(s); ${failed} failed delivery record(s) in 24 hours.`,
         details: [
-          `Pending longer than 5 minutes: ${pending}`,
+          `Due and unsent for more than 5 minutes: ${pending}`,
           `Enabled without configuration: ${incomplete.map(item => item.provider).join(', ') || 'none'}`,
         ],
         telemetry: {
@@ -1422,6 +1521,7 @@ export async function collectAdminHealth(options?: {
 }
 
 export function resetAdminHealthCacheForTests(): void {
+  releaseCache = null;
   cachedHealthReport = null;
   healthCollectionInFlight = null;
 }

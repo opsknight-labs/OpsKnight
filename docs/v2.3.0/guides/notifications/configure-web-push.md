@@ -36,7 +36,7 @@ Confirm the controlled device receives the test in both foreground and backgroun
 
 ## Change or undo it
 
-Use the supported key-history/rotation workflow when replacing keys so existing devices can transition. Move routes before disabling Web Push and re-register devices that still use an expired subscription.
+Use the supported key-history/rotation workflow when replacing keys so existing devices can transition. OpsKnight keeps the ten most recent retired keys, so devices keep receiving pushes through ten rotations; a device that was subscribed with an older key stops receiving them. A device that opens OpsKnight after a rotation replaces its subscription with one for the current key, and its **Push notifications** card then offers **Repair** to save it. Move routes before disabling Web Push and re-register devices that still use an expired subscription.
 
 ## Troubleshooting
 

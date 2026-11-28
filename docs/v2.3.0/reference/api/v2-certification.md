@@ -76,7 +76,7 @@ Behaviour change to announce: deployments that relied on `CF-Connecting-IP` bein
 | Service-account identity and the browser boundary | Done | Identity is the reserved email domain only (profile text such as job title no longer counts); credentials and OIDC sign-in refuse such accounts. Tokens may not carry scopes the account's role cannot issue; team ids are validated |
 | Detail endpoints no longer reveal whether an inaccessible object exists | Done for schedules (detail, on-call, overrides) and runbook execution against an incident; the latter now uses `incidentReadWhere`. **Behaviour change**: executing a runbook against an incident also needs `incidents:read` |
 | Role × scope × operation matrix | Done | `api-v2-authorization-matrix.test.ts` asserts, for all 63 operations and 4 roles: no scope → denied, disabled principal → denied, USER never gets a global mutation, only ADMIN administers service accounts; the full decision table is a committed snapshot. This tests the policy function, **not** per-route resource filtering with real data (cross-team object tests exist for a subset in `api-v2-cross-team.test.ts`) |
-| Notification read policy decided | Done | ADMIN/RESPONDER see delivery detail; AUDITOR gets metadata only (no message body, recipient or email); USER has no access. The unreachable own-notifications branch is removed. Policy unit tests in `api-v2-hardening.test.ts` |
+| Notification read policy decided | Done | ADMIN sees delivery detail for every notification; RESPONDER and AUDITOR see full detail only for notifications addressed to themselves and metadata only (no message body, recipient or email) for other users' rows; USER has no access. Route tests in `api-v2-hardening.test.ts` |
 
 ## Phase 5: contract
 

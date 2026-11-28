@@ -5,6 +5,8 @@ import { getAuthOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { calculateActorSLAMetrics } from '@/lib/actor-metrics';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
+import { actorHasCapability } from '@/lib/authorization-policy';
+import { CAPABILITIES } from '@/lib/authorization';
 import { serviceReadWhere, teamReadWhere } from '@/lib/authorization-filters';
 import { serializeSlaMetrics } from '@/lib/sla';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
@@ -138,6 +140,7 @@ export default async function ExecutiveDashboardPage({
       currentUserId={user.id}
       currentTemplateId={activeTemplate.id}
       isTemplate={true}
+      canManage={actorHasCapability(actor, CAPABILITIES.REPORT_MANAGE)}
     />
   );
 }

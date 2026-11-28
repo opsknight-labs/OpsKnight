@@ -7,6 +7,7 @@ export type ObjectiveHealth =
   | 'AT_RISK'
   | 'BREACHED'
   | 'NO_DATA'
+  | 'PARTIAL'
   | 'UNAVAILABLE'
   | 'NOT_MEASURED'
   | 'RESTRICTED'
@@ -40,9 +41,12 @@ export function summarizeObjective(objective: {
   canReadHistory: boolean;
 }): { health: ObjectiveHealth; value: number | null; budgetRemaining: number | null } {
   const { snapshot } = objective;
-  const value = snapshot?.dataState === 'AVAILABLE' ? snapshot.value : null;
+  // A partial window still shows its value, but it has no error budget and never decides a breach.
+  const value =
+    snapshot?.dataState === 'AVAILABLE' || snapshot?.dataState === 'PARTIAL' ? snapshot.value : null;
   const budgetRemaining =
     value !== null &&
+    snapshot?.dataState === 'AVAILABLE' &&
     PERCENT_METRICS.includes(objective.metricType) &&
     objective.comparator === 'GREATER_THAN_OR_EQUAL' &&
     objective.target < 100
@@ -56,13 +60,15 @@ export function summarizeObjective(objective: {
         ? 'NOT_MEASURED'
         : snapshot.dataState === 'NO_DATA'
           ? 'NO_DATA'
-          : snapshot.dataState !== 'AVAILABLE'
-            ? 'UNAVAILABLE'
-            : snapshot.breached
-              ? 'BREACHED'
-              : budgetRemaining !== null && budgetRemaining < AT_RISK_BUDGET
-                ? 'AT_RISK'
-                : 'MEETING';
+          : snapshot.dataState === 'PARTIAL'
+            ? 'PARTIAL'
+            : snapshot.dataState !== 'AVAILABLE'
+              ? 'UNAVAILABLE'
+              : snapshot.breached
+                ? 'BREACHED'
+                : budgetRemaining !== null && budgetRemaining < AT_RISK_BUDGET
+                  ? 'AT_RISK'
+                  : 'MEETING';
   return { health, value, budgetRemaining };
 }
 

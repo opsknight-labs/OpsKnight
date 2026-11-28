@@ -88,6 +88,52 @@ export async function prepareNotificationProviderAvailability(
   return { email, sms, push, voice, whatsapp, slack };
 }
 
+type NotificationChannelFlags = Pick<
+  z.output<typeof notificationPreferencesInput>,
+  'emailEnabled' | 'smsEnabled' | 'pushEnabled' | 'voiceEnabled' | 'whatsappEnabled'
+>;
+
+/** An enabled channel needs a configured provider. Shared by every writer of these preferences. */
+export function assertNotificationProvidersAvailable(
+  input: NotificationChannelFlags,
+  available: NotificationProviderAvailability
+) {
+  for (const [enabled, provider, label] of [
+    [input.emailEnabled, available.email, 'Email'],
+    [input.smsEnabled, available.sms, 'SMS'],
+    [input.pushEnabled, available.push, 'Push'],
+    [input.voiceEnabled, available.voice, 'Voice'],
+    [input.whatsappEnabled, available.whatsapp, 'WhatsApp'],
+  ] as const) {
+    if (enabled && !provider) {
+      const message =
+        label === 'Email'
+          ? 'Email notifications cannot be enabled because no email provider is configured.'
+          : label === 'SMS'
+            ? 'SMS notifications cannot be enabled because no SMS provider is configured.'
+            : label === 'Push'
+              ? 'Push notifications cannot be enabled because no push notification provider is configured.'
+              : label === 'Voice'
+                ? 'Voice notifications cannot be enabled because Twilio Voice is not configured.'
+                : 'WhatsApp notifications cannot be enabled because no WhatsApp provider is configured.';
+      throw new AppError({ code: 'RESOURCE_CONFLICT', userMessage: message });
+    }
+  }
+}
+
+/** SMS, Voice and WhatsApp page a phone number, so enabling any of them needs one. */
+export function assertPhoneForNotificationChannels(
+  input: NotificationChannelFlags,
+  phone: string | null | undefined
+) {
+  if ((input.smsEnabled || input.voiceEnabled || input.whatsappEnabled) && !phone)
+    throw new AppError({
+      code: 'VALIDATION_FAILED',
+      userMessage:
+        'A valid phone number is required when SMS, Voice, or WhatsApp notifications are enabled.',
+    });
+}
+
 export async function readNotificationPreferences(
   userId: string,
   tx: Prisma.TransactionClient = prisma
@@ -115,27 +161,7 @@ export async function updateNotificationPreferences(
     });
   const input = parsed.data;
   const available = options.availability ?? (await prepareNotificationProviderAvailability(input));
-  for (const [enabled, provider, label] of [
-    [input.emailEnabled, available.email, 'Email'],
-    [input.smsEnabled, available.sms, 'SMS'],
-    [input.pushEnabled, available.push, 'Push'],
-    [input.voiceEnabled, available.voice, 'Voice'],
-    [input.whatsappEnabled, available.whatsapp, 'WhatsApp'],
-  ] as const) {
-    if (enabled && !provider) {
-      const message =
-        label === 'Email'
-          ? 'Email notifications cannot be enabled because no email provider is configured.'
-          : label === 'SMS'
-            ? 'SMS notifications cannot be enabled because no SMS provider is configured.'
-            : label === 'Push'
-              ? 'Push notifications cannot be enabled because no push notification provider is configured.'
-              : label === 'Voice'
-                ? 'Voice notifications cannot be enabled because Twilio Voice is not configured.'
-                : 'WhatsApp notifications cannot be enabled because no WhatsApp provider is configured.';
-      throw new AppError({ code: 'RESOURCE_CONFLICT', userMessage: message });
-    }
-  }
+  assertNotificationProvidersAvailable(input, available);
   if (input.slackDmEnabled && !available.slack)
     throw new AppError({
       code: 'RESOURCE_CONFLICT',
@@ -149,12 +175,7 @@ export async function updateNotificationPreferences(
       throw preconditionFailed();
     const effectivePhone =
       input.phoneNumber === undefined ? current.phoneNumber : input.phoneNumber;
-    if ((input.smsEnabled || input.voiceEnabled || input.whatsappEnabled) && !effectivePhone)
-      throw new AppError({
-        code: 'VALIDATION_FAILED',
-        userMessage:
-          'A valid phone number is required when SMS, Voice, or WhatsApp notifications are enabled.',
-      });
+    assertPhoneForNotificationChannels(input, effectivePhone);
     const next = {
       emailNotificationsEnabled: input.emailEnabled,
       smsNotificationsEnabled: input.smsEnabled,

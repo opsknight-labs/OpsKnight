@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { Activity } from 'lucide-react';
+import { useTimezone } from '@/contexts/TimezoneContext';
 import {
   Tooltip,
   TooltipContent,
@@ -17,53 +18,57 @@ import {
 const HEAT_LEVELS = ['bg-muted', 'bg-ink-300', 'bg-ink-400', 'bg-ink-600', 'bg-ink-800'] as const;
 
 interface HeatmapDataPoint {
-  date: string; // YYYY-MM-DD
+  date: string; // YYYY-MM-DD, a calendar day in the viewer's time zone
   count: number;
 }
 
 interface IncidentHeatmapWidgetProps {
   data?: HeatmapDataPoint[];
-  year?: number;
   variant?: 'dashboard' | 'analytics';
+}
+
+const DAY_MS = 86_400_000;
+/** The window the server feeds the heatmap: the last 365 days, ending today. */
+const WINDOW_DAYS = 365;
+
+/** Today's calendar date in `timeZone`, as milliseconds at that date's UTC midnight. */
+function todayInZone(timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const part = (type: string) => Number(parts.find(p => p.type === type)?.value);
+  return Date.UTC(part('year'), part('month') - 1, part('day'));
 }
 
 export function IncidentHeatmapWidget({
   data = [],
-  year = new Date().getFullYear(),
   variant = 'dashboard',
 }: IncidentHeatmapWidgetProps) {
-  const { weeks, monthLabels, totalCount, maxCount } = useMemo(() => {
+  const { userTimeZone } = useTimezone();
+  const { weeks, monthLabels, totalCount, maxCount, todayMs, windowStartMs } = useMemo(() => {
     const map = new Map<string, number>();
+    data.forEach(d => map.set(d.date, (map.get(d.date) || 0) + d.count));
+
+    // Calendar arithmetic on UTC midnights, so the grid is the viewer's days whatever the browser zone.
+    const todayMs = todayInZone(userTimeZone);
+    const windowStartMs = todayMs - WINDOW_DAYS * DAY_MS;
+    // align to Sunday → Saturday (GitHub style)
+    const startMs = windowStartMs - new Date(windowStartMs).getUTCDay() * DAY_MS;
+    const endMs = todayMs + (6 - new Date(todayMs).getUTCDay()) * DAY_MS;
+
+    const days: { ms: number; count: number }[] = [];
     let total = 0;
     let max = 0;
-
-    data.forEach(d => {
-      const v = (map.get(d.date) || 0) + d.count;
-      map.set(d.date, v);
-      total += d.count;
-      max = Math.max(max, v);
-    });
-
-    const start = new Date(year, 0, 1);
-    const end = new Date(year, 11, 31);
-
-    // align to Sunday → Saturday (GitHub style)
-    start.setDate(start.getDate() - start.getDay());
-    end.setDate(end.getDate() + (6 - end.getDay()));
-
-    const days: { date: Date; count: number }[] = [];
-    const cursor = new Date(start);
-
-    while (cursor <= end) {
-      const year = cursor.getFullYear();
-      const month = String(cursor.getMonth() + 1).padStart(2, '0');
-      const day = String(cursor.getDate()).padStart(2, '0');
-      const key = `${year}-${month}-${day}`;
-      days.push({
-        date: new Date(cursor),
-        count: map.get(key) || 0,
-      });
-      cursor.setDate(cursor.getDate() + 1);
+    for (let ms = startMs; ms <= endMs; ms += DAY_MS) {
+      const count = map.get(new Date(ms).toISOString().slice(0, 10)) || 0;
+      days.push({ ms, count });
+      if (ms >= windowStartMs && ms <= todayMs) {
+        total += count;
+        max = Math.max(max, count);
+      }
     }
 
     const weeks: (typeof days)[] = [];
@@ -73,9 +78,9 @@ export function IncidentHeatmapWidget({
 
     const monthLabels = weeks
       .map((week, i) => {
-        const d = week[0].date;
-        return d.getDate() <= 7
-          ? { label: d.toLocaleString('en-US', { month: 'short' }), index: i }
+        const d = new Date(week[0].ms);
+        return d.getUTCDate() <= 7
+          ? { label: d.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' }), index: i }
           : null;
       })
       .filter(Boolean) as { label: string; index: number }[];
@@ -85,21 +90,18 @@ export function IncidentHeatmapWidget({
       monthLabels,
       totalCount: total,
       maxCount: max || 1,
+      todayMs,
+      windowStartMs,
     };
-  }, [data, year]);
+  }, [data, userTimeZone]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  // On narrow screens the year scrolls horizontally; start at the most recent weeks.
+  // On narrow screens the grid scrolls horizontally; start at the most recent weeks.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || el.scrollWidth <= el.clientWidth) return;
-    const now = Date.now();
-    const current = weeks.findIndex(week => week[week.length - 1].date.getTime() >= now);
-    const anchor = current === -1 ? weeks.length : current + 1;
-    el.scrollLeft = Math.max(0, (anchor / weeks.length) * el.scrollWidth - el.clientWidth + 16);
+    el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth);
   }, [weeks]);
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
 
   const getColor = useCallback(
     (count: number) => {
@@ -132,7 +134,7 @@ export function IncidentHeatmapWidget({
             <div>
               <h3 className="dash-heading-sm">Incident activity</h3>
               <p className="text-xs text-muted-foreground tabular-nums">
-                {totalCount.toLocaleString()} incidents in {year}
+                {totalCount.toLocaleString()} incidents in the last {WINDOW_DAYS} days
               </p>
             </div>
           </div>
@@ -172,7 +174,7 @@ export function IncidentHeatmapWidget({
                         className={cn(
                           'cursor-pointer rounded-[1.5px] transition-shadow duration-150 hover:ring-1 hover:ring-ring',
                           getColor(day.count),
-                          day.date > today && 'opacity-35'
+                          (day.ms > todayMs || day.ms < windowStartMs) && 'opacity-35'
                         )}
                         style={{
                           aspectRatio: '1 / 1',
@@ -184,10 +186,11 @@ export function IncidentHeatmapWidget({
                     <TooltipContent className="text-xs font-medium tabular-nums">
                       <span className="font-semibold">{day.count}</span> incident
                       {day.count === 1 ? '' : 's'} ·{' '}
-                      {day.date.toLocaleDateString('en-US', {
+                      {new Date(day.ms).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
                         year: 'numeric',
+                        timeZone: 'UTC',
                       })}
                     </TooltipContent>
                   </Tooltip>

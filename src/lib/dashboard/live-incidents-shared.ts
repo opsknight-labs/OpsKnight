@@ -358,9 +358,20 @@ export type LiveAccuracy = {
   filtered: 'exact' | 'window';
   /** SLA-at-risk, due-soon, breached and the SLA attention list. Never exact when truncated. */
   sla: 'exact' | 'window';
-  /** 24h trend series and MTTA/MTTR. */
-  trend: 'exact' | 'capped';
+  /** 24h trend series and MTTA/MTTR. `unavailable`: the read failed, the series is not real zeros. */
+  trend: 'exact' | 'capped' | 'unavailable';
 };
+
+/** Snapshot parts read separately from the active set; any of them can fail on its own. */
+export type LiveSnapshotSection = 'activity' | 'onCall' | 'schedules' | 'trend';
+
+/** True when a section's data is missing: no snapshot yet, or its read failed. */
+export function isLiveSectionUnavailable(
+  snapshot: { unavailable?: LiveSnapshotSection[] } | null | undefined,
+  section: LiveSnapshotSection
+): boolean {
+  return !snapshot || (snapshot.unavailable?.includes(section) ?? false);
+}
 
 /** Last-24h activity in the viewer's scope (hourly buckets, oldest first). */
 export type LiveTrend = {
@@ -415,6 +426,11 @@ export type LiveSnapshot = {
   /** Incidents held in the in-memory working set this snapshot was derived from. */
   workingSet: number;
   accuracy: LiveAccuracy;
+  /**
+   * Sections whose read failed. Their values above are placeholders (zeros, empty lists), not
+   * facts: render them as unavailable. Absent or empty when every read succeeded.
+   */
+  unavailable?: LiveSnapshotSection[];
   /**
    * Newest active critical incidents across the viewer's whole visible set, independent of the
    * current filters and scope. Feeds global critical alerts when the console runs on the

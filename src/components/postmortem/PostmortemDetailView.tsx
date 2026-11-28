@@ -17,6 +17,7 @@ import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 import UserAvatar from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
+import { notify } from '@/lib/toast';
 import { Pencil, Globe, Eye, EyeOff, Sparkles } from 'lucide-react';
 import { normalizeLegacyActionItems } from '@/lib/action-items';
 import type { JiraCapability } from '@/lib/jira-capabilities';
@@ -92,6 +93,8 @@ export default function PostmortemDetailView({
   const [isUpdatingPublic, setIsUpdatingPublic] = useState(false);
   const [previewAsPublic, setPreviewAsPublic] = useState(false);
 
+  // The public page only serves PUBLISHED postmortems, whatever the isPublic flag says.
+  const isPublished = postmortem.status === 'PUBLISHED';
   const effectivePublicView = initialPublicView || previewAsPublic;
   const inheritedJiraIssues = effectivePublicView ? [] : incidentJiraIssues;
 
@@ -104,9 +107,11 @@ export default function PostmortemDetailView({
       const res = await togglePostmortemPublicStatus(postmortem.id, nextState);
       if (!res.success) {
         setIsPublic(!nextState);
+        notify.error(res.error ?? 'Could not change the status page visibility.');
       }
-    } catch {
+    } catch (error) {
       setIsPublic(!nextState);
+      notify.error(error);
     } finally {
       setIsUpdatingPublic(false);
     }
@@ -286,14 +291,14 @@ export default function PostmortemDetailView({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-2">
                 <Badge variant={statusConfig.variant}>{statusConfig.label}</Badge>
-                {isPublic ? (
+                {isPublic && isPublished ? (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/30">
                     <Globe className="h-3 w-3" />
                     <span>Public on Status Page</span>
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-ink-100 text-ink-600 border border-ink-200">
-                    <span>Internal Only</span>
+                    <span>{isPublic ? 'Public once published' : 'Internal Only'}</span>
                   </span>
                 )}
               </div>
@@ -346,7 +351,13 @@ export default function PostmortemDetailView({
                   className="h-9 gap-1.5 text-xs shadow-2xs"
                 >
                   <Globe className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span>{isPublic ? 'Make Internal Only' : 'Publish to Status Page'}</span>
+                  <span>
+                    {isPublic
+                      ? 'Make Internal Only'
+                      : isPublished
+                        ? 'Publish to Status Page'
+                        : 'Allow on Status Page'}
+                  </span>
                 </Button>
 
                 <Link href={`/postmortems/${incidentId}?edit=true`}>

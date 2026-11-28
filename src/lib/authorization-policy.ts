@@ -27,6 +27,7 @@ export const AUTHORIZATION_ACTIONS = {
   RESPONSE_POLICY_MANAGE: 'response_policy.manage',
   SCHEDULE_READ: 'schedule.read',
   SCHEDULE_MANAGE: 'schedule.manage',
+  SCHEDULE_DELETE: 'schedule.delete',
   TEAM_READ: 'team.read',
   TEAM_MANAGE: 'team.manage',
   TEAM_MEMBERSHIP_READ: 'team.membership.read',
@@ -167,6 +168,7 @@ type AuthorizationResourceByAction = {
   [AUTHORIZATION_ACTIONS.RESPONSE_POLICY_MANAGE]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.SCHEDULE_READ]: ScheduleResource;
   [AUTHORIZATION_ACTIONS.SCHEDULE_MANAGE]?: ScheduleResource;
+  [AUTHORIZATION_ACTIONS.SCHEDULE_DELETE]?: ScheduleResource;
   [AUTHORIZATION_ACTIONS.TEAM_READ]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.TEAM_MANAGE]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.TEAM_ACTIVITY_READ]: Extract<AuthorizationResource, { type: 'team' }> & {
@@ -469,6 +471,14 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
     },
   ],
   [
+    // Matches the UI deleteSchedule action (assertAdmin): deleting drops layers, overrides and shifts.
+    AUTHORIZATION_ACTIONS.SCHEDULE_DELETE,
+    {
+      global: CAPABILITIES.ADMIN_MANAGE,
+      apiScope: API_SCOPES.SCHEDULES_WRITE,
+    },
+  ],
+  [
     AUTHORIZATION_ACTIONS.TEAM_READ,
     {
       global: CAPABILITIES.USER_READ_ALL,
@@ -738,8 +748,8 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
   [
     AUTHORIZATION_ACTIONS.REPORT_MANAGE,
     {
-      global: CAPABILITIES.REPORT_READ,
-      scoped: CAPABILITIES.REPORT_READ,
+      global: CAPABILITIES.REPORT_MANAGE,
+      scoped: CAPABILITIES.REPORT_MANAGE,
       apiScope: API_SCOPES.REPORTS_WRITE,
     },
   ],

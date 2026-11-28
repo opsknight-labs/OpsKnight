@@ -8,7 +8,7 @@ import type { TeamRole } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { logAudit } from '@/lib/audit';
-import { roleLabel, type AppRole, type Capability } from '@/lib/authorization';
+import { CAPABILITIES, roleLabel, type AppRole, type Capability } from '@/lib/authorization';
 import { getRequestActorContext } from '@/lib/request-actor-context';
 import { effectiveAccessSelect, resolveEffectiveAccess } from '@/lib/access/effective';
 import { getAccessControlSettings } from '@/lib/access/settings';
@@ -313,7 +313,8 @@ export type AccessExplanation = {
   resourceType: AccessResourceType | null;
   resourceId: string | null;
   owningTeam: { id: string; name: string } | null;
-  grantors: Awaited<ReturnType<typeof findGrantors>>;
+  /** `restricted`: names and emails are withheld because the person cannot read the user directory. */
+  grantors: Awaited<ReturnType<typeof findGrantors>> & { restricted?: boolean };
   snapshot: AccessSnapshot | null;
   /** Permanent role changes are possible (role not managed by the identity provider). */
   canRequestOrgRole: boolean;
@@ -369,23 +370,63 @@ function resourceIdFromPath(rulePattern: string, path: string): string | undefin
   return index >= 0 ? segments.at(index) : undefined;
 }
 
+/**
+ * Whether the signed-in person can really open the item, using the same checks as its page.
+ * Types without an item-level check return false, which keeps them on the denied explanation
+ * (they reveal no owning team and no identities).
+ */
+async function viewerCanOpenResource(
+  resource: AccessResourceType | undefined,
+  id: string | null
+): Promise<boolean> {
+  if (!resource || !id) return false;
+  const rbac = await import('@/lib/rbac');
+  try {
+    if (resource === 'incident' || resource === 'postmortem') await rbac.assertCanViewIncident(id);
+    else if (resource === 'service') await rbac.assertCanViewService(id);
+    else if (resource === 'team') await rbac.assertCanViewTeam(id);
+    else if (resource === 'schedule') await rbac.assertCanViewSchedule(id);
+    else return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Explains access for `path` for the signed-in person (used by the 403 page). */
 export async function explainAccessForPath(rawPath: string): Promise<AccessExplanation> {
   const path = rawPath.startsWith('/') && !rawPath.startsWith('//') ? rawPath.slice(0, 500) : '/';
   const snapshot = await getAccessSnapshot();
   const rule = resolvePageAccess(path);
   const pageAllowed = snapshot ? ruleAllows(rule, snapshot.capabilities) : false;
-  const resourceDenied = Boolean(snapshot && pageAllowed && rule?.resource);
-  const resourceId =
-    resourceDenied && rule ? (resourceIdFromPath(rule.pattern, path) ?? null) : null;
+  const candidateId =
+    snapshot && pageAllowed && rule?.resource
+      ? (resourceIdFromPath(rule.pattern, path) ?? null)
+      : null;
+  // Only a real denial explains an item: an item the person can open (or that does not exist)
+  // must not reveal its owning team or who administers it.
+  const resourceDenied = Boolean(
+    snapshot &&
+      pageAllowed &&
+      rule?.resource &&
+      !(await viewerCanOpenResource(rule.resource, candidateId))
+  );
+  const resourceId = resourceDenied ? candidateId : null;
   const owningTeam = resourceDenied
     ? await owningTeamFor(rule?.resource, resourceId ?? undefined)
     : null;
   const requirement = rule?.anyOf?.length ? describeRequirement(rule.anyOf) : null;
-  const grantors = await findGrantors({
-    grantor: rule?.grantor,
-    teamId: owningTeam?.id ?? null,
-  });
+  // Names and emails are the user directory; only people who may read it get them.
+  const grantors: AccessExplanation['grantors'] = snapshot?.capabilities.includes(
+    CAPABILITIES.USER_READ_ALL
+  )
+    ? await findGrantors({ grantor: rule?.grantor, teamId: owningTeam?.id ?? null })
+    : {
+        kind: owningTeam ? 'team_owner' : 'org_admin',
+        teamName: owningTeam?.name,
+        people: [],
+        restricted: true,
+      };
   const currentRank = snapshot ? ROLE_ORDER.indexOf(snapshot.role) : -1;
   const alreadyInOwningTeam = Boolean(
     owningTeam && snapshot?.teams.some(team => team.id === owningTeam.id)

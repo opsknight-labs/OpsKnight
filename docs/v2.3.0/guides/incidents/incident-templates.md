@@ -31,9 +31,9 @@ Open **Incidents → Templates**. Select an existing template to use/delete, or 
 1. Open **Incidents → Templates**.
 2. Select **New Template**.
 3. Enter a unique **Template name** between 3 and 100 characters. This identifies the template in the chooser.
-4. Optionally enter an internal **Description** explaining when responders should use it.
-5. Enter the default incident **Title**, between 5 and 255 characters.
-6. Add optional incident description/runbook content. The form previews headings, lists, bold text, inline code, and links.
+4. Optionally enter an internal **Description** explaining when responders should use it, up to 5,000 characters.
+5. Enter the default incident **Title**, between 5 and 200 characters.
+6. Add optional incident description/runbook content, up to 10,000 characters. The form previews headings, lists, bold text, inline code, and links.
 7. Choose default urgency: `HIGH`, `MEDIUM`, or `LOW`.
 8. Choose priority `P1` through `P5`, or leave it unset if the form permits.
 9. Optionally select a default service.
@@ -44,9 +44,9 @@ Success means the template appears in **Incidents → Templates** and the incide
 
 ## Visibility and ownership
 
-The listing returns public templates plus private templates created by the current user. `ADMIN` and `RESPONDER` can create templates. A non-admin can delete only a template they created; an administrator can delete any template.
+The listing returns public templates plus private templates created by the current user; an administrator sees every template, including other users' private ones. `ADMIN` and `RESPONDER` can create templates. A non-admin can delete only a template they created; an administrator can delete any template.
 
-The creator relationship is ownership metadata. If you plan to disable or delete a creator, inventory private templates first and create public or replacement templates where the workflow must continue.
+The creator relationship is ownership metadata. If you plan to disable a creator, inventory private templates first and create public or replacement templates where the workflow must continue. When a user is erased through a privacy request, their templates are not deleted: ownership moves to the administrator who runs the erasure (or, when the person running it does not have the `admin.manage` permission, to the first active administrator), so the template and its name stay manageable and a privacy operator never gains access to the subject's private templates.
 
 ## What OpsKnight does
 

@@ -26,7 +26,7 @@ import { resolveUserActor } from '@/lib/authorization-actors';
 import { resolveIncidentResourceForActor } from '@/lib/access/incident-relations';
 import { resolvePageAccess, ruleAllows } from '@/lib/access/pages';
 import { capabilityInfo, describeRequirement } from '@/lib/access/catalog';
-import { getAccessControlSettings, invalidateAccessControlSettings } from '@/lib/access/settings';
+import { invalidateAccessControlSettings } from '@/lib/access/settings';
 import {
   invalidateSessionSecurityProjection,
   invalidateSessionSecurityProjections,
@@ -369,7 +369,11 @@ export async function archiveCustomRole(actorId: string, id: string) {
     }
     const holders = await tx.user.findMany({ where: { customRoleId: id }, select: { id: true } });
     await tx.user.updateMany({ where: { customRoleId: id }, data: { customRoleId: null } });
-    await tx.customRole.update({ where: { id }, data: { archivedAt: new Date() } });
+    // The name column is unique, so an archived role gives its name back for reuse.
+    await tx.customRole.update({
+      where: { id },
+      data: { archivedAt: new Date(), name: `${role.name} (archived ${id})` },
+    });
     await logAudit(
       {
         action: 'custom_role.archived',
@@ -430,7 +434,7 @@ export async function assignCustomRole(
  */
 export async function startAccessReview(
   actorId: string | null,
-  input: { name: string; dueAt?: Date | null }
+  input: { name: string; dueAt?: Date | null; supersedeOpen?: boolean }
 ) {
   const name =
     input.name.trim().slice(0, 120) || `Access review ${new Date().toISOString().slice(0, 10)}`;
@@ -518,7 +522,36 @@ export async function startAccessReview(
       },
     });
   }
-  const review = await prisma.$transaction(async tx => {
+  const review = await runSerializableTransaction(async tx => {
+    // One open review at a time: a second one would be hidden in the UI and could never be closed.
+    const stale = await tx.accessReview.findMany({
+      where: { status: 'OPEN' },
+      select: { id: true },
+    });
+    if (stale.length > 0) {
+      if (!input.supersedeOpen) {
+        throw new AppError({
+          code: 'RESOURCE_CONFLICT',
+          userMessage: 'An access review is already open. Complete or cancel it first.',
+        });
+      }
+      await tx.accessReview.updateMany({
+        where: { id: { in: stale.map(review => review.id) }, status: 'OPEN' },
+        data: { status: 'CANCELLED', completedAt: now },
+      });
+      for (const review of stale) {
+        await logAudit(
+          {
+            action: 'access_review.superseded',
+            entityType: 'ACCESS_REVIEW',
+            entityId: review.id,
+            actorId,
+            details: { reason: 'A scheduled review started while this one was still open.' },
+          },
+          tx
+        );
+      }
+    }
     const created = await tx.accessReview.create({
       data: { name, dueAt: input.dueAt ?? null, createdById: actorId, items: { create: items } },
     });
@@ -600,44 +633,64 @@ export async function decideAccessReviewItem(
   decision: 'KEEP' | 'REVOKE',
   note?: string
 ) {
-  const item = await prisma.accessReviewItem.findUnique({
-    where: { id: itemId },
-    include: { review: { select: { status: true } } },
-  });
-  if (!item || item.review.status !== 'OPEN') {
-    throw new AppError({ code: 'RESOURCE_CONFLICT', userMessage: 'This review is closed.' });
-  }
-  let selfCertification: string | null = null;
-  if (item.userId === reviewerId) {
-    // Four-eyes whenever possible; the evidence records exactly why self-certification happened.
-    const otherReviewer = await hasOtherReviewer(reviewerId);
-    if (!otherReviewer) {
-      selfCertification = 'Self-certified: no other reviewer available.';
-    } else if ((await getAccessControlSettings(true)).selfApprovalAllowed) {
-      selfCertification = 'Self-certified: allowed by the organization access policy.';
-    } else {
-      throw new AppError({
-        code: 'SEPARATION_OF_DUTIES',
-        userMessage: 'You cannot certify your own access. Another reviewer must decide this item.',
-      });
+  // Serializable, like completeAccessReview: a decision cannot land after the review completed
+  // (one of the two retries and sees the other), and every decision is audited with what it replaced.
+  await runSerializableTransaction(async tx => {
+    const item = await tx.accessReviewItem.findUnique({
+      where: { id: itemId },
+      include: { review: { select: { status: true } } },
+    });
+    if (!item || item.review.status !== 'OPEN') {
+      throw new AppError({ code: 'RESOURCE_CONFLICT', userMessage: 'This review is closed.' });
     }
-  }
-  const trimmed = note?.trim().slice(0, 450) || null;
-  await prisma.accessReviewItem.update({
-    where: { id: itemId },
-    data: {
-      decision,
-      reviewerId,
-      decidedAt: new Date(),
-      note: selfCertification ? [trimmed, selfCertification].filter(Boolean).join(' ') : trimmed,
-    },
+    let selfCertification: string | null = null;
+    if (item.userId === reviewerId) {
+      // Four-eyes whenever another reviewer exists, whatever the request self-approval policy says;
+      // the evidence records why self-certification happened.
+      if (await hasOtherReviewer(reviewerId)) {
+        throw new AppError({
+          code: 'SEPARATION_OF_DUTIES',
+          userMessage:
+            'You cannot certify your own access. Another reviewer must decide this item.',
+        });
+      }
+      selfCertification = 'Self-certified: no other reviewer available.';
+    }
+    const trimmed = note?.trim().slice(0, 450) || null;
+    await tx.accessReviewItem.update({
+      where: { id: itemId },
+      data: {
+        decision,
+        reviewerId,
+        decidedAt: new Date(),
+        note: selfCertification ? [trimmed, selfCertification].filter(Boolean).join(' ') : trimmed,
+      },
+    });
+    await logAudit(
+      {
+        action: 'access_review.item_decided',
+        entityType: 'ACCESS_REVIEW',
+        entityId: item.reviewId,
+        actorId: reviewerId,
+        details: {
+          itemId,
+          subjectUserId: item.userId,
+          subjectType: item.subjectType,
+          subjectLabel: item.subjectLabel,
+          decision,
+          previousDecision: item.decision,
+          previousReviewerId: item.reviewerId,
+          selfCertified: Boolean(selfCertification),
+        },
+      },
+      tx
+    );
   });
 }
 
-/** Whether `reviewerId` may decide their own item (sole reviewer, or policy allows it). */
+/** Whether `reviewerId` may decide their own item: only when nobody else could review it. */
 export async function canSelfCertify(reviewerId: string): Promise<boolean> {
-  const settings = await getAccessControlSettings();
-  return settings.selfApprovalAllowed || !(await hasOtherReviewer(reviewerId));
+  return !(await hasOtherReviewer(reviewerId));
 }
 
 /** Cancels an open review without applying anything, so a new one can be started. */
@@ -832,11 +885,11 @@ export async function maybeStartScheduledAccessReview(now: Date = new Date()) {
   if (now.getTime() - last < settings.accessReviewIntervalDays * 24 * 60 * 60 * 1000) {
     return { started: false };
   }
-  const open = await prisma.accessReview.count({ where: { status: 'OPEN' } });
-  if (open > 0) return { started: false };
+  // An open review older than the whole interval is stale; the new one supersedes it.
   await startAccessReview(null, {
     name: `Scheduled access review ${now.toISOString().slice(0, 10)}`,
     dueAt: new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000),
+    supersedeOpen: true,
   });
   return { started: true };
 }

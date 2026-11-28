@@ -10,7 +10,8 @@ import { EmptyState, PageHeader } from '@/components/patterns';
 import { pageHeaderActionClass } from '@/components/patterns/PageHeader';
 import { InlineNotice } from '@/components/ui/InlineNotice';
 import { requirePageAccess } from '@/lib/access/server';
-import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { CAPABILITIES } from '@/lib/authorization';
+import { actorHasCapability } from '@/lib/authorization-policy';
 import { teamReadWhere } from '@/lib/authorization-filters';
 import {
   IMPACT_REPORT_LIMIT,
@@ -55,7 +56,8 @@ export default async function BusinessImpactPage({
       take: 500,
     }),
   ]);
-  const canExport = hasCapability(actor.role, CAPABILITIES.REPORT_EXPORT);
+  // The effective capabilities (custom role and grants included), as the export route checks.
+  const canExport = actorHasCapability(actor, CAPABILITIES.REPORT_EXPORT);
   const search = impactReportSearch(params);
   const rows = report.rows;
   const impacted = rows.filter(row => row.stats.impactMinutes > 0);

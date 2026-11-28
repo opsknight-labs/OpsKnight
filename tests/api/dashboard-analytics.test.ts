@@ -1,11 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ getAnalytics: vi.fn(), getActor: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  getAnalytics: vi.fn(),
+  getActor: vi.fn(),
+  getUser: vi.fn(),
+}));
 vi.mock('next-auth', () => ({
   getServerSession: vi.fn().mockResolvedValue({ user: { email: 'user@example.com' } }),
 }));
 vi.mock('@/lib/auth', () => ({ getAuthOptions: vi.fn().mockResolvedValue({}) }));
-vi.mock('@/lib/rbac', () => ({ getCurrentAuthorizationActor: mocks.getActor }));
+vi.mock('@/lib/rbac', () => ({
+  getCurrentAuthorizationActor: mocks.getActor,
+  getCurrentUser: mocks.getUser,
+}));
 vi.mock('@/lib/dashboard/dashboard-analytics-cache', () => ({
   DashboardAnalyticsUnavailableError: class DashboardAnalyticsUnavailableError extends Error {},
   getDashboardAnalytics: mocks.getAnalytics,
@@ -23,6 +30,7 @@ describe('GET /api/dashboard/insights', () => {
       status: 'ACTIVE',
       teamIds: ['team-1'],
     });
+    mocks.getUser.mockResolvedValue({ id: 'user-1', timeZone: 'America/Los_Angeles' });
     mocks.getAnalytics.mockResolvedValue({ mtta: 5, freshness: 'fresh' });
   });
 
@@ -34,6 +42,14 @@ describe('GET /api/dashboard/insights', () => {
     expect(mocks.getAnalytics).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'user-1', teamIds: ['team-1'] }),
       expect.objectContaining({ rangeDays: 30, serviceId: 'svc-1' })
+    );
+  });
+
+  it("buckets the analytics days in the viewer's time zone", async () => {
+    await GET(new Request('http://localhost/api/dashboard/analytics?range=30'));
+    expect(mocks.getAnalytics).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ userTimeZone: 'America/Los_Angeles' })
     );
   });
 

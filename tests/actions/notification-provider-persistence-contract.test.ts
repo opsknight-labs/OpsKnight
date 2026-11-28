@@ -145,6 +145,39 @@ describe('notification provider UI adapter contract', () => {
     expect(mocks.logAudit).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps ten retired Web Push keys across rotations, dropping only the oldest', async () => {
+    const history = Array.from({ length: 10 }, (_, i) => ({
+      publicKey: `old-public-${i}`,
+      privateKey: `old-private-${i}`,
+    }));
+    mocks.findUnique.mockResolvedValue({
+      ...previous,
+      provider: 'web-push',
+      config: { encrypted: true },
+    });
+    mocks.decryptProviderConfig.mockResolvedValueOnce({
+      vapidPublicKey: 'current-public',
+      vapidPrivateKey: 'current-private',
+      vapidKeyHistory: history,
+    });
+    mocks.encryptProviderConfig.mockResolvedValue({ encrypted: true });
+    mocks.txUpdateMany.mockResolvedValue({ count: 1 });
+    mocks.findUniqueOrThrow.mockResolvedValue({ updatedAt: new Date('2026-09-08T12:01:00.000Z') });
+    mocks.transaction.mockImplementation(async callback =>
+      callback({ notificationProvider: { updateMany: mocks.txUpdateMany } })
+    );
+    mocks.logAudit.mockResolvedValue({ id: 'audit-1' });
+
+    await generateVapidKeys({ rotate: true, expectedUpdatedAt: previous.updatedAt.toISOString() });
+
+    const saved = mocks.encryptProviderConfig.mock.calls[0][1] as {
+      vapidKeyHistory: Array<{ publicKey: string }>;
+    };
+    expect(saved.vapidKeyHistory).toHaveLength(10);
+    expect(saved.vapidKeyHistory[0].publicKey).toBe('current-public');
+    expect(saved.vapidKeyHistory.map(entry => entry.publicKey)).not.toContain('old-public-9');
+  });
+
   // Server-action errors are redacted to "Minified React error #441" in
   // production, so the user-facing message must travel in the return value.
   it('returns the AppError user message when the shared command rejects the save', async () => {

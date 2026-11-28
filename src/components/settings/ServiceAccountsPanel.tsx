@@ -519,6 +519,7 @@ export default function ServiceAccountsPanel({
                               <TableHead className="text-xs py-2.5">Scopes</TableHead>
                               <TableHead className="text-xs py-2.5">Status</TableHead>
                               <TableHead className="text-xs py-2.5">Created</TableHead>
+                              <TableHead className="text-xs py-2.5">Last used</TableHead>
                               <TableHead className="text-xs py-2.5">Expires</TableHead>
                               <TableHead className="text-xs py-2.5 text-right">Action</TableHead>
                             </TableRow>
@@ -561,6 +562,9 @@ export default function ServiceAccountsPanel({
                                 </TableCell>
                                 <TableCell className="text-xs text-muted-foreground py-2.5">
                                   {token.createdAt}
+                                </TableCell>
+                                <TableCell className="text-xs text-muted-foreground py-2.5">
+                                  {token.lastUsedAt || 'Never'}
                                 </TableCell>
                                 <TableCell className="text-xs text-muted-foreground py-2.5">
                                   {token.expiresAt || 'Never'}

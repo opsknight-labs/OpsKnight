@@ -7,6 +7,7 @@ export type OnCallShift = {
   start: Date;
   end: Date;
   userId: string;
+  scheduleId: string;
 };
 
 export type OnCallLoadEntry = {
@@ -95,12 +96,17 @@ export function buildStatusAges(
   });
 }
 
+/**
+ * Incidents are credited to the people on call for a schedule in the incident's service's
+ * escalation policy (`serviceSchedules`: service id to schedule ids), not to everyone on call.
+ */
 export function buildOnCallLoad(
   shifts: OnCallShift[],
-  incidents: Array<{ createdAt: Date }>,
+  incidents: Array<{ createdAt: Date; serviceId: string }>,
   windowStart: Date,
   windowEnd: Date,
   userNameMap: Map<string, string>,
+  serviceSchedules: ReadonlyMap<string, ReadonlySet<string>>,
   limit: number = 6
 ): OnCallLoadEntry[] {
   const onCallLoadMap = new Map<string, { hoursMs: number; incidentCount: number }>();
@@ -139,7 +145,10 @@ export function buildOnCallLoad(
     while (currentIdx < sortedShifts.length && sortedShifts[currentIdx].start.getTime() <= time) {
       // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
       const shift = sortedShifts[currentIdx];
-      if (time <= shift.end.getTime()) {
+      if (
+        time <= shift.end.getTime() &&
+        serviceSchedules.get(incident.serviceId)?.has(shift.scheduleId)
+      ) {
         const entry = onCallLoadMap.get(shift.userId) || { hoursMs: 0, incidentCount: 0 };
         entry.incidentCount += 1;
         onCallLoadMap.set(shift.userId, entry);

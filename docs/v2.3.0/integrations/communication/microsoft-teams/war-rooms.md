@@ -60,7 +60,7 @@ Confirm the channel appears in the intended team, normal incident context and op
 
 ## Remove or change the war room
 
-Close/reconcile it from OpsKnight rather than manually deleting the Teams channel. To change owner destination, finish/open-room coordination, select the new service destination, and test with a new incident; do not assume existing remote rooms migrate.
+Close/reconcile it from OpsKnight rather than manually deleting the Teams channel. If you end the video bridge or resolve the incident while the bridge is still being created, the bridge closes at once and the Teams meeting created a moment later is deleted automatically; if that deletion fails it shows as cleanup debt that an administrator can retry. To change owner destination, finish/open-room coordination, select the new service destination, and test with a new incident; do not assume existing remote rooms migrate.
 
 ## Squire in the war room
 

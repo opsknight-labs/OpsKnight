@@ -2,6 +2,8 @@
 import prisma from './prisma';
 import { incidentNotificationPriority } from './notification-priority';
 import { logger } from './logger';
+import { unsupportedServiceChannels } from './service-notification-settings';
+import { readSlackWebhookUrl, slackWebhookHandle } from './slack-webhook-secret';
 import { enqueueCentralNotification } from './notification-control-plane';
 import { getBaseUrl } from './env-validation';
 import type { SlackCardEvent } from './slack/incident-card';
@@ -73,6 +75,76 @@ async function persistIntent(
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+type SlackChannelTarget = {
+  id: string;
+  address: string;
+  name: string | null;
+  matches?: boolean;
+};
+
+/** Linked Slack destinations (or the legacy channel), deduplicated by address, with their conditions applied. */
+async function loadSlackChannelTargets(
+  service: { id: string; slackChannel?: string | null },
+  incident: { priority?: string | null; urgency?: string | null }
+): Promise<SlackChannelTarget[]> {
+  const slackDestinations =
+    (await (
+      prisma as unknown as {
+        slackDestination?: {
+          findMany: (a: unknown) => Promise<
+            Array<{
+              id: string;
+              channelId: string;
+              channelName: string | null;
+              priorities?: string[];
+              urgencies?: string[];
+            }>
+          >;
+        };
+      }
+    ).slackDestination?.findMany({
+      where: { serviceId: service.id, enabled: true },
+      select: {
+        id: true,
+        channelId: true,
+        channelName: true,
+        priorities: true,
+        urgencies: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    })) ?? [];
+
+  const rawChannels: SlackChannelTarget[] =
+    slackDestinations.length > 0
+      ? slackDestinations.map(d => ({
+          id: d.id,
+          address: (d.channelId || d.channelName || '').trim(),
+          name: d.channelName?.trim() || null,
+          matches: slackDestinationMatches(d, incident),
+        }))
+      : service.slackChannel?.trim()
+        ? [
+            {
+              id: 'legacy',
+              address: service.slackChannel.trim(),
+              name: service.slackChannel.trim(),
+            },
+          ]
+        : [];
+
+  // Filter empty addresses and deduplicate by address
+  const seenAddresses = new Set<string>();
+  const activeChannels: SlackChannelTarget[] = [];
+  for (const target of rawChannels) {
+    const normalized = target.address.toLowerCase();
+    if (normalized && !seenAddresses.has(normalized)) {
+      seenAddresses.add(normalized);
+      activeChannels.push(target);
+    }
+  }
+  return activeChannels;
 }
 
 export async function sendServiceNotifications(
@@ -179,6 +251,13 @@ export async function sendServiceNotifications(
     const rollUp = rollUpParentId ? { rollUpParentId } : {};
     const incidentSourceId = `${service.id}:${rollUpParentId ?? incidentId}`;
     const serviceChannels = service.serviceNotificationChannels || [];
+    const ignoredChannels = unsupportedServiceChannels(serviceChannels);
+    if (ignoredChannels.length > 0) {
+      logger.warn('service_notifications.unsupported_channels_ignored', {
+        serviceId: service.id,
+        channels: ignoredChannels,
+      });
+    }
     const errors: string[] = [];
     const incidentPresentation = {
       id: incident.id,
@@ -209,68 +288,12 @@ export async function sendServiceNotifications(
     };
 
     if (serviceChannels.includes('SLACK')) {
-      const slackDestinations =
-        (await (
-          prisma as unknown as {
-            slackDestination?: {
-              findMany: (a: unknown) => Promise<
-                Array<{
-                  id: string;
-                  channelId: string;
-                  channelName: string | null;
-                  priorities?: string[];
-                  urgencies?: string[];
-                }>
-              >;
-            };
-          }
-        ).slackDestination?.findMany({
-          where: { serviceId: service.id, enabled: true },
-          select: {
-            id: true,
-            channelId: true,
-            channelName: true,
-            priorities: true,
-            urgencies: true,
-          },
-          orderBy: { createdAt: 'asc' },
-        })) ?? [];
+      const activeChannels = await loadSlackChannelTargets(service, incident);
 
-      const rawChannels: Array<{
-        id: string;
-        address: string;
-        name: string | null;
-        matches?: boolean;
-      }> =
-        slackDestinations.length > 0
-          ? slackDestinations.map(d => ({
-              id: d.id,
-              address: (d.channelId || d.channelName || '').trim(),
-              name: d.channelName?.trim() || null,
-              matches: slackDestinationMatches(d, incident),
-            }))
-          : service.slackChannel?.trim()
-            ? [
-                {
-                  id: 'legacy',
-                  address: service.slackChannel.trim(),
-                  name: service.slackChannel.trim(),
-                },
-              ]
-            : [];
-
-      // Filter empty addresses and deduplicate by address
-      const seenAddresses = new Set<string>();
-      const activeChannels: typeof rawChannels = [];
-      for (const target of rawChannels) {
-        const normalized = target.address.toLowerCase();
-        if (normalized && !seenAddresses.has(normalized)) {
-          seenAddresses.add(normalized);
-          activeChannels.push(target);
-        }
-      }
-
-      const slackWebhookUrl = service.slackWebhookUrl?.trim();
+      // The webhook URL is a stored secret: rows below carry only a non-secret handle and delivery
+      // reads the URL from the service when it sends.
+      const slackWebhookUrl = await readSlackWebhookUrl(service.slackWebhookUrl);
+      const slackWebhookTarget = slackWebhookUrl ? slackWebhookHandle(slackWebhookUrl) : null;
       const slackEditable = !slackEditOnly || (await liveCardExists());
       if (activeChannels.length > 0 && slackEditable) {
         await Promise.all(
@@ -336,7 +359,7 @@ export async function sendServiceNotifications(
         );
       }
 
-      if (slackWebhookUrl && eventType !== 'updated' && !slackOnly) {
+      if (slackWebhookTarget && eventType !== 'updated' && !slackOnly) {
         const result = await persistIntent(async () => {
           await enqueueCentralNotification(
             {
@@ -344,7 +367,7 @@ export async function sendServiceNotifications(
               channel: 'SLACK',
               recipientType: 'WEBHOOK',
               recipientId: service.id,
-              recipientAddress: slackWebhookUrl,
+              recipientAddress: slackWebhookTarget,
               incidentId,
               templateKey: `service-slack-webhook-${eventType}`,
               sourceType: 'SERVICE_INCIDENT',
@@ -357,13 +380,12 @@ export async function sendServiceNotifications(
                 kind: 'SLACK_WEBHOOK',
                 incident: incidentPresentation,
                 eventType,
-                webhookUrl: slackWebhookUrl,
                 serviceId: service.id,
                 lifecyclePolicy: {
                   ...lifecyclePolicy,
                   targetKind: 'SERVICE_SLACK_WEBHOOK',
                   targetId: service.id,
-                  targetAddress: slackWebhookUrl,
+                  targetAddress: slackWebhookTarget,
                 },
               },
             },
@@ -532,4 +554,193 @@ export async function sendServiceNotifications(
       errors: [error instanceof Error ? error.message : 'Unknown service notification error'],
     };
   }
+}
+
+export type ServiceSlaNotice = {
+  breachType: 'ack' | 'resolve';
+  breached: boolean;
+  /** `<ack|resolve>:<breached|warning>:<target minutes>`: a breach state notifies each destination once. */
+  eventKey: string;
+  /** One line posted with the Slack incident card. */
+  message: string;
+  /** Plain text for Teams and the notification list. */
+  text: string;
+};
+
+/**
+ * SLA warnings and breaches for the service's chat destinations, resolved exactly like the lifecycle
+ * notifications above: every linked Slack destination (3 at most, with its priority and urgency
+ * conditions), the legacy channel, the legacy Slack webhook and every Microsoft Teams channel. The
+ * delivery key is (destination, incident, breach state), so a state is queued once per destination and a
+ * monitor re-run only retries the ones that failed to queue.
+ */
+export async function sendServiceSlaNotifications(
+  incidentId: string,
+  sla: ServiceSlaNotice,
+  options: { fallbackSlackWebhookUrl?: string } = {}
+): Promise<{ success: boolean; queued: number; errors?: string[] }> {
+  const errors: string[] = [];
+  let queued = 0;
+  try {
+    const incident = await prisma.incident.findUnique({
+      where: { id: incidentId },
+      include: { service: true, assignee: true },
+    });
+    if (!incident?.service) return { success: false, queued, errors: ['Incident or service not found'] };
+    const service = incident.service;
+    const channels = service.serviceNotificationChannels || [];
+    const ignoredChannels = unsupportedServiceChannels(channels);
+    if (ignoredChannels.length > 0) {
+      logger.warn('service_notifications.unsupported_channels_ignored', {
+        serviceId: service.id,
+        channels: ignoredChannels,
+      });
+    }
+    const state = sla.breached ? 'breached' : 'warning';
+    const templateKey = `sla-${sla.breachType}-${state}`;
+    const incidentPresentation = {
+      id: incident.id,
+      title: incident.title,
+      status: incident.status,
+      urgency: incident.urgency,
+      serviceName: service.name,
+      assigneeName: incident.assignee?.name || undefined,
+    };
+    const common = {
+      category: 'SLA' as const,
+      recipientId: service.id,
+      incidentId,
+      sourceType: 'INCIDENT_SLA',
+      sourceId: incidentId,
+      eventKey: sla.eventKey,
+      displayMessage: sla.text,
+      priority: sla.breached ? 0 : 1,
+    };
+    const lifecyclePolicy = { incidentId, eventType: 'sla', serviceId: service.id };
+    const enqueue = async (label: string, input: Parameters<typeof enqueueCentralNotification>[0]) => {
+      const result = await persistIntent(async () => {
+        await enqueueCentralNotification(input);
+      });
+      if (result.success) queued += 1;
+      else errors.push(`SLA ${label} notification failed: ${result.error || 'Unknown error'}`);
+    };
+
+    if (channels.includes('SLACK')) {
+      const targets = await loadSlackChannelTargets(service, incident);
+      for (const target of targets) {
+        // A destination whose priority/urgency conditions do not match the incident gets no new post.
+        if (target.matches === false) continue;
+        await enqueue(`Slack channel ${target.name ?? target.address}`, {
+          ...common,
+          channel: 'SLACK',
+          recipientType: 'SLACK_CHANNEL',
+          recipientAddress: target.address,
+          templateKey,
+          payload: {
+            kind: 'SLACK_CHANNEL',
+            channel: target.address,
+            incident: incidentPresentation,
+            eventType: 'triggered',
+            includeInteractiveButtons: true,
+            serviceId: service.id,
+            additionalMessage: sla.message,
+            lifecyclePolicy: {
+              ...lifecyclePolicy,
+              targetKind: 'SERVICE_SLACK_CHANNEL',
+              targetId: target.id,
+              targetAddress: target.address,
+            },
+          },
+        });
+      }
+      const serviceWebhookUrl = await readSlackWebhookUrl(service.slackWebhookUrl);
+      if (serviceWebhookUrl) {
+        const handle = slackWebhookHandle(serviceWebhookUrl);
+        await enqueue('Slack webhook', {
+          ...common,
+          channel: 'SLACK',
+          recipientType: 'WEBHOOK',
+          recipientAddress: handle,
+          templateKey,
+          payload: {
+            kind: 'SLACK_WEBHOOK',
+            incident: incidentPresentation,
+            eventType: 'triggered',
+            serviceId: service.id,
+            additionalMessage: sla.message,
+            lifecyclePolicy: {
+              ...lifecyclePolicy,
+              targetKind: 'SERVICE_SLACK_WEBHOOK',
+              targetId: service.id,
+              targetAddress: handle,
+            },
+          },
+        });
+      } else if (targets.length === 0 && options.fallbackSlackWebhookUrl) {
+        // Deliberate fallback: a service with Slack on but no target of its own uses the global webhook.
+        await enqueue('Slack webhook', {
+          ...common,
+          channel: 'SLACK',
+          recipientType: 'WEBHOOK',
+          recipientAddress: slackWebhookHandle(options.fallbackSlackWebhookUrl),
+          templateKey,
+          payload: {
+            kind: 'SLACK_WEBHOOK',
+            incident: incidentPresentation,
+            eventType: 'triggered',
+            webhookUrl: options.fallbackSlackWebhookUrl,
+            additionalMessage: sla.message,
+          },
+        });
+      }
+    }
+
+    if (channels.includes('MICROSOFT_TEAMS')) {
+      const teamsDestinations = await (
+        prisma as unknown as {
+          microsoftTeamsDestination: {
+            findMany: (a: unknown) => Promise<
+              Array<{
+                id: string;
+                tenantId: string;
+                teamId: string;
+                channelId: string;
+                channelName?: string | null;
+              }>
+            >;
+          };
+        }
+      ).microsoftTeamsDestination.findMany({
+        where: { serviceId: service.id, enabled: true },
+        orderBy: { createdAt: 'asc' },
+      } as never);
+      const incidentUrl = `${getBaseUrl().replace(/\/+$/, '')}/incidents/${encodeURIComponent(incidentId)}`;
+      for (const destination of teamsDestinations) {
+        await enqueue(`Microsoft Teams channel ${destination.channelName ?? destination.channelId}`, {
+          ...common,
+          channel: 'MICROSOFT_TEAMS',
+          recipientType: 'MICROSOFT_TEAMS_CHANNEL',
+          recipientAddress: `teams:${destination.id}`,
+          templateKey,
+          payload: {
+            kind: 'CHAT_TEXT',
+            provider: 'MICROSOFT_TEAMS',
+            channel: destination.channelId,
+            tenantId: destination.tenantId,
+            teamId: destination.teamId,
+            title: `SLA ${sla.breachType.toUpperCase()} ${sla.breached ? 'BREACHED' : 'WARNING'}: ${service.name}`,
+            text: sla.text,
+            url: incidentUrl,
+          },
+        });
+      }
+    }
+  } catch (error) {
+    logger.error('Service SLA notification error', {
+      incidentId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    errors.push(error instanceof Error ? error.message : 'Unknown service SLA notification error');
+  }
+  return { success: errors.length === 0, queued, errors: errors.length ? errors : undefined };
 }

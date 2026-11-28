@@ -61,6 +61,12 @@ export async function administerUser(
 ) {
   userIdInput.parse(userId);
   const input = userAdministrationInput.parse(rawInput);
+  // A leaked key must not be able to mint administrators: only the console, with its step-up, grants ADMIN.
+  if (actor.apiKey && input.operation === 'set-role' && input.role === 'ADMIN')
+    throw new AppError({
+      code: 'AUTHORIZATION_DENIED',
+      userMessage: 'API keys cannot grant the Admin role. Change the role in the OpsKnight console.',
+    });
   const command = async (tx: Prisma.TransactionClient) => {
     await acquireAdvisoryLock(tx, LOCK_KEYS.USER_ADMIN_INVARIANT);
     await requireUserAdministrator(tx, actor);

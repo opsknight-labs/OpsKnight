@@ -28,6 +28,8 @@ import EscalationStepEditModal from './EscalationStepEditModal';
 import StepOutcomeStrip from './StepOutcomeStrip';
 import type { PolicyStepStat } from '@/lib/intelligence/ops-insights/policy-intelligence';
 import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
+import { inFlightDeleteNotice } from './InFlightEscalationConfirm';
+import { useInFlightEscalationGuard } from './useInFlightEscalationGuard';
 
 type EscalationStep = {
   id: string;
@@ -64,6 +66,8 @@ type EscalationStepItemProps = {
   updateStep: (stepId: string, formData: FormData) => Promise<{ error?: string } | undefined>;
   deleteStep: (stepId: string) => Promise<{ error?: string } | undefined>;
   moveStep: (stepId: string, direction: 'up' | 'down') => Promise<{ error?: string } | undefined>;
+  /** Open incidents mid-escalation on this policy, read when the operator moves or deletes a step. */
+  countInFlight: () => Promise<number>;
   users?: Array<{
     id: string;
     name: string;
@@ -88,6 +92,7 @@ export default function EscalationStepItem({
   updateStep,
   deleteStep,
   moveStep,
+  countInFlight,
   users = [],
   teams = [],
   schedules = [],
@@ -99,14 +104,23 @@ export default function EscalationStepItem({
   const [isEditOpen, setIsEditOpen] = useState(suggestion !== undefined);
 
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [inFlight, setInFlight] = useState(0);
+  const { guard, dialog: inFlightDialog } = useInFlightEscalationGuard(countInFlight);
 
-  const handleMove = (direction: 'up' | 'down') => {
+  const runMove = (direction: 'up' | 'down') => {
     startTransition(async () => {
       const res = await moveStep(step.id, direction);
       if (res?.error) {
         notify.error(res.error);
       }
     });
+  };
+  const handleMove = (direction: 'up' | 'down') => {
+    startTransition(() => guard('move', () => runMove(direction)));
+  };
+  const openDelete = async () => {
+    setInFlight(await countInFlight());
+    setIsDeleteOpen(true);
   };
 
   // Helper to get target label and icon
@@ -251,7 +265,7 @@ export default function EscalationStepItem({
                       <ArrowDown /> Move Down
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem variant="destructive" onClick={() => setIsDeleteOpen(true)}>
+                    <DropdownMenuItem variant="destructive" onClick={() => void openDelete()}>
                       <Trash2 /> Delete Step
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -266,10 +280,14 @@ export default function EscalationStepItem({
         open={isDeleteOpen}
         onOpenChange={setIsDeleteOpen}
         title={`Delete step ${step.stepOrder + 1}?`}
-        description="Incidents on this policy will no longer escalate to this step's target. This cannot be undone."
+        description={`Incidents on this policy will no longer escalate to this step's target. This cannot be undone.${
+          inFlight > 0 ? ` ${inFlightDeleteNotice(inFlight)}` : ''
+        }`}
         confirmText="Delete step"
         onConfirm={() => deleteStep(step.id)}
       />
+
+      {inFlightDialog}
 
       {/* Edit Modal */}
       {isEditOpen && (

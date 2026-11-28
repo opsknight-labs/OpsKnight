@@ -30,6 +30,8 @@ The mobile shell displays network and queue banners. Open a banner to inspect pe
 4. After reconnecting, let Background Sync/page replay run and inspect the queue summary.
 5. Treat `queued` as not yet accepted, `failed` as requiring attention, and `confirmed` as server-accepted.
 6. Refresh the affected incident before repeating an action to avoid a conflict with newer server state.
+7. A queued action that the server refuses because the incident changed in the meantime (for example someone else already resolved it) is marked `conflict`. A conflict is final, like `failed` and `forbidden`: it is not retried and does not hold up later actions on the same incident, which replay normally. Its notice stays visible for 24 hours; check the incident and repeat the action only if it still applies.
+8. **Mark all as read** queued offline marks only the alerts you were looking at when you tapped it. Alerts that arrive before the queue replays stay unread.
 
 ## What OpsKnight does
 
@@ -47,6 +49,7 @@ Sign out before clearing site data when possible. Clearing browser storage remov
 
 - **Queue stays pending:** keep one app window online and authenticated, then refresh once.
 - **Queue failed:** inspect the action; authorization or lifecycle state may have changed.
+- **Queue shows a conflict:** the incident changed before the action replayed. Open the incident, read its current state and act again if needed; the conflict does not block other actions.
 - **Old UI after release:** close all windows and reopen; if needed remove/reinstall after preserving drafts.
 - **Draft missing:** site-data cleanup, browser eviction, or a different profile/device may have removed local storage.
 

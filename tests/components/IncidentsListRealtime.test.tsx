@@ -4,7 +4,11 @@ import type { IncidentListItem } from '@/types/incident-list';
 
 const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
-  realtime: { recentIncidents: [] as Record<string, unknown>[], isConnected: true },
+  realtime: {
+    recentIncidents: [] as Record<string, unknown>[],
+    isConnected: true,
+    connectionEpoch: 0,
+  },
 }));
 
 vi.mock('next/navigation', () => ({
@@ -52,6 +56,26 @@ describe('IncidentsListTable realtime projection', () => {
   beforeEach(() => {
     mocks.refresh.mockClear();
     mocks.realtime.recentIncidents = [];
+    mocks.realtime.connectionEpoch = 0;
+  });
+
+  it('re-reads the list on a reconnect, but not on the first connect', () => {
+    // A fresh element each time: React skips re-rendering an identical one.
+    const table = () => (
+      <IncidentsListTable incidents={[existing]} users={[]} canManageIncidents={false} readOnly />
+    );
+    const { rerender } = render(table());
+
+    mocks.realtime.connectionEpoch = 1;
+    rerender(table());
+    expect(mocks.refresh).not.toHaveBeenCalled();
+
+    mocks.realtime.connectionEpoch = 2;
+    rerender(table());
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+
+    rerender(table());
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
   });
 
   it('patches matching rows locally without refreshing the route', () => {

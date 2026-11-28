@@ -3,10 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getServerSession = vi.hoisted(() => vi.fn());
 const updateIncidentStatus = vi.hoisted(() => vi.fn());
+const notificationFindUnique = vi.hoisted(() => vi.fn());
 
 vi.mock('next-auth', () => ({ getServerSession }));
 vi.mock('@/lib/auth', () => ({ getAuthOptions: vi.fn().mockResolvedValue({}) }));
 vi.mock('@/lib/incidents/operator-lifecycle', () => ({ updateIncidentStatus }));
+vi.mock('@/lib/prisma', () => ({
+  default: { notification: { findUnique: notificationFindUnique } },
+}));
 
 import { PATCH } from '@/app/api/mobile/incidents/[id]/status/route';
 
@@ -25,6 +29,7 @@ describe('mobile incident status idempotency', () => {
     vi.clearAllMocks();
     getServerSession.mockResolvedValue({ user: { email: 'Responder@Example.com' } });
     updateIncidentStatus.mockResolvedValue({ replayed: false });
+    notificationFindUnique.mockResolvedValue({ userId: 'user-1' });
   });
 
   it('passes the request key into the transaction-bound lifecycle command', async () => {
@@ -86,5 +91,17 @@ describe('mobile incident status idempotency', () => {
       undefined,
       { id: 'ntf-9', via: 'PUSH', userId: 'user-1' }
     );
+  });
+
+  it('refuses a push action whose notification was sent to a different account', async () => {
+    getServerSession.mockResolvedValue({ user: { email: 'next@example.com', id: 'user-2' } });
+    const req = new NextRequest('https://ops.example.com/api/mobile/incidents/inc-1/status', {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'ACKNOWLEDGED' }),
+      headers: { 'content-type': 'application/json', 'x-opsknight-notification-id': 'ntf-9' },
+    });
+
+    expect((await PATCH(req, props)).status).toBe(403);
+    expect(updateIncidentStatus).not.toHaveBeenCalled();
   });
 });

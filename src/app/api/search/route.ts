@@ -5,10 +5,11 @@ import { getAuthOptions } from '@/lib/auth';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
-import type { IncidentStatus, IncidentUrgency } from '@prisma/client';
+import type { IncidentStatus, IncidentUrgency, Prisma } from '@prisma/client';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import {
   incidentReadWhere,
+  postmortemReadWhere,
   runbookReadWhere,
   scheduleReadWhere,
   serviceReadWhere,
@@ -22,6 +23,19 @@ import { businessServiceReadWhere } from '@/lib/business-services/commands';
 import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
 
 const INSENSITIVE_MODE = 'insensitive' as const;
+
+const INCIDENT_LIMIT = 8;
+
+const incidentSelect = {
+  id: true,
+  title: true,
+  status: true,
+  urgency: true,
+  automationSourceRestricted: true,
+  automationTraces: { select: { incidentId: true }, take: 1 },
+  automationDecision: { select: { incidentId: true } },
+  service: { select: { id: true, name: true } },
+} satisfies Prisma.IncidentSelect;
 
 const BUSINESS_STATUS_LABEL = new Map<string, string>([
   ['OPERATIONAL', 'Operational'],
@@ -136,6 +150,9 @@ export async function GET(req: NextRequest) {
     };
     const isPrivileged = hasCapability(currentUser.role, CAPABILITIES.INCIDENT_READ_ALL);
     const canReadSensitive = hasCapability(currentUser.role, CAPABILITIES.INCIDENT_SENSITIVE_READ);
+    // A result whose page answers 403 is a dead link: search only what the actor can open.
+    const canReadUsers = hasCapability(currentUser.role, CAPABILITIES.USER_READ_ALL);
+    const canReadPolicies = hasCapability(currentUser.role, CAPABILITIES.POLICY_READ_ALL);
     // Restricted automation-source content must not be matchable (or shown) by text.
     const unrestrictedSource = canReadSensitive
       ? {}
@@ -157,9 +174,19 @@ export async function GET(req: NextRequest) {
 
     const rate = await checkRateLimit(`api:search:user:${currentUser.id}`, 30, 60_000);
     if (!rate.allowed) {
-      return jsonError('Rate limit exceeded', 429, {
-        retryAfter: Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000)),
-      });
+      // The counter store failing says nothing about this user's quota: retry shortly, not "limited".
+      if (rate.unavailable) {
+        return jsonError('Search is temporarily unavailable', 503, undefined, {
+          'Retry-After': '5',
+        });
+      }
+      const retryAfter = Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000));
+      return jsonError(
+        'Rate limit exceeded',
+        429,
+        { retryAfter },
+        { 'Retry-After': String(retryAfter) }
+      );
     }
 
     const searchParams = req.nextUrl.searchParams;
@@ -192,6 +219,12 @@ export async function GET(req: NextRequest) {
       .split(/\s+/)
       .filter(w => w.length > 1)
       .slice(0, 5);
+    // Every word must appear (in any of the fields): 'payment timeout' is not 'payment OR timeout'.
+    const queryWords = searchWords.length > 0 ? searchWords : [sanitizedTerm];
+    const has = (word: string) => ({ contains: word, mode: INSENSITIVE_MODE });
+    const everyWord = <Field>(fieldsFor: (word: string) => Field[]) => ({
+      AND: queryWords.map(word => ({ OR: fieldsFor(word) })),
+    });
     // Run all searches in parallel for better performance
     // Note: Postmortem search is wrapped to handle missing model gracefully
     const searchPromises = [
@@ -205,21 +238,7 @@ export async function GET(req: NextRequest) {
                 {
                   AND: [
                     unrestrictedSource,
-                    {
-                      OR: [
-                        { title: { equals: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                        { title: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                        { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                        ...(searchWords.length > 1
-                          ? searchWords.slice(0, 3).map(word => ({
-                              OR: [
-                                { title: { contains: word, mode: INSENSITIVE_MODE } },
-                                { description: { contains: word, mode: INSENSITIVE_MODE } },
-                              ],
-                            }))
-                          : []),
-                      ],
-                    },
+                    everyWord(word => [{ title: has(word) }, { description: has(word) }]),
                   ],
                 },
                 { id: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
@@ -227,18 +246,9 @@ export async function GET(req: NextRequest) {
             },
           ],
         },
-        take: 8, // Reduced for faster response on small systems
+        take: INCIDENT_LIMIT, // Reduced for faster response on small systems
         orderBy: [{ createdAt: 'desc' }],
-        select: {
-          id: true,
-          title: true,
-          status: true,
-          urgency: true,
-          automationSourceRestricted: true,
-          automationTraces: { select: { incidentId: true }, take: 1 },
-          automationDecision: { select: { incidentId: true } },
-          service: { select: { id: true, name: true } },
-        },
+        select: incidentSelect,
       }),
 
       // Search services
@@ -246,12 +256,7 @@ export async function GET(req: NextRequest) {
         where: {
           AND: [
             serviceAccess,
-            {
-              OR: [
-                { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-              ],
-            },
+            everyWord(word => [{ name: has(word) }, { description: has(word) }]),
           ],
         },
         take: 5,
@@ -269,12 +274,7 @@ export async function GET(req: NextRequest) {
         where: {
           AND: [
             isPrivileged ? {} : { id: { in: teamIds } },
-            {
-              OR: [
-                { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-              ],
-            },
+            everyWord(word => [{ name: has(word) }, { description: has(word) }]),
           ],
         },
         take: 5,
@@ -286,58 +286,52 @@ export async function GET(req: NextRequest) {
         },
       }),
 
-      // Search users
-      prisma.user.findMany({
-        where: {
-          AND: [
-            isPrivileged
-              ? {}
-              : {
-                  OR: [
-                    { id: currentUser.id },
-                    { teamMemberships: { some: { teamId: { in: teamIds } } } },
-                  ],
-                },
-            {
-              OR: [
-                { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                { email: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+      // Search users (skipped when the actor cannot open user pages)
+      canReadUsers
+        ? prisma.user.findMany({
+            where: {
+              AND: [
+                isPrivileged
+                  ? {}
+                  : {
+                      OR: [
+                        { id: currentUser.id },
+                        { teamMemberships: { some: { teamId: { in: teamIds } } } },
+                      ],
+                    },
+                everyWord(word => [{ name: has(word) }, { email: has(word) }]),
               ],
             },
-          ],
-        },
-        take: 5,
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-          avatarUrl: true,
-        },
-      }),
+            take: 5,
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+              avatarUrl: true,
+            },
+          })
+        : Promise.resolve([]),
 
-      // Search escalation policies
-      prisma.escalationPolicy.findMany({
-        where: {
-          AND: [
-            isPrivileged ? {} : { services: { some: { teamId: { in: teamIds } } } },
-            {
-              OR: [
-                { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+      // Search escalation policies (skipped when the actor cannot open policy pages)
+      canReadPolicies
+        ? prisma.escalationPolicy.findMany({
+            where: {
+              AND: [
+                isPrivileged ? {} : { services: { some: { teamId: { in: teamIds } } } },
+                everyWord(word => [{ name: has(word) }, { description: has(word) }]),
               ],
             },
-          ],
-        },
-        take: 5,
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-        },
-      }),
+            take: 5,
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true,
+              name: true,
+              description: true,
+            },
+          })
+        : Promise.resolve([]),
 
       // Search postmortems (only if Postmortem model exists)
       (async () => {
@@ -349,19 +343,14 @@ export async function GET(req: NextRequest) {
           return await prisma.postmortem.findMany({
             where: {
               AND: [
-                isPrivileged
-                  ? {}
-                  : {
-                      incident: incidentAccess,
-                    },
-                {
-                  OR: [
-                    { title: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                    { summary: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                    { rootCause: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                    { lessons: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                  ],
-                },
+                // Same rule as every other postmortem read: drafts only for draft readers.
+                postmortemReadWhere(actor),
+                everyWord(word => [
+                  { title: has(word) },
+                  { summary: has(word) },
+                  { rootCause: has(word) },
+                  { lessons: has(word) },
+                ]),
               ],
               status: { not: 'ARCHIVED' }, // Don't show archived postmortems
             },
@@ -393,7 +382,7 @@ export async function GET(req: NextRequest) {
       scheduleAccess
         ? prisma.onCallSchedule.findMany({
             where: {
-              AND: [scheduleAccess, { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } }],
+              AND: [scheduleAccess, everyWord(word => [{ name: has(word) }])],
             },
             take: 5,
             orderBy: { name: 'asc' },
@@ -408,12 +397,7 @@ export async function GET(req: NextRequest) {
               AND: [
                 runbookAccess,
                 { archivedAt: null },
-                {
-                  OR: [
-                    { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                    { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                  ],
-                },
+                everyWord(word => [{ name: has(word) }, { description: has(word) }]),
               ],
             },
             take: 5,
@@ -428,12 +412,7 @@ export async function GET(req: NextRequest) {
             where: {
               AND: [
                 businessServiceAccess,
-                {
-                  OR: [
-                    { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                    { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                  ],
-                },
+                everyWord(word => [{ name: has(word) }, { description: has(word) }]),
               ],
             },
             take: 5,
@@ -443,8 +422,26 @@ export async function GET(req: NextRequest) {
         : Promise.resolve([]),
     ];
 
+    // Exact title matches rank first: the newest-first limit above must not cut an older exact match.
+    const exactIncidentsPromise = prisma.incident.findMany({
+      where: {
+        AND: [
+          incidentAccess,
+          unrestrictedSource,
+          { title: { equals: sanitizedTerm, mode: INSENSITIVE_MODE } },
+        ],
+      },
+      take: INCIDENT_LIMIT,
+      orderBy: [{ createdAt: 'desc' }],
+      select: incidentSelect,
+    });
+
+    const [searchResults, exactIncidents] = await Promise.all([
+      Promise.all(searchPromises),
+      exactIncidentsPromise,
+    ]);
     const [
-      incidents,
+      broadIncidents,
       services,
       teams,
       users,
@@ -453,7 +450,12 @@ export async function GET(req: NextRequest) {
       schedules,
       runbooks,
       businessServices,
-    ] = (await Promise.all(searchPromises)) as SearchResponses;
+    ] = searchResults as SearchResponses;
+    const exactIncidentIds = new Set(exactIncidents.map(incident => incident.id));
+    const incidents = [
+      ...exactIncidents,
+      ...broadIncidents.filter(incident => !exactIncidentIds.has(incident.id)),
+    ].slice(0, INCIDENT_LIMIT) as IncidentWithService[];
     // Health for the status dot, from the cached snapshot; a miss leaves the dot off.
     const businessHealth = businessServices.length
       ? await import('@/lib/business-services/health')

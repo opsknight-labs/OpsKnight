@@ -80,8 +80,9 @@ describe('MobileServiceMaintenance', () => {
     expect(pathId).toBe('svc-1');
     expect(input.title).toBe('Swap disk');
     expect(input.serviceIds).toEqual(['svc-1']);
-    expect(input.endsAt.getTime() - input.startsAt.getTime()).toBe(120 * 60_000);
-    expect(Math.abs(input.startsAt.getTime() - Date.now())).toBeLessThan(5_000);
+    // The server clock sets the start; the phone only sends how long.
+    expect(input.startNowForMinutes).toBe(120);
+    expect(input.startsAt).toBeUndefined();
   });
 
   it('shows the action error inline', async () => {

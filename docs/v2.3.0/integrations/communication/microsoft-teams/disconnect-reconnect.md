@@ -37,6 +37,20 @@ For credential rotation, keep application/tenant identity stable and create a ne
 4. Install/approve the current package in target teams.
 5. Revalidate destinations, test card, incident card/action, and selected war-room lifecycle.
 
+## What Disconnect deletes
+
+**Disconnect** on the Microsoft Teams page is permanent. It deletes the Azure AD app
+credentials and Teams settings, every bot installation (each team must install the bot
+again), every service-to-channel mapping (each service must be linked again) and the card
+ledger, so OpsKnight can no longer update or reply to cards it already posted. Services
+stop routing to Teams and in-flight war rooms are settled. None of it comes back when you
+connect again.
+
+The confirmation dialog lists these counts and asks you to type `Microsoft Teams` before it
+deletes anything. One audit entry, `microsoftTeams.integration.disconnected`, records how
+many destinations, installations, card-ledger rows and configuration rows were removed. To
+rotate a secret without losing any of this, change the credentials instead of disconnecting.
+
 ## What OpsKnight does
 
 Credential/tenant identity changes invalidate stale installation/destination delivery state so old credentials cannot keep sending. The tenant, Bot, package, and OpsKnight configuration must agree.

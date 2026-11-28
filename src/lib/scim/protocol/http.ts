@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { recordRequest } from '../observability/metrics';
 import { scimError } from '@/lib/scim';
 import { AppError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { ScimFailure } from './validation';
 
 export function json(body: unknown, status = 200, location?: string) {
@@ -37,6 +38,12 @@ async function respond(operation: () => Promise<Response>): Promise<Response> {
     const code = error && typeof error === 'object' && 'code' in error ? error.code : '';
     if (code === 'P2002')
       return scimError(409, 'A resource with this identifier already exists.', 'uniqueness');
+    // The client only gets a generic 503; the cause goes to the server log under the request id.
+    logger.error('[SCIM] Unexpected error handling request', {
+      component: 'scim',
+      requestId: scimRequestId(),
+      error,
+    });
     // Never expose database messages, SQL, payloads or connection details.
     const response = scimError(503, 'Provisioning is temporarily unavailable. Retry the request.');
     response.headers.set('Retry-After', '60');

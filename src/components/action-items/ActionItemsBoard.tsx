@@ -45,6 +45,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import Pagination from '@/components/service/Pagination';
 import { exportToCsv } from '@/lib/export-csv';
 import { updateActionItemStatus } from '@/app/(app)/action-items/actions';
+import { notify } from '@/lib/toast';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import {
   Command,
@@ -504,7 +505,8 @@ export default function ActionItemsBoard({
   // 'cards' is the kanban board here.
   const [view, setView] = useDirectoryView('action-items');
   const [items, setItems] = useState<BoardActionItem[]>(initialItems);
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  // Several items can be saving at once (change A, then B before A returns).
+  const [updatingIds, setUpdatingIds] = useState<ReadonlySet<string>>(new Set());
   const [search, setSearch] = useState(initialSearch);
   const [selectedStatus, setSelectedStatus] = useState(filters.status || '');
   const [selectedOwner, setSelectedOwner] = useState(filters.owner || '');
@@ -601,6 +603,22 @@ export default function ActionItemsBoard({
   }, [ownerSearch, users, selectedOwner]);
 
   const handleStatusChange = async (itemId: string, newStatus: ActionItemStatus) => {
+    const before = items.find(item => item.id === itemId);
+    const setUpdating = (updating: boolean) =>
+      setUpdatingIds(current => {
+        const next = new Set(current);
+        if (updating) next.add(itemId);
+        else next.delete(itemId);
+        return next;
+      });
+    // Put back only this item: other optimistic changes may still be in flight.
+    const rollback = (reason: string) => {
+      if (before) {
+        setItems(current => current.map(item => (item.id === itemId ? before : item)));
+      }
+      notify.error(reason);
+    };
+
     setItems(previous =>
       previous.map(item =>
         item.id === itemId
@@ -613,14 +631,14 @@ export default function ActionItemsBoard({
       )
     );
 
-    setUpdatingId(itemId);
+    setUpdating(true);
     try {
       const result = await updateActionItemStatus(itemId, newStatus);
-      if (!result.success) setItems(initialItems);
+      if (!result.success) rollback(result.error ?? 'Could not update the action item status.');
     } catch {
-      setItems(initialItems);
+      rollback('Could not update the action item status.');
     } finally {
-      setUpdatingId(null);
+      setUpdating(false);
     }
   };
 
@@ -820,7 +838,7 @@ export default function ActionItemsBoard({
           <Select
             value={item.status}
             onValueChange={value => handleStatusChange(item.id, value as ActionItemStatus)}
-            disabled={updatingId === item.id}
+            disabled={updatingIds.has(item.id)}
           >
             <SelectTrigger className="h-7 w-[124px] text-xs" aria-label={`Status of ${item.title}`}>
               <SelectValue />
@@ -1067,7 +1085,7 @@ export default function ActionItemsBoard({
                           userTimeZone={userTimeZone}
                           canManage={canManage}
                           onStatusChange={handleStatusChange}
-                          isUpdating={updatingId === item.id}
+                          isUpdating={updatingIds.has(item.id)}
                           jiraCapability={requireJiraCapability(jiraCapabilities, item.serviceId)}
                         />
                       ))

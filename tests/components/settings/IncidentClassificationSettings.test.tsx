@@ -1,10 +1,14 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import IncidentClassificationSettings from '@/components/incident-sla/IncidentClassificationSettings';
-import { saveWorkspaceClassificationPolicyAction } from '@/app/(app)/settings/incident-sla/actions';
+import {
+  saveScopedClassificationPolicyAction,
+  saveWorkspaceClassificationPolicyAction,
+} from '@/app/(app)/settings/incident-sla/actions';
 
 vi.mock('@/app/(app)/settings/incident-sla/actions', () => ({
   saveWorkspaceClassificationPolicyAction: vi.fn(),
+  saveScopedClassificationPolicyAction: vi.fn(),
 }));
 
 vi.mock('@/lib/toast', () => ({
@@ -52,5 +56,27 @@ describe('IncidentClassificationSettings', () => {
     fireEvent.click(saveAgain);
     await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
     expect(save.mock.calls[1][0]).toEqual(expect.objectContaining({ expectedVersion: 2 }));
+  });
+
+  it('leaves rows nobody edited on a scoped policy inheriting the workspace, not pinned to CLEAR', async () => {
+    const save = vi.mocked(saveScopedClassificationPolicyAction);
+    save.mockResolvedValueOnce({ ok: true, version: 1 });
+
+    render(<IncidentClassificationSettings scopeKey="service:svc-1" policy={null} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /save classification policy/i }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    const saved = (save.mock.calls[0][0] as { rules: unknown[] }).rules;
+    expect(saved).toHaveLength(4);
+    for (const rule of saved) {
+      expect(rule).toEqual(
+        expect.objectContaining({
+          priorityMode: 'INHERIT',
+          priority: null,
+          urgencyMode: 'INHERIT',
+          urgency: null,
+        })
+      );
+    }
   });
 });

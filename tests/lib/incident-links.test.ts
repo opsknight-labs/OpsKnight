@@ -36,4 +36,16 @@ describe('buildIncidentListHref', () => {
       '/incidents?filter=resolved&teamId=team-1&createdAfter=2026-08-01T00%3A00%3A00.000Z&createdBefore=2026-08-26T00%3A00%3A00.000Z'
     );
   });
+
+  it('keeps the priority and sort of the list the counts were taken from', () => {
+    expect(buildIncidentListHref({ filter: 'all_open', priority: 'P1', sort: 'priority' })).toBe(
+      '/incidents?filter=all_open&priority=P1&sort=priority'
+    );
+  });
+
+  it('leaves the default priority and sort out of the link', () => {
+    expect(buildIncidentListHref({ filter: 'resolved', priority: 'all', sort: 'newest' })).toBe(
+      '/incidents?filter=resolved'
+    );
+  });
 });

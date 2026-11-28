@@ -18,9 +18,10 @@ const identity = z
   })
   .strict();
 export async function saveObjective(_state: { message: string; ok: boolean }, form: FormData) {
+  let operation: 'create' | 'update' | 'archive' | undefined;
   try {
     const actor = await assertAdmin();
-    const operation = z.enum(['create', 'update', 'archive']).parse(form.get('operation'));
+    operation = z.enum(['create', 'update', 'archive']).parse(form.get('operation'));
     const context = { id: actor.id, source: 'UI' as const };
     const patch =
       operation === 'archive'
@@ -63,7 +64,10 @@ export async function saveObjective(_state: { message: string; ok: boolean }, fo
     return {
       message:
         error instanceof AppError
-          ? error.userMessage
+          ? operation === 'create' && error.code === 'PRECONDITION_FAILED'
+            ? // The create fence is "the slot is empty": failing it means one already exists.
+              'An active objective already exists for this service and metric. Edit it instead.'
+            : error.userMessage
           : error instanceof z.ZodError
             ? 'Check the objective fields and measurement limits.'
             : 'Unable to save the objective. Refresh and try again.',

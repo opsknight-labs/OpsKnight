@@ -6,7 +6,14 @@ import { isSearchResult, type SearchResult } from './palette-model';
 export const SEARCH_DEBOUNCE_MS = 150;
 export const MIN_SEARCH_LENGTH = 2;
 
-type Response = { term: string; results: SearchResult[]; failed: boolean };
+type Response = {
+  term: string;
+  attempt: number;
+  results: SearchResult[];
+  failed: boolean;
+  /** The server answered 429: the caller is being rate limited, not out of results. */
+  limited: boolean;
+};
 
 /**
  * Debounced `/api/search` lookup. Each new term aborts the in-flight request, and results
@@ -15,7 +22,14 @@ type Response = { term: string; results: SearchResult[]; failed: boolean };
  */
 export function useEntitySearch(query: string) {
   const term = query.trim();
-  const [response, setResponse] = useState<Response>({ term: '', results: [], failed: false });
+  const [attempt, setAttempt] = useState(0);
+  const [response, setResponse] = useState<Response>({
+    term: '',
+    attempt: 0,
+    results: [],
+    failed: false,
+    limited: false,
+  });
 
   useEffect(() => {
     if (term.length < MIN_SEARCH_LENGTH) return;
@@ -25,25 +39,37 @@ export function useEntitySearch(query: string) {
         const res = await fetch(`/api/search?q=${encodeURIComponent(term)}`, {
           signal: controller.signal,
         });
-        if (!res.ok) throw new Error(`Search failed with ${res.status}`);
+        if (!res.ok) {
+          if (!controller.signal.aborted) {
+            setResponse({ term, attempt, results: [], failed: true, limited: res.status === 429 });
+          }
+          return;
+        }
         const data = (await res.json()) as { results?: unknown };
         const results = Array.isArray(data?.results) ? data.results.filter(isSearchResult) : [];
-        if (!controller.signal.aborted) setResponse({ term, results, failed: false });
+        if (!controller.signal.aborted) {
+          setResponse({ term, attempt, results, failed: false, limited: false });
+        }
       } catch {
-        if (!controller.signal.aborted) setResponse({ term, results: [], failed: true });
+        if (!controller.signal.aborted) {
+          setResponse({ term, attempt, results: [], failed: true, limited: false });
+        }
       }
     }, SEARCH_DEBOUNCE_MS);
     return () => {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [term]);
+  }, [term, attempt]);
 
   const active = term.length >= MIN_SEARCH_LENGTH;
-  const settled = active && response.term === term;
+  const settled = active && response.term === term && response.attempt === attempt;
   return {
     results: settled ? response.results : [],
     loading: active && !settled,
     failed: settled && response.failed,
+    limited: settled && response.limited,
+    /** Run the same search again (after a failure or a rate limit). */
+    retry: () => setAttempt(count => count + 1),
   };
 }

@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma';
+import { actionItemOverdueBefore } from '@/lib/action-item-due-dates';
 import {
   ActionItemListQuerySchema,
   buildCursorWhere,
@@ -23,12 +24,14 @@ export const GET = defineV2Route({
     if (query.incidentId) filters.push({ incidentId: query.incidentId });
     if (query.postmortemId) filters.push({ postmortemId: query.postmortemId });
     if (query.overdue !== undefined) {
-      const now = new Date();
+      const overdueBefore = actionItemOverdueBefore(new Date());
       // Spelled out rather than NOT(...): SQL's NOT would drop items without a due date.
       filters.push(
         query.overdue
-          ? { dueDate: { lt: now }, status: { not: 'COMPLETED' } }
-          : { OR: [{ dueDate: null }, { dueDate: { gte: now } }, { status: 'COMPLETED' }] }
+          ? { dueDate: { lt: overdueBefore }, status: { not: 'COMPLETED' } }
+          : {
+              OR: [{ dueDate: null }, { dueDate: { gte: overdueBefore } }, { status: 'COMPLETED' }],
+            }
       );
     }
 

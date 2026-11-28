@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { cn } from '@/lib/utils';
 import { formatDateTime } from '@/lib/timezone';
+import { actionItemOverdueBefore } from '@/lib/action-item-due-dates';
 import { AlertTriangle, Clock, Calendar, CheckCircle2 } from 'lucide-react';
 
 export type DueDateBadgeProps = {
@@ -31,11 +32,13 @@ export function getDueDateStatus(
     return { type: 'none' };
   }
 
-  // Calculate day difference at midnight boundaries
-  const dueMidnight = new Date(due.getFullYear(), due.getMonth(), due.getDate());
-  const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // A due date is a calendar date stored at 00:00Z. Compare it with today's UTC day, the same rule
+  // as the board count, the API filter and the reminders (actionItemOverdueBefore), so the badge
+  // never disagrees with them whichever side of UTC the viewer is on.
+  const dueDay = Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate());
+  const today = actionItemOverdueBefore(now).getTime();
   const msPerDay = 1000 * 60 * 60 * 24;
-  const daysDiff = Math.round((dueMidnight.getTime() - nowMidnight.getTime()) / msPerDay);
+  const daysDiff = Math.round((dueDay - today) / msPerDay);
 
   if (daysDiff < 0) {
     return { type: 'overdue', daysDiff: Math.abs(daysDiff) };
@@ -61,7 +64,7 @@ function DueDateBadge({
     const formatted = completedAt
       ? formatDateTime(completedAt, userTimeZone, { format: 'date' })
       : dueDate
-        ? formatDateTime(dueDate, userTimeZone, { format: 'date' })
+        ? formatDateTime(dueDate, 'UTC', { format: 'date' })
         : null;
 
     return (
@@ -81,7 +84,7 @@ function DueDateBadge({
     return null;
   }
 
-  const formattedDate = dueDate ? formatDateTime(dueDate, userTimeZone, { format: 'date' }) : '';
+  const formattedDate = dueDate ? formatDateTime(dueDate, 'UTC', { format: 'date' }) : '';
 
   if (result.type === 'overdue') {
     const days = result.daysDiff ?? 1;

@@ -44,8 +44,8 @@ it('cancels once, replays safely, and rejects a new cancellation without another
     data: {
       scheduleId: schedule.id,
       userId: admin.user.id,
-      start: new Date('2026-11-01T00:00:00.000Z'),
-      end: new Date('2026-11-01T08:00:00.000Z'),
+      start: new Date('2099-11-01T00:00:00.000Z'),
+      end: new Date('2099-11-01T08:00:00.000Z'),
     },
   });
   const path = `/schedules/${schedule.id}/overrides/${override.id}`;

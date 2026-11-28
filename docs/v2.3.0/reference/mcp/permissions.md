@@ -71,7 +71,7 @@ Operation columns count catalog operations that need the permission: plain reads
 | `custom-fields:write` | Change custom fields (higher-risk changes wait for approval) | Settings | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 3 |
 | `escalation-policies:read` | View escalation policies | Schedules and escalation | View | ✓ | ✓ | ✓ |  |  | 5 | 1 | 0 | 1 |
 | `escalation-policies:write` | Change escalation policies (higher-risk changes wait for approval) | Schedules and escalation | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 3 |
-| `incidents:read` | View incidents | Incidents | View | ✓ | ✓ | ✓ | ✓ |  | 26 | 12 | 2 | 16 |
+| `incidents:read` | View incidents | Incidents | View | ✓ | ✓ | ✓ | ✓ |  | 25 | 13 | 2 | 16 |
 | `incidents:write` | Change incidents (higher-risk changes wait for approval) | Incidents | Change | ✓ | ✓ |  | ✓ |  | 0 | 0 | 13 | 13 |
 | `integrations:delete` | Delete integrations | Services | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 1 |
 | `integrations:read` | View integrations | Services | View | ✓ | ✓ | ✓ | ✓ | ✓ | 1 | 3 | 0 | 1 |
@@ -82,7 +82,7 @@ Operation columns count catalog operations that need the permission: plain reads
 | `postmortems:read` | View postmortems | Incidents | View | ✓ | ✓ | ✓ | ✓ |  | 7 | 0 | 0 | 2 |
 | `postmortems:write` | Change postmortems (higher-risk changes wait for approval) | Incidents | Change | ✓ | ✓ |  |  |  | 0 | 0 | 0 | 8 |
 | `reports:read` | View reports and analytics | Reports and audit | View | ✓ | ✓ | ✓ | ✓ |  | 3 | 6 | 0 | 2 |
-| `reports:write` | Change reports and analytics (higher-risk changes wait for approval) | Reports and audit | Change | ✓ | ✓ | ✓ | ✓ |  | 0 | 0 | 0 | 8 |
+| `reports:write` | Change reports and analytics (higher-risk changes wait for approval) | Reports and audit | Change | ✓ | ✓ |  | ✓ |  | 0 | 0 | 0 | 8 |
 | `response-policy:read` | View the response policy | Settings | View | ✓ |  |  |  |  | 3 | 1 | 0 | 0 |
 | `response-policy:write` | Change the response policy (higher-risk changes wait for approval) | Settings | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 4 |
 | `runbook-rules:activate` | Turn runbook trigger rules on or off | Runbooks | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 2 |
@@ -104,7 +104,7 @@ Operation columns count catalog operations that need the permission: plain reads
 | `services:write` | Change services (higher-risk changes wait for approval) | Services | Change | ✓ | ✓ |  |  |  | 1 | 1 | 0 | 23 |
 | `status-page-subscribers:read` | View status page subscribers | Status pages | View | ✓ |  |  |  |  | 0 | 1 | 0 | 0 |
 | `status-pages:read` | View status pages | Status pages | View | ✓ | ✓ | ✓ |  |  | 5 | 9 | 0 | 2 |
-| `status-pages:write` | Change status pages (higher-risk changes wait for approval) | Status pages | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 11 |
+| `status-pages:write` | Change status pages (higher-risk changes wait for approval) | Status pages | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 12 |
 | `teams:read` | View teams | Teams and people | View | ✓ | ✓ | ✓ | ✓ | ✓ | 6 | 1 | 0 | 2 |
 | `teams:write` | Change teams (higher-risk changes wait for approval) | Teams and people | Change | ✓ | ✓ |  | ✓ |  | 0 | 0 | 0 | 7 |
 | `users:read` | View people | Teams and people | View | ✓ | ✓ | ✓ |  |  | 3 | 0 | 0 | 0 |
@@ -146,10 +146,10 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | service-reviews | 3 | 1 | 1 | 1 |
 | services | 45 | 21 | 21 | 3 |
 | settings | 12 | 5 | 5 | 2 |
-| status-pages | 33 | 15 | 11 | 7 |
+| status-pages | 34 | 15 | 12 | 7 |
 | teams | 14 | 7 | 7 | 0 |
 | users | 13 | 4 | 0 | 9 |
-| **All** | 394 | 180 | 130 | 84 |
+| **All** | 395 | 180 | 131 | 84 |
 
 <details>
 <summary>Operations by area</summary>
@@ -285,7 +285,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `getIncidentTimeline` | `incident_get_timeline` |
 | `getIncidentWatcher` | `read_operation` (sensitive reads on) |
 | `listIncidentAlerts` | `read_operation` (sensitive reads on) |
-| `listIncidentCustomFields` | `read_operation` |
+| `listIncidentCustomFields` | `read_operation` (sensitive reads on) |
 | `listIncidentNotes` | `incident_list_notes` |
 | `listIncidentNotificationAttempts` | `read_operation` (sensitive reads on) |
 | `listIncidentRoles` | `incident_roles_list` |
@@ -620,6 +620,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `createStatusPage` | `operation_prepare`, then approval |
 | `createStatusPageAnnouncement` | `operation_prepare`, then approval |
 | `deleteStatusPageAsset` | `operation_prepare`, then approval |
+| `endStatusPageAnnouncement` | `operation_prepare`, then approval |
 | `getStatusPage` | `status_page_get` |
 | `getStatusPageAppearance` | `read_operation` (sensitive reads on) |
 | `getStatusPageAsset` | `read_operation` (sensitive reads on) |

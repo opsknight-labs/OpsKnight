@@ -52,6 +52,10 @@ from the secret JWT capability. Revocation commits an audit and security alert.
 An emergency principal can revoke authentication sessions through the recovery
 console but cannot access ordinary product administration.
 
+Signing out ends the session on the server as well as in the browser: the session
+shows as revoked in **Signed-in Sessions**, and a copy of its cookie stops working
+at once instead of lasting until it expires.
+
 ## Configure revocation
 
 Revoke a specific unfamiliar session first when the account remains under your
@@ -59,6 +63,18 @@ control. Confirm it disappears and that the affected browser must authenticate
 again. Use **Revoke all sessions** for a lost device, suspected credential
 exposure, or uncertain scope. This increments the identity token version and
 invalidates existing browser sessions, including other trusted devices.
+
+## Change your password
+
+On **Settings -> Security**, the password form changes your local password. It
+allows 10 attempts per 15 minutes; a wrong current password counts as an
+attempt, and further attempts are refused with "Too many password change
+attempts. Try again in a few minutes." An account that signs in only through SSO
+has no current password, so it can set its first local password only after a
+sign-in within the last 15 minutes; otherwise OpsKnight asks you to sign in again
+first. After each successful change OpsKnight sends the same security notice as
+a password reset: an email, or an SMS when email is off and you have SMS turned
+on with a phone number.
 
 ## How session revocation works
 

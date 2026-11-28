@@ -23,7 +23,7 @@ const state = vi.hoisted(() => ({
   current: null as unknown as ReturnType<typeof buildMockPrisma>,
 }));
 vi.mock('@/lib/prisma', () => ({
-  default: new Proxy({}, { get: (_t, prop) => (state.current as never)[prop] }),
+  default: new Proxy({}, { get: (_t, prop) => Reflect.get(state.current, prop) }),
 }));
 
 import { verifySubjectErasure } from '@/lib/privacy/erasure/verify';
@@ -71,6 +71,29 @@ describe('verifySubjectErasure', () => {
     const result = await verifySubjectErasure(SUBJECT_ID, { originalEmail: 'alice@example.com' });
     expect(result.verified).toBe(false);
     expect(result.issues).toContain("1 audit log row(s) still expose the subject's actor email.");
+  });
+
+  it('does not count the audit rows a legal hold on another user protects', async () => {
+    const client = {
+      ...buildMockPrisma(),
+      dataRetentionHold: { findMany: vi.fn().mockResolvedValue([{ scopeId: 'cheld0000001' }]) },
+    };
+    await verifySubjectErasure(SUBJECT_ID, { originalEmail: 'alice@example.com' }, client as never);
+    const wheres = client.auditLog.count.mock.calls.map(call => call[0].where as Record<string, unknown>);
+    const byEmail = wheres.filter(where => 'actorEmail' in where || 'targetEmail' in where);
+    expect(byEmail).toHaveLength(2);
+    for (const where of byEmail) {
+      expect(where.AND).toEqual([
+        { OR: [{ actorId: null }, { actorId: { notIn: ['cheld0000001'] } }] },
+        {
+          OR: [
+            { entityType: { not: 'USER' } },
+            { entityId: null },
+            { entityId: { notIn: ['cheld0000001'] } },
+          ],
+        },
+      ]);
+    }
   });
 
   it('does not query by email when no originalEmail is supplied', async () => {

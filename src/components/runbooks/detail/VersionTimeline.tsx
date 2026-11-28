@@ -22,6 +22,8 @@ export type VersionTimelineItem = {
   compareHref: string | null;
   restoreAction?: RunbookFormAction;
   retireAction?: RunbookFormAction;
+  /** Set on the live version: retires it so the runbook has no published version. */
+  unpublishAction?: RunbookFormAction;
 };
 
 const NODE_CONFIG: Record<
@@ -152,7 +154,10 @@ export function VersionTimeline({ versions }: { versions: VersionTimelineItem[] 
                   </div>
                 </dl>
               </div>
-              {(version.compareHref || version.restoreAction || version.retireAction) && (
+              {(version.compareHref ||
+                version.restoreAction ||
+                version.retireAction ||
+                version.unpublishAction) && (
                 <div className="flex shrink-0 flex-wrap items-center gap-2">
                   {version.compareHref && (
                     <Button
@@ -185,6 +190,16 @@ export function VersionTimeline({ versions }: { versions: VersionTimelineItem[] 
                       title={`Retire version ${version.version}?`}
                       description="Marks this superseded version as retired. It stays in history with its executions. Rules still pinned to it must be moved first."
                       successMessage="Version retired"
+                    />
+                  )}
+                  {version.unpublishAction && (
+                    <ConfirmAction
+                      action={version.unpublishAction}
+                      label="Unpublish"
+                      variant="outline"
+                      title={`Unpublish version ${version.version}?`}
+                      description={`Retires the live version, so this runbook has no published version until you publish again. Service rules that follow the latest version stop with a clear reason. Rules pinned to version ${version.version} keep running that exact version until you detach or re-pin them (${plural(version.pinnedRuleCount, 'rule')} pinned now). The version stays in history.`}
+                      successMessage="Runbook unpublished"
                     />
                   )}
                 </div>

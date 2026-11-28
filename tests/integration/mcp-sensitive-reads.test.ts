@@ -160,6 +160,17 @@ describeSensitiveReads([
     },
   },
   {
+    name: 'incident custom fields',
+    operationId: 'listIncidentCustomFields',
+    setup: async () => {
+      const [target, field] = [await incident(), await customField()];
+      await db.customFieldValue.create({
+        data: { incidentId: target.id, customFieldId: field.id, value: 'eu-west-1' },
+      });
+      return { path: { id: target.id } };
+    },
+  },
+  {
     name: 'incident template',
     operationId: 'getIncidentTemplate',
     setup: async owner => ({ path: { templateId: (await incidentTemplate(owner)).id } }),

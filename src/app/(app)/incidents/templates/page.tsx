@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { getUserPermissions } from '@/lib/rbac';
+import { isAdministratorRole } from '@/lib/authorization';
 import { getAllTemplates } from '../template-actions';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import TemplatesListClient from '@/components/incident/TemplatesListClient';
@@ -14,7 +15,7 @@ export default async function TemplatesPage() {
   const permissions = await getUserPermissions();
   const canManageTemplates = permissions.isResponderOrAbove;
 
-  const templates = await getAllTemplates(permissions.id);
+  const templates = await getAllTemplates(permissions.id, isAdministratorRole(permissions.role));
 
   const totalCount = templates.length;
   const highUrgencyCount = templates.filter(t => t.defaultUrgency === 'HIGH').length;

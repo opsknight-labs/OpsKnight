@@ -26,6 +26,8 @@ Configure the single supported status page and map the affected services.
 
 Identify the customer-facing impact, approved wording, affected services/components, intended component state, privacy settings, and person authorized to publish. Internal incident visibility does not automatically define public output.
 
+Setting an incident to **Private** takes it off every page that publishes its service straight away: each page stops serving its previous version first, then is rebuilt without the incident. If one page cannot be rebuilt, the others are still handled, the change reports the failure, and that page stays withheld until it rebuilds.
+
 ## Open the feature
 
 Open **Settings → Status page** to review the single installation-wide page and service/component mapping. During response, open the incident's status communication controls.

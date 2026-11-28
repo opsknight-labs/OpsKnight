@@ -53,6 +53,27 @@ export function computeSuccessRate(statuses: string[]) {
   };
 }
 
+/** The rate covers only the runs sampled (the newest few), so it says which runs, and never shows 100% for none. */
+export function describeSuccessRate(
+  rate: ReturnType<typeof computeSuccessRate>,
+  totalRuns: number
+) {
+  return {
+    value:
+      rate.completed > 0
+        ? `${Math.round((rate.succeeded / rate.completed) * 100)}%`
+        : rate.sampled > 0
+          ? 'No finished runs'
+          : 'No runs',
+    window:
+      rate.sampled === 0
+        ? 'No runs yet'
+        : totalRuns > rate.sampled
+          ? `Last ${rate.sampled} of ${totalRuns} runs`
+          : `All ${totalRuns} runs`,
+  };
+}
+
 const panelLinkClass =
   'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/10 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
 

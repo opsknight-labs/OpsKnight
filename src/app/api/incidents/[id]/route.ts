@@ -212,6 +212,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     result = await applyRestIncidentPatch({
       incidentId: id,
       status: parsed.data.status,
+      resolutionNote: parsed.data.resolutionNote,
       urgency: parsed.data.urgency,
       assigneeId: hasAssigneeUpdate ? (parsed.data.assigneeId ?? null) : undefined,
       hasAssigneeUpdate,

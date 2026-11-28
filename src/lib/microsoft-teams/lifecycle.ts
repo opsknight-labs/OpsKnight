@@ -252,11 +252,13 @@ export async function disconnectMicrosoftTeamsIntegration(
       reason: 'Microsoft Teams integration disconnected',
     });
 
+    // What a destructive disconnect removed, for the audit row written in this same transaction.
+    const removed = { cardLedger: 0, destinations: 0, installations: 0, config: 0 };
     if (deleteConfig) {
-      await tx.microsoftTeamsIncidentMessage.deleteMany({});
-      await tx.microsoftTeamsDestination.deleteMany({});
-      await tx.microsoftTeamsInstallation.deleteMany({});
-      await tx.microsoftTeamsConfig.deleteMany({});
+      removed.cardLedger = (await tx.microsoftTeamsIncidentMessage.deleteMany({})).count;
+      removed.destinations = (await tx.microsoftTeamsDestination.deleteMany({})).count;
+      removed.installations = (await tx.microsoftTeamsInstallation.deleteMany({})).count;
+      removed.config = (await tx.microsoftTeamsConfig.deleteMany({})).count;
     } else {
       await tx.microsoftTeamsConfig.updateMany({
         data: { enabled: false, interactiveEnabled: false },
@@ -281,6 +283,10 @@ export async function disconnectMicrosoftTeamsIntegration(
           warRoomsRevoked: revokedWarRooms.warRoomIds.length,
           warRoomJobsCancelled: revokedWarRooms.jobsCancelled,
           deleted: deleteConfig,
+          destinationsRemoved: removed.destinations,
+          installationsRemoved: removed.installations,
+          cardLedgerRowsRemoved: removed.cardLedger,
+          configRowsRemoved: removed.config,
         },
       },
       tx

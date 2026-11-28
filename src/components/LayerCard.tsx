@@ -6,6 +6,8 @@ import LayerEditSheet from './LayerEditSheet';
 import ResponderCombobox, { type ResponderOption } from './ResponderCombobox';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
 import UserAvatar from '@/components/UserAvatar';
+import ConfirmDialog from '@/components/ConfirmDialog';
+import type { RotationImpact } from '@/lib/schedules/rotation-change-preview';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Collapsible, CollapsibleContent } from '@/components/ui/shadcn/collapsible';
@@ -51,6 +53,7 @@ type LayerRestrictions = {
 type LayerCardProps = {
   layer: {
     id: string;
+    revision?: number;
     name: string;
     start: Date;
     end: Date | null;
@@ -77,6 +80,7 @@ type LayerCardProps = {
     direction: 'up' | 'down'
   ) => Promise<{ error?: string } | undefined>;
   removeLayerUser: (layerId: string, userId: string) => Promise<{ error?: string } | undefined>;
+  previewLayerUserRemoval: (layerId: string, userId: string) => Promise<RotationImpact>;
   moveLayerPrecedence: (
     layerId: string,
     direction: 'higher' | 'lower'
@@ -219,6 +223,7 @@ export default function LayerCard({
   addLayerUser,
   moveLayerUser,
   removeLayerUser,
+  previewLayerUserRemoval,
   moveLayerPrecedence,
   colorIndex = 0,
   layerPosition,
@@ -228,6 +233,9 @@ export default function LayerCard({
   const [isPending, startTransition] = useTransition();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [pendingRemoval, setPendingRemoval] = useState<{ userId: string; message: string } | null>(
+    null
+  );
   const [isExpanded, setIsExpanded] = useState(colorIndex === 0);
 
   const color = LAYER_COLORS[colorIndex % LAYER_COLORS.length];
@@ -290,19 +298,34 @@ export default function LayerCard({
     [layer.id, moveLayerUser, router]
   );
 
-  const handleRemoveUser = useCallback(
+  const removeUser = useCallback(
     async (userId: string) => {
-      startTransition(async () => {
-        const result = await removeLayerUser(layer.id, userId);
-        if (result?.error) {
-          notify.error(result.error);
-        } else {
-          notify.success('Responder removed');
-          router.refresh();
-        }
-      });
+      const result = await removeLayerUser(layer.id, userId);
+      if (result?.error) {
+        notify.error(result.error);
+      } else {
+        notify.success('Responder removed');
+        router.refresh();
+      }
     },
     [layer.id, removeLayerUser, router]
+  );
+
+  // Removing a member moves later rotation slots to other people: show that and ask first.
+  const handleRemoveUser = useCallback(
+    (userId: string) => {
+      startTransition(async () => {
+        const impact = await previewLayerUserRemoval(layer.id, userId).catch(
+          (): RotationImpact => ({
+            changed: true,
+            message: 'The change to the on-call schedule could not be previewed. Remove anyway?',
+          })
+        );
+        if (impact.changed) setPendingRemoval({ userId, message: impact.message });
+        else await removeUser(userId);
+      });
+    },
+    [layer.id, previewLayerUserRemoval, removeUser]
   );
 
   const handleMovePrecedence = useCallback(
@@ -462,6 +485,7 @@ export default function LayerCard({
           <LayerEditSheet
             layer={{
               id: layer.id,
+              revision: layer.revision,
               name: layer.name,
               start: new Date(layer.start),
               end: layer.end ? new Date(layer.end) : null,
@@ -607,6 +631,21 @@ export default function LayerCard({
           </Collapsible>
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        isOpen={pendingRemoval !== null}
+        title="Remove responder from rotation?"
+        message={pendingRemoval?.message ?? ''}
+        confirmText="Remove responder"
+        cancelText="Cancel"
+        variant="warning"
+        onCancel={() => setPendingRemoval(null)}
+        onConfirm={() => {
+          const userId = pendingRemoval?.userId;
+          setPendingRemoval(null);
+          if (userId) startTransition(() => removeUser(userId));
+        }}
+      />
 
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent className="max-w-sm">

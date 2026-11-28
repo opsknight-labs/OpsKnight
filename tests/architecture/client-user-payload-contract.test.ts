@@ -17,3 +17,14 @@ describe('client-bound user relations', () => {
     expect(source).not.toMatch(/include:\s*\{\s*(user|teamLead)\s*:\s*true/);
   });
 });
+
+describe('user profile page', () => {
+  it('does not send audit-log rows or raw details to the client', () => {
+    const source = readFileSync(
+      path.join(process.cwd(), 'src/app/(app)/users/[id]/page.tsx'),
+      'utf8'
+    );
+    expect(source).not.toMatch(/auditLogs/);
+    expect(source).not.toMatch(/details:\s*true/);
+  });
+});

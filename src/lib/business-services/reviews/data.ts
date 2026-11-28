@@ -98,7 +98,20 @@ export async function collectServiceReviews(
   return out;
 }
 
-/** Up to three causes per service: postmortem root cause when written, else the incident title. */
+/**
+ * The digest goes to every opted-in team member, whatever their role, so a root cause is quoted only
+ * once the postmortem is published; a draft or archived one is working material.
+ */
+export function causeLabel(incident: {
+  title: string;
+  postmortem: { status: string; rootCause: string | null } | null;
+}): string {
+  const rootCause =
+    incident.postmortem?.status === 'PUBLISHED' ? incident.postmortem.rootCause : null;
+  return (rootCause?.split('\n')[0] || incident.title).trim().slice(0, 80);
+}
+
+/** Up to three causes per service: published postmortem root cause when written, else the incident title. */
 async function topCauses(ids: string[], period: ReviewPeriod) {
   const impacts = await prisma.incidentBusinessServiceImpact.findMany({
     where: {
@@ -112,7 +125,9 @@ async function topCauses(ids: string[], period: ReviewPeriod) {
     select: {
       businessServiceId: true,
       incidentId: true,
-      incident: { select: { title: true, postmortem: { select: { rootCause: true } } } },
+      incident: {
+        select: { title: true, postmortem: { select: { status: true, rootCause: true } } },
+      },
     },
   });
   const counts = new Map<string, Map<string, number>>();
@@ -122,9 +137,7 @@ async function topCauses(ids: string[], period: ReviewPeriod) {
     const pair = `${row.businessServiceId}:${row.incidentId}`;
     if (seen.has(pair)) continue;
     seen.add(pair);
-    const label = (row.incident.postmortem?.rootCause?.split('\n')[0] || row.incident.title)
-      .trim()
-      .slice(0, 80);
+    const label = causeLabel(row.incident);
     const perService = counts.get(row.businessServiceId) ?? new Map<string, number>();
     perService.set(label, (perService.get(label) ?? 0) + 1);
     counts.set(row.businessServiceId, perService);

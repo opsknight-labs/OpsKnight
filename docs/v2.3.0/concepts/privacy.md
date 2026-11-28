@@ -7,7 +7,7 @@ audience: [administrator, operator]
 verification:
   level: source
   verified_at: 2026-09-27
-  evidence: [src/lib/privacy/requests.ts, src/lib/retention-policy.ts]
+  evidence: [src/lib/privacy/requests.ts, src/lib/retention-policy.ts, src/lib/privacy/erasure/audit-pseudonymise.ts]
 ---
 
 # Privacy requests and retention
@@ -25,9 +25,35 @@ manual-review flags before executing erasure.
 
 A retention hold takes precedence over scheduled cleanup for the resources in
 scope. Releasing a hold restores normal eligibility but does not promise
-immediate deletion. Encryption-key retirement, database backups, third-party
+immediate deletion. A hold on a user also keeps that person's audit trail through
+retention cleanup: the audit entries they performed and the entries about their
+account. Audit entries that are identified only by an email address (failed
+sign-ins and other sign-in attempts) carry no user and are not covered by the
+hold. Encryption-key retirement, database backups, third-party
 systems, and exported artifacts each have their own lifecycle and must be
 included in the deployment's privacy procedure.
+
+Erasure keeps the audit trail but pseudonymises the person's own entries: the
+ones they performed, the ones keyed by their email address (failed sign-ins), and
+the ones about their account. Each keeps its action, entity type and timestamp;
+the IP address is cleared, and their email, name, phone number and the IP
+addresses seen on those entries are replaced with `[erased]` wherever they appear
+in the entry's details. An entry keyed by the person's email address also loses
+that address from its entity ID, so an audit search for the email finds nothing. Entries that a hold on another user protects are left as
+they are (including their email columns), and a hold on the person blocks the erasure. Entries that only mention
+the person inside someone else's free text, values written in a different form
+(a misspelt name, a reformatted phone number), and logs outside the database
+cannot be attributed and are covered by the manual-review step.
+
+In incident text, erasure replaces the person's email, phone number and full name
+(a space and at least 5 characters; a one-word name is never matched) in the notes
+they wrote and in timeline entries on incidents they took part in: they wrote a
+note, were the assignee or acknowledged it, watched it, held an incident role, or
+were added to its war room. Email addresses match only when they are not the end
+of a longer address. The scrub is bounded so the erasure always completes: at most
+1,000 incidents (newest first) and 5,000 notes and 5,000 timeline entries per
+erasure. If a bound is hit, the completion audit entry records
+`incidentTextTruncated: true` and the rest needs manual review.
 
 Preserve request transitions, operator decisions, export generation, erasure
 results, and hold changes as audit evidence. Avoid copying subject data into

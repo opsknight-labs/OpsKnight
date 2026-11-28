@@ -29,6 +29,7 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { cn } from '@/lib/utils';
 import prisma from '@/lib/prisma';
+import { listRunbookTeamOptions } from '@/lib/runbooks/team-options';
 import { CAPABILITIES } from '@/lib/authorization';
 import {
   assertCapability,
@@ -49,7 +50,7 @@ import {
   saveDraftAction,
   updateRunbookMetadataAction,
 } from '../actions';
-import { retireVersionAction } from './version-actions';
+import { retireVersionAction, unpublishRunbookAction } from './version-actions';
 import DetailTabs from '@/components/ui/DetailTabs';
 import RunbookBuilder from '@/components/runbooks/RunbookBuilder';
 import {
@@ -60,7 +61,11 @@ import {
   SubmitButton,
 } from '@/components/runbooks/RunbookControls';
 import { EmptyHint, Pill, SectionCard } from '@/components/runbooks/ui/primitives';
-import { RunbookOverview, computeSuccessRate } from '@/components/runbooks/detail/RunbookOverview';
+import {
+  RunbookOverview,
+  computeSuccessRate,
+  describeSuccessRate,
+} from '@/components/runbooks/detail/RunbookOverview';
 import { RunbookHealthSection } from '@/components/runbooks/detail/RunbookHealthSection';
 import { VersionTimeline } from '@/components/runbooks/detail/VersionTimeline';
 import { RunbookDetailsSheet } from '@/components/runbooks/detail/RunbookDetailsSheet';
@@ -181,13 +186,7 @@ export default async function RunbookDetailPage({
           select: { id: true, name: true },
         })
       : Promise.resolve<NamedEntity[]>([]),
-    canManage
-      ? prisma.team.findMany({
-          select: { id: true, name: true },
-          orderBy: { name: 'asc' },
-          take: 500,
-        })
-      : Promise.resolve<NamedEntity[]>([]),
+    canManage ? listRunbookTeamOptions() : Promise.resolve<NamedEntity[]>([]),
   ]);
   if (runbook.ownerTeam && !teams.some(team => team.id === runbook.ownerTeam!.id)) {
     teams.unshift(runbook.ownerTeam);
@@ -223,7 +222,7 @@ export default async function RunbookDetailPage({
 
   async function handleRestoreRunbook() {
     'use server';
-    await restoreRunbookAction(id);
+    return restoreRunbookAction(id);
   }
   const selectedVersion = query.version
     ? await prisma.runbookVersion.findFirst({
@@ -385,6 +384,10 @@ export default async function RunbookDetailPage({
       canPublish && version.state === 'PUBLISHED' && version.id !== publishedId
         ? retireVersionAction.bind(null, version.id, runbook.id)
         : undefined,
+    unpublishAction:
+      canPublish && version.state === 'PUBLISHED' && version.id === publishedId
+        ? unpublishRunbookAction.bind(null, runbook.id)
+        : undefined,
   }));
 
   const primaryAction =
@@ -406,6 +409,7 @@ export default async function RunbookDetailPage({
         title={`Publish immutable v${runbook.draftVersion.version}?`}
         description="Only the saved draft is published. Save any builder changes first. Published definitions cannot be edited."
         successMessage="Draft published"
+        blockWhileBuilderDirty
       />
     ) : canManage && nextDraftSource ? (
       <ActionForm
@@ -425,10 +429,7 @@ export default async function RunbookDetailPage({
     ) : null;
 
   const successMetric = computeSuccessRate(runbook.executions.map(execution => execution.status));
-  const successRateDisplay =
-    successMetric.completed > 0
-      ? `${Math.round((successMetric.succeeded / successMetric.completed) * 100)}%`
-      : '100%';
+  const successRate = describeSuccessRate(successMetric, runbook._count.executions);
 
   const dangerZoneCard = hasManageCapability ? (
     <div className="rounded-2xl border border-destructive/25 bg-card/60 dark:bg-card/30 backdrop-blur-xs overflow-hidden shadow-2xs">
@@ -718,8 +719,8 @@ export default async function RunbookDetailPage({
           },
           {
             label: 'Success Rate',
-            value: successRateDisplay,
-            subtext: 'Across recorded runs',
+            value: successRate.value,
+            subtext: successRate.window,
             icon: <Activity className="h-4 w-4" />,
           },
         ]}
@@ -935,12 +936,21 @@ export default async function RunbookDetailPage({
                     </p>
                     <div className="mt-1.5 flex items-baseline gap-2">
                       <span className="text-2xl font-bold tracking-tight text-foreground">
-                        {successRateDisplay}
+                        {successRate.value}
                       </span>
-                      <span className="text-xs text-muted-foreground font-mono">overall</span>
+                      <span className="text-xs text-muted-foreground font-mono">
+                        {successRate.window.toLowerCase()}
+                      </span>
                     </div>
                   </div>
                 </div>
+
+                {runbook._count.executions > runbook.executions.length && (
+                  <p className="text-xs text-muted-foreground">
+                    Succeeded, failed and the success rate count the{' '}
+                    {successRate.window.toLowerCase()}; Total Runs counts every recorded run.
+                  </p>
+                )}
 
                 {/* Recent Executions List Card */}
                 <SectionCard

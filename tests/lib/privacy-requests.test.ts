@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mocks = vi.hoisted(() => {
   const auditCreate = vi.fn();
   const userFindUnique = vi.fn();
+  const userFindMany = vi.fn();
   const privacyRequestCreate = vi.fn();
   const privacyRequestFindUnique = vi.fn();
   const privacyRequestFindUniqueOrThrow = vi.fn();
@@ -12,7 +13,7 @@ const mocks = vi.hoisted(() => {
 
   const mockPrisma = {
     auditLog: { create: auditCreate },
-    user: { findUnique: userFindUnique },
+    user: { findUnique: userFindUnique, findMany: userFindMany },
     privacyRequest: {
       create: privacyRequestCreate,
       findUnique: privacyRequestFindUnique,
@@ -29,6 +30,7 @@ const mocks = vi.hoisted(() => {
   return {
     auditCreate,
     userFindUnique,
+    userFindMany,
     privacyRequestCreate,
     privacyRequestFindUnique,
     privacyRequestFindUniqueOrThrow,
@@ -45,6 +47,7 @@ import {
   assignPrivacyRequest,
   createPrivacyRequest,
   isAutomatedPrivacyRequestType,
+  listAssignablePrivacyOperators,
   listPrivacyRequests,
   transitionPrivacyRequest,
 } from '@/lib/privacy/requests';
@@ -451,6 +454,30 @@ describe('privacy request lifecycle', () => {
       expect(mocks.privacyRequestUpdate).not.toHaveBeenCalled();
     });
 
+    it('assigns to a user whose custom role grants privacy.requests.manage', async () => {
+      mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest({ assignedToId: null }));
+      mocks.privacyRequestUpdate.mockResolvedValue(baseRequest({ assignedToId: 'cprivops00001' }));
+      mocks.userFindUnique.mockResolvedValueOnce({
+        id: 'cprivops00001',
+        role: 'USER',
+        status: 'ACTIVE',
+        customRole: {
+          id: 'crole0000001',
+          name: 'Privacy operator',
+          capabilities: ['privacy.requests.manage'],
+          archivedAt: null,
+        },
+        accessGrants: [],
+      });
+
+      const result = await assignPrivacyRequest(
+        { requestId: 'creq00000001', assignedToId: 'cprivops00001' },
+        ACTOR
+      );
+
+      expect(result.assignedToId).toBe('cprivops00001');
+    });
+
     it('refuses to assign to a deactivated eligible user', async () => {
       mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest({ assignedToId: null }));
       mocks.userFindUnique.mockResolvedValueOnce({
@@ -463,6 +490,48 @@ describe('privacy request lifecycle', () => {
         assignPrivacyRequest({ requestId: 'creq00000001', assignedToId: 'cadmin0000003' }, ACTOR)
       ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
       expect(mocks.privacyRequestUpdate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listAssignablePrivacyOperators', () => {
+    it('offers administrators and custom-role operators, not users without the capability', async () => {
+      mocks.userFindMany.mockResolvedValue([
+        { id: 'cadmin0000001', name: 'Ada', email: 'ada@x.io', role: 'ADMIN', customRole: null },
+        {
+          id: 'cprivops00001',
+          name: 'Priv',
+          email: 'priv@x.io',
+          role: 'USER',
+          customRole: {
+            id: 'crole0000001',
+            name: 'Privacy operator',
+            capabilities: ['privacy.requests.manage'],
+            archivedAt: null,
+          },
+        },
+        {
+          id: 'cother0000001',
+          name: 'Other',
+          email: 'other@x.io',
+          role: 'USER',
+          customRole: {
+            id: 'crole0000002',
+            name: 'Reader',
+            capabilities: ['audit.read'],
+            archivedAt: null,
+          },
+        },
+      ]);
+
+      const operators = await listAssignablePrivacyOperators();
+
+      expect(operators.map(user => user.id)).toEqual(['cadmin0000001', 'cprivops00001']);
+      expect(operators[1]).toEqual({
+        id: 'cprivops00001',
+        name: 'Priv',
+        email: 'priv@x.io',
+        role: 'USER',
+      });
     });
   });
 

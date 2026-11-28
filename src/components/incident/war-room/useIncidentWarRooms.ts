@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { notify } from '@/lib/toast';
 import type {
   IncidentCollaborationView,
   WarRoomProviderName,
@@ -22,6 +23,7 @@ export function useIncidentWarRooms(initialCollaboration: IncidentCollaborationV
 
   // Sync state if initialCollaboration prop updates from server
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- a fresh server snapshot replaces the local optimistic state
     setCollaboration(initialCollaboration);
   }, [initialCollaboration]);
 
@@ -174,6 +176,8 @@ export function useIncidentWarRooms(initialCollaboration: IncidentCollaborationV
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Failed to create war room.';
         setError(msg);
+        // The desktop launcher and the mobile card never render `error`, so tell the user here.
+        notify.error(msg);
         // Rollback optimistic update
         await fetchLatestCollaboration();
       } finally {
@@ -234,6 +238,7 @@ export function useIncidentWarRooms(initialCollaboration: IncidentCollaborationV
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : `Failed to execute action ${action}.`;
         setError(msg);
+        notify.error(msg);
         await fetchLatestCollaboration();
       } finally {
         setPendingAction(null);

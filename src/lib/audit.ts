@@ -1,6 +1,6 @@
 import type { AuditEntityType, Prisma } from '@prisma/client';
 import prisma from './prisma';
-import { sanitizeContext } from './logger';
+import { sanitizeAuditContext } from './logger';
 import { getRequestContext } from './request-context';
 import { internalV2Channel } from './api-v2/internal-context';
 
@@ -56,7 +56,7 @@ function resolveRequestId(value: string | null | undefined): string {
 function jsonValue(value: AuditDetails | null | undefined): Prisma.InputJsonValue | null {
   return value === undefined || value === null
     ? null
-    : (sanitizeContext(value) as Prisma.InputJsonValue);
+    : (sanitizeAuditContext(value) as Prisma.InputJsonValue);
 }
 
 /** Writes one versioned audit event through the supplied transaction or Prisma client. */

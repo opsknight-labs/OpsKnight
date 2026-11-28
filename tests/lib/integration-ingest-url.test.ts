@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { getWebhookUrl } from '@/lib/integrations/ingest-url';
+import {
+  getWebhookUrl,
+  INTEGRATION_KEY_HEADER,
+  URL_ONLY_INTEGRATION_TYPES,
+} from '@/lib/integrations/ingest-url';
 
 describe('getWebhookUrl', () => {
   it('builds provider ingest URLs from the given App URL', () => {
@@ -46,5 +50,22 @@ describe('getWebhookUrl', () => {
     expect(getWebhookUrl('https://ops.example.com', 'PAGERDUTY', 'int_1', 'k')).toBe(
       'https://ops.example.com/api/integrations/pagerduty/v2/enqueue?integrationId=int_1&integrationKey=k'
     );
+  });
+
+  it('can omit the key so it travels in the X-Integration-Key header instead', () => {
+    const url = getWebhookUrl('https://ops.example.com', 'GRAFANA', 'int_1', 'secret-key', {
+      includeKey: false,
+    });
+    expect(url).toBe('https://ops.example.com/api/integrations/grafana?integrationId=int_1');
+    expect(url).not.toContain('secret-key');
+    expect(INTEGRATION_KEY_HEADER).toBe('X-Integration-Key');
+  });
+
+  it('marks only the senders that cannot add a header as URL-only', () => {
+    expect([...URL_ONLY_INTEGRATION_TYPES].sort()).toEqual([
+      'AZURE',
+      'CLOUDWATCH',
+      'GOOGLE_CLOUD_MONITORING',
+    ]);
   });
 });

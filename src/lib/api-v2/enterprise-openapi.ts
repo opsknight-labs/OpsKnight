@@ -33,14 +33,8 @@ import {
   incidentTemplateDefaultRoles,
   incidentRoleKeySchema,
 } from './incident-roles-openapi';
-import {
-  BUSINESS_SERVICE_SCHEMAS,
-  BUSINESS_SERVICE_OPERATIONS,
-} from './business-services-openapi';
-import {
-  DEPENDENCY_GRAPH_SCHEMAS,
-  DEPENDENCY_GRAPH_OPERATIONS,
-} from './dependency-graph-openapi';
+import { BUSINESS_SERVICE_SCHEMAS, BUSINESS_SERVICE_OPERATIONS } from './business-services-openapi';
+import { DEPENDENCY_GRAPH_SCHEMAS, DEPENDENCY_GRAPH_OPERATIONS } from './dependency-graph-openapi';
 import { statusPageSectionFields } from '@/lib/status-pages/settings-sections';
 import { AUTOMATION_SCHEMAS, automationDraftBody } from './automation-openapi';
 import {
@@ -1278,6 +1272,40 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
         )
       ),
       inputKeys: object({ added: array(string()), removed: array(string()) }, ['added', 'removed']),
+      defaults: object(
+        {
+          before: object(
+            {
+              timeoutSeconds: { type: ['integer', 'null'] },
+              maxRetries: { type: ['integer', 'null'] },
+            },
+            ['timeoutSeconds', 'maxRetries']
+          ),
+          after: object(
+            {
+              timeoutSeconds: { type: ['integer', 'null'] },
+              maxRetries: { type: ['integer', 'null'] },
+            },
+            ['timeoutSeconds', 'maxRetries']
+          ),
+          changed: { type: 'boolean' },
+        },
+        ['before', 'after', 'changed']
+      ),
+      inputChanges: array(
+        object(
+          {
+            key: string(),
+            changes: array({ type: 'string', enum: ['type', 'required', 'default', 'options'] }),
+            type: object({ before: string(), after: string() }, ['before', 'after']),
+            required: object({ before: { type: 'boolean' }, after: { type: 'boolean' } }, [
+              'before',
+              'after',
+            ]),
+          },
+          ['key', 'changes', 'type', 'required']
+        )
+      ),
       inputDetails: object(
         {
           added: array(
@@ -1336,7 +1364,18 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
       rulesTruncated: { type: 'boolean' },
       warning: string(),
     },
-    ['base', 'next', 'steps', 'inputKeys', 'inputDetails', 'rules', 'rulesTruncated', 'warning']
+    [
+      'base',
+      'next',
+      'steps',
+      'defaults',
+      'inputKeys',
+      'inputChanges',
+      'inputDetails',
+      'rules',
+      'rulesTruncated',
+      'warning',
+    ]
   ),
   RunbookDiffStep: object(
     {
@@ -1699,9 +1738,10 @@ const operations: Operation[] = [
   {
     method: 'delete',
     path: '/custom-fields/{id}',
-    summary: 'Delete an unused custom-field definition',
+    summary: 'Delete a custom-field definition',
+    query: { cascade: { type: 'string', enum: ['true', 'false'], default: 'false' } },
     description:
-      'Rejects deletion while incident values still depend on the field. Requires exact If-Match and Idempotency-Key.',
+      'Rejects deletion with 409 while incident values still depend on the field. With cascade=true the stored values are deleted with the field in one transaction and the audit event records valuesDeleted, as the settings page does. Requires exact If-Match and Idempotency-Key.',
   },
   {
     method: 'post',

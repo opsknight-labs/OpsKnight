@@ -51,7 +51,8 @@ describe('team available-user directory search', () => {
     expect(prisma.user.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          status: { not: 'DISABLED' },
+          // An invited person cannot be added: team membership needs an active user.
+          status: 'ACTIVE',
           teamMemberships: { none: { teamId: 'team-1' } },
         }),
         take: 3,

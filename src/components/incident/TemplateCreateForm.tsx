@@ -62,19 +62,26 @@ type TemplateCreateFormProps = {
   action: (prevState: null, formData: FormData) => Promise<null>;
 };
 
-// Zod Schema
-const formSchema = z.object({
+// Zod Schema. Length limits mirror IncidentTemplateInputSchema (server-only), so the server
+// never rejects what this form accepted.
+export const templateFormSchema = z.object({
   name: z.string().min(3, 'Name must be at least 3 characters').max(100),
-  description: z.string().optional(),
-  title: z.string().min(5, 'Default Title must be at least 5 characters').max(255),
-  descriptionText: z.string().optional(),
+  description: z.string().max(5000, 'Description must be 5000 characters or fewer').optional(),
+  title: z
+    .string()
+    .min(5, 'Default Title must be at least 5 characters')
+    .max(200, 'Default Title must be 200 characters or fewer'),
+  descriptionText: z
+    .string()
+    .max(10000, 'Default Description must be 10000 characters or fewer')
+    .optional(),
   defaultUrgency: z.enum(['HIGH', 'MEDIUM', 'LOW']),
   defaultPriority: z.string().optional(),
   defaultServiceId: z.string().optional(),
   isPublic: z.boolean(),
 });
 
-type FormValues = z.infer<typeof formSchema>;
+type FormValues = z.infer<typeof templateFormSchema>;
 
 const URGENCY_OPTIONS = [
   {
@@ -251,7 +258,7 @@ export default function TemplateCreateForm({
 
   // Form definition
   const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(templateFormSchema),
     defaultValues: {
       name: '',
       description: '',

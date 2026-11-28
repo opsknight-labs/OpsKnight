@@ -6,20 +6,21 @@ const m = vi.hoisted(() => ({
   getItems: vi.fn(),
   replace: vi.fn(),
   update: vi.fn(),
+  resolveActor: vi.fn(),
+  itemFindMany: vi.fn(),
+  itemCount: vi.fn(),
 }));
 vi.mock('@/lib/prisma', () => ({
   default: {
     postmortem: { findUnique: m.pmFind },
-    actionItem: { findMany: vi.fn(), count: vi.fn() },
+    actionItem: { findMany: m.itemFindMany, count: m.itemCount },
   },
 }));
 vi.mock('@/lib/db-utils', () => ({
   runSerializableTransaction: (fn: (tx: unknown) => unknown) =>
     fn({ actionItem: { update: m.update } }),
 }));
-vi.mock('@/lib/authorization-actors', () => ({
-  resolveUserActor: vi.fn().mockResolvedValue({ id: 'u1' }),
-}));
+vi.mock('@/lib/authorization-actors', () => ({ resolveUserActor: m.resolveActor }));
 vi.mock('@/lib/incidents/chatops-lifecycle', () => ({ authorizeChatOpsIncident: vi.fn() }));
 vi.mock('@/lib/incidents/chatops-postmortem', () => ({
   executeChatOpsPostmortemCommand: m.pmCommand,
@@ -34,7 +35,12 @@ vi.mock('@/lib/postmortems/action-item-commands', () => ({
 }));
 vi.mock('@/lib/env-validation', () => ({ getBaseUrl: () => 'https://x.test' }));
 
-import { handleActionCommand, parseActionArgs } from '@/lib/chatops/slash/action-command';
+import {
+  handleActionCommand,
+  handleActionsListCommand,
+  parseActionArgs,
+} from '@/lib/chatops/slash/action-command';
+import type { AuthorizationActor } from '@/lib/authorization-policy';
 
 const now = new Date('2026-12-01T12:00:00Z');
 
@@ -70,6 +76,7 @@ describe('handleActionCommand', () => {
   };
   beforeEach(() => {
     vi.clearAllMocks();
+    m.resolveActor.mockResolvedValue({ id: 'u1' });
     m.pmCommand.mockResolvedValue({ created: false });
     m.pmFind.mockResolvedValue({ id: 'pm1' });
     m.getItems.mockResolvedValue({
@@ -104,5 +111,45 @@ describe('handleActionCommand', () => {
     const res = await handleActionCommand({ ...base, args: 'x due:nope' });
     expect(res.response_type).toBe('ephemeral');
     expect(m.pmCommand).not.toHaveBeenCalled();
+  });
+});
+
+describe('handleActionsListCommand', () => {
+  const input = { incident: { id: 'i1' }, actor: { id: 'u1' } };
+  const actor = (role: AuthorizationActor['role']): AuthorizationActor => ({
+    id: 'u1',
+    role,
+    status: 'ACTIVE',
+    teamIds: [],
+  });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    m.itemFindMany.mockResolvedValue([]);
+    m.itemCount.mockResolvedValue(0);
+  });
+
+  it('lists only items of published postmortems for someone without postmortem.draft.read', async () => {
+    m.resolveActor.mockResolvedValue(actor('AUDITOR'));
+    await handleActionsListCommand(input);
+    expect(m.itemFindMany.mock.calls[0][0].where).toMatchObject({
+      incidentId: 'i1',
+      postmortem: { status: 'PUBLISHED' },
+    });
+    expect(m.itemCount.mock.calls[0][0].where).toMatchObject({
+      postmortem: { status: 'PUBLISHED' },
+    });
+  });
+
+  it('lists draft postmortem items for someone who may read drafts', async () => {
+    m.resolveActor.mockResolvedValue(actor('RESPONDER'));
+    await handleActionsListCommand(input);
+    expect(m.itemFindMany.mock.calls[0][0].where.postmortem).not.toHaveProperty('status');
+  });
+
+  it('refuses when the account is not active', async () => {
+    m.resolveActor.mockResolvedValue(null);
+    const res = await handleActionsListCommand(input);
+    expect(res.text).toContain('not active');
+    expect(m.itemFindMany).not.toHaveBeenCalled();
   });
 });

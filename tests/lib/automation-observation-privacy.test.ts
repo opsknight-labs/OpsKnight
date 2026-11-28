@@ -17,6 +17,28 @@ it('excludes personal/contact fields and embedded credentials from diagnostic di
     isSensitiveObservation({ key: 'label', path: 'payload.label', value: 'Bearer credential' })
   ).toBe(true);
 });
+it('keeps IPs, dates, epochs and numeric ids visible but still hides phone numbers by shape', () => {
+  const sensitive = (value: string) =>
+    isSensitiveObservation({ key: 'label', path: 'payload.label', value });
+  for (const value of [
+    '10.0.0.12',
+    '192.168.100.200',
+    '1700000000',
+    '2026-11-18',
+    '18-11-2026',
+    '123456789012',
+  ])
+    expect(sensitive(value), value).toBe(false);
+  for (const value of [
+    '+15551234567',
+    '+44 20 7946 0958',
+    '(555) 123-4567',
+    '555-123-4567',
+    '555 123 4567',
+    '555.123.4567',
+  ])
+    expect(sensitive(value), value).toBe(true);
+});
 it('uses service-scoped keyed value identities and disables discovery hashing without a secret', () => {
   vi.stubEnv('API_KEY_SECRET', 'observation-test-key-independent-secret');
   const first = observationValueHash('service-a', 'production');

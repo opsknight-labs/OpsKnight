@@ -107,11 +107,25 @@ const MAX_DEAD_LETTER_AGE_MS = parseBoundedInteger(
 async function saveIdentity(identity: AgentIdentity, targetPath = identityPath) {
   await mkdir(dirname(targetPath), { recursive: true, mode: 0o700 });
   const temporary = `${targetPath}.${process.pid}.tmp`;
+  // A temp file left by an earlier run (container pids repeat) must not block the save.
+  await unlink(temporary).catch(() => undefined);
   await writeFile(temporary, JSON.stringify(identity), { mode: 0o600, flag: 'wx' });
   await rename(temporary, targetPath);
 }
 
-async function loadIdentity(
+// The server spends the one-time enrollment token when it binds our public key, so the matching
+// private key must never be lost to a failed save: keep it and retry the save, not the enrollment.
+let unsavedEnrollment: { path: string; identity: AgentIdentity } | null = null;
+
+async function assertIdentityWritable(targetPath: string) {
+  // Fail before the token is spent when the identity location cannot be written.
+  await mkdir(dirname(targetPath), { recursive: true, mode: 0o700 });
+  const probe = `${targetPath}.${process.pid}.probe`;
+  await writeFile(probe, '', { mode: 0o600 });
+  await unlink(probe);
+}
+
+export async function loadIdentity(
   targetPath = identityPath,
   effectiveUrl = baseUrl
 ): Promise<AgentIdentity> {
@@ -123,14 +137,19 @@ async function loadIdentity(
       process.env.OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE ??
       process.env.OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_PATH
     )?.trim();
-    const token = tokenFile
-      ? (await readFile(tokenFile, 'utf8')).trim()
-      : process.env.OPSKNIGHT_AGENT_ENROLLMENT_TOKEN?.trim();
-    if (!token)
-      throw new Error('Agent is not enrolled and OPSKNIGHT_AGENT_ENROLLMENT_TOKEN is missing.');
-    if (!effectiveUrl) throw new Error('OPSKNIGHT_URL is required to enroll agent.');
-    const identity = await enrollAgent(effectiveUrl, token);
+    if (unsavedEnrollment?.path !== targetPath) {
+      const token = tokenFile
+        ? (await readFile(tokenFile, 'utf8')).trim()
+        : process.env.OPSKNIGHT_AGENT_ENROLLMENT_TOKEN?.trim();
+      if (!token)
+        throw new Error('Agent is not enrolled and OPSKNIGHT_AGENT_ENROLLMENT_TOKEN is missing.');
+      if (!effectiveUrl) throw new Error('OPSKNIGHT_URL is required to enroll agent.');
+      await assertIdentityWritable(targetPath);
+      unsavedEnrollment = { path: targetPath, identity: await enrollAgent(effectiveUrl, token) };
+    }
+    const { identity } = unsavedEnrollment;
     await saveIdentity(identity, targetPath);
+    unsavedEnrollment = null;
     if (tokenFile) {
       try {
         await unlink(tokenFile);

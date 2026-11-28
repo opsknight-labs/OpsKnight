@@ -700,6 +700,34 @@ async function markWarRoomJobFailed(job: QueuedJob, error: string): Promise<void
       await settleWarRoomProjectionFailure(warRoomIdValue, versionValue);
     }
   }
+  if (!shouldRetry && job.type === 'MEETING_PROVISION') {
+    const incidentId = payloadValue(job.payload, 'incidentId');
+    const provisioningToken = payloadValue(job.payload, 'provisioningToken');
+    const generation = payloadValue(job.payload, 'generation');
+    const provider = (job.payload as Record<string, unknown> | null)?.provider;
+    if (
+      typeof incidentId === 'string' &&
+      typeof provisioningToken === 'string' &&
+      typeof generation === 'number' &&
+      typeof provider === 'string'
+    ) {
+      try {
+        const { settleMeetingProvisionFailure } =
+          await import('../incident-collaboration/meeting-store');
+        await settleMeetingProvisionFailure(incidentId, error, {
+          provisioningToken,
+          generation,
+          provider: provider as never,
+        });
+      } catch (settleErr) {
+        logger.warn('jobs.meeting_provision_failure_settlement_failed', {
+          jobId: job.id,
+          incidentId,
+          error: settleErr instanceof Error ? settleErr.message : String(settleErr),
+        });
+      }
+    }
+  }
   if (!shouldRetry && job.type === 'MEETING_CLOSE') {
     const incidentId = payloadValue(job.payload, 'incidentId');
     if (typeof incidentId === 'string') {

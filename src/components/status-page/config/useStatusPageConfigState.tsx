@@ -190,6 +190,8 @@ export type StatusPageConfigProps = {
   liveSnapshot?: any;
   /** From an incident's "Post status update": open Announcements with that incident's draft. */
   draftIncidentId?: string;
+  /** Host (and port) of this installation, from its configured app URL; subdomains sit under it. */
+  appHost?: string;
 };
 
 export const normalizeAnnouncementServiceIds = (value?: string[] | null) => {
@@ -205,6 +207,7 @@ export function useStatusPageConfigState({
   allBusinessServices = [],
   liveSnapshot,
   draftIncidentId,
+  appHost,
 }: StatusPageConfigProps) {
   const { browserTimeZone } = useTimezone();
   const router = useRouter();
@@ -897,17 +900,19 @@ export function useStatusPageConfigState({
   };
 
   const previewDomain = useMemo(() => {
+    // Hosts sit under the installation's own host, the same rule the public URL uses.
+    const underAppHost = (label: string) => (appHost ? `${label}.${appHost}` : label);
     if (formData.customDomain && formData.customDomain.trim()) {
       return formData.customDomain.trim();
     }
     if (formData.subdomain && formData.subdomain.trim()) {
-      return `${formData.subdomain.trim()}.opsknight.com`;
+      return underAppHost(formData.subdomain.trim());
     }
     if (formData.slug && formData.slug.trim()) {
-      return `status-${formData.slug.trim()}.opsknight.com`;
+      return underAppHost(`status-${formData.slug.trim()}`);
     }
-    return statusPage.slug ? `status-${statusPage.slug}.opsknight.com` : 'status.opsknight.com';
-  }, [formData.customDomain, formData.subdomain, formData.slug, statusPage.slug]);
+    return underAppHost(statusPage.slug ? `status-${statusPage.slug}` : 'status');
+  }, [formData.customDomain, formData.subdomain, formData.slug, statusPage.slug, appHost]);
 
   // Inputs (branding, services, privacy) are rebuilt each render, so a memo here never cached.
   const previewData = (() => {

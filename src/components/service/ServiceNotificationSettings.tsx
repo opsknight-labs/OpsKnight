@@ -39,12 +39,20 @@ import Link from 'next/link';
 import { SlackLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
 import AddWebhookDialog from '@/components/service/AddWebhookDialog';
 import { updateServiceNotificationSettings } from '@/app/(app)/services/actions';
+import { InlineNotice } from '@/components/ui/InlineNotice';
+import {
+  isDispatchableServiceChannel,
+  unsupportedServiceChannels,
+} from '@/lib/service-notification-settings';
 
 type ServiceNotificationSettingsProps = {
   serviceId: string;
+  /** Service revision the form was loaded with; Save is refused if the service changed since. */
+  revision: number;
   serviceNotificationChannels: string[];
   slackChannel: string | null;
-  slackWebhookUrl: string | null;
+  /** The stored Slack webhook is a secret: the page only says whether one is configured. */
+  slackWebhookConfigured: boolean;
   slackIntegration: {
     id: string;
     workspaceName: string | null;
@@ -67,9 +75,10 @@ type ServiceNotificationSettingsProps = {
 
 export default function ServiceNotificationSettings({
   serviceId,
+  revision: initialRevision,
   serviceNotificationChannels,
   slackChannel,
-  slackWebhookUrl,
+  slackWebhookConfigured,
   slackIntegration,
   webhookIntegrations,
   serviceNotifyOnTriggered,
@@ -79,7 +88,19 @@ export default function ServiceNotificationSettings({
   children,
 }: ServiceNotificationSettingsProps) {
   const saveNotificationSettings = updateServiceNotificationSettings.bind(null, serviceId);
-  const [channels, setChannels] = useState<string[]>(serviceNotificationChannels || []);
+  // Link and unlink write immediately and bump the service revision; each follow-up read reports the
+  // new one so this form's own changes never make its Save look stale.
+  const [revision, setRevision] = useState(initialRevision);
+  const adoptRevision = useCallback((response: unknown) => {
+    const next = (response as { data?: { serviceRevision?: unknown } } | null)?.data
+      ?.serviceRevision;
+    if (typeof next === 'number') setRevision(next);
+  }, []);
+  // Legacy EMAIL/SMS/PUSH/WHATSAPP values never deliver; they are left out of the form and dropped on save.
+  const ignoredStoredChannels = unsupportedServiceChannels(serviceNotificationChannels || []);
+  const [channels, setChannels] = useState<string[]>(
+    (serviceNotificationChannels || []).filter(isDispatchableServiceChannel)
+  );
   const [notifyOnTriggered, setNotifyOnTriggered] = useState(serviceNotifyOnTriggered ?? true);
   const [notifyOnAck, setNotifyOnAck] = useState(serviceNotifyOnAck ?? true);
   const [notifyOnResolved, setNotifyOnResolved] = useState(serviceNotifyOnResolved ?? true);
@@ -148,13 +169,14 @@ export default function ServiceNotificationSettings({
     fetch(`/api/slack/destinations?serviceId=${encodeURIComponent(serviceId)}`)
       .then(r => r.json())
       .then(d => {
+        adoptRevision(d);
         const dests = (d?.data?.destinations ?? d?.destinations ?? []) as typeof existingSlackDests;
         if (Array.isArray(dests)) {
           setExistingSlackDests(dests);
         }
       })
       .catch(() => undefined);
-  }, [serviceId]);
+  }, [serviceId, adoptRevision]);
 
   useEffect(() => {
     if (channels.includes('SLACK') || slackIntegration) {
@@ -243,6 +265,7 @@ export default function ServiceNotificationSettings({
     fetch(`/api/microsoft-teams/destinations?serviceId=${encodeURIComponent(serviceId)}`)
       .then(r => r.json())
       .then(d => {
+        adoptRevision(d);
         const dests = (d?.data?.destinations ??
           d?.destinations ??
           (d?.data?.destination
@@ -274,7 +297,7 @@ export default function ServiceNotificationSettings({
       })
       .catch(err => setTeamsError(err instanceof Error ? err.message : String(err)))
       .finally(() => setTeamsLoading(false));
-  }, [channels, serviceId]);
+  }, [channels, serviceId, adoptRevision]);
 
   useEffect(() => {
     if (!selectedTeamId) {
@@ -512,6 +535,14 @@ export default function ServiceNotificationSettings({
         </div>
       </div>
 
+      {ignoredStoredChannels.length > 0 && (
+        <InlineNotice tone="warning" title="Some stored channels are never sent">
+          This service still lists {ignoredStoredChannels.join(', ')}. Service-level channels support
+          Slack, Teams and webhooks only, so these send nothing. Saving this form removes them; use
+          escalation policies or user notification preferences for email, SMS, push and WhatsApp.
+        </InlineNotice>
+      )}
+
       {/* FORM: Notification Channels and Event Triggers */}
       <form
         ref={formRef}
@@ -522,7 +553,7 @@ export default function ServiceNotificationSettings({
           const removesSlack =
             serviceNotificationChannels.includes('SLACK') &&
             !channels.includes('SLACK') &&
-            Boolean(slackWebhookUrl || slackChannel || existingSlackDests.some(d => d.enabled));
+            Boolean(slackWebhookConfigured || slackChannel || existingSlackDests.some(d => d.enabled));
           if (removesSlack && !slackRemovalConfirmed.current) {
             e.preventDefault();
             setConfirmSlackRemoval(true);
@@ -530,6 +561,7 @@ export default function ServiceNotificationSettings({
         }}
         className="space-y-3.5"
       >
+        <input type="hidden" name="expectedRevision" value={revision} />
         {/* Submit an explicit snapshot so an empty selection cannot be confused with a missing field. */}
         <input
           type="hidden"
@@ -554,14 +586,14 @@ export default function ServiceNotificationSettings({
           required={
             channels.includes('SLACK') &&
             existingSlackDests.length === 0 &&
-            !slackWebhookUrl?.trim()
+            !slackWebhookConfigured
           }
           value={
             channels.includes('SLACK')
               ? existingSlackDests[0]?.channelName ||
                 existingSlackDests[0]?.channelId ||
                 selectedSlackChannel ||
-                (slackWebhookUrl?.trim() ? 'webhook' : '')
+                (slackWebhookConfigured ? 'webhook' : '')
               : ''
           }
           readOnly
@@ -1133,15 +1165,27 @@ export default function ServiceNotificationSettings({
                         >
                           Slack Webhook URL (Legacy Fallback)
                         </Label>
-                        <span className="text-[10px] text-muted-foreground">Optional</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {slackWebhookConfigured ? 'Configured' : 'Optional'}
+                        </span>
                       </div>
                       <input
                         id="slackWebhookUrl"
                         name="slackWebhookUrl"
-                        defaultValue={slackWebhookUrl || ''}
-                        placeholder="https://hooks.slack.com/services/..."
+                        autoComplete="off"
+                        placeholder={
+                          slackWebhookConfigured
+                            ? 'Configured. Enter a new URL to replace it.'
+                            : 'https://hooks.slack.com/services/...'
+                        }
                         className="w-full h-8 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-mono shadow-2xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
                       />
+                      {slackWebhookConfigured && (
+                        <label className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                          <input type="checkbox" name="clearSlackWebhookUrl" value="true" />
+                          Remove the stored webhook on save (the URL is never shown again)
+                        </label>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1249,6 +1293,7 @@ export default function ServiceNotificationSettings({
                                     `/api/microsoft-teams/destinations?serviceId=${encodeURIComponent(serviceId)}`
                                   );
                                   const getData = await getRes.json().catch(() => ({}));
+                                  adoptRevision(getData);
                                   const nextDests = (getData?.data?.destinations ??
                                     getData?.destinations ??
                                     []) as typeof existingTeamsDests;
@@ -1429,6 +1474,7 @@ export default function ServiceNotificationSettings({
                               `/api/microsoft-teams/destinations?serviceId=${encodeURIComponent(serviceId)}`
                             );
                             const getData = await getRes.json().catch(() => ({}));
+                            adoptRevision(getData);
                             const nextDests = (getData?.data?.destinations ??
                               getData?.destinations ??
                               []) as typeof existingTeamsDests;

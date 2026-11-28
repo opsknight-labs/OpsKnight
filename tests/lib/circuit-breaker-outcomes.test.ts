@@ -25,6 +25,18 @@ describe('circuit breaker provider outcomes', () => {
     await expect(breaker.execute(async () => ({ success: true }))).rejects.toThrow(/OPEN/);
   });
 
+  it('lets a push to several slow devices finish instead of timing out after a few seconds', async () => {
+    vi.useFakeTimers();
+    // Three devices at up to 15s each, sent one after another.
+    const slowPush = () =>
+      new Promise<{ success: true }>(resolve =>
+        setTimeout(() => resolve({ success: true }), 45_000)
+      );
+    const operation = CircuitBreakers.push().execute(slowPush);
+    await vi.advanceTimersByTimeAsync(45_000);
+    await expect(operation).resolves.toEqual({ success: true });
+  });
+
   it('classifies a local timeout as an ambiguous external mutation', async () => {
     vi.useFakeTimers();
     const breaker = new CircuitBreaker({

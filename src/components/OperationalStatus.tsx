@@ -21,6 +21,8 @@ type Props = {
   criticalCount?: number;
   mediumCount?: number;
   lowCount?: number;
+  /** The server could not read incident counts (a transient fault), so `neutral` is not a verdict. */
+  countsUnavailable?: boolean;
 };
 
 export default function OperationalStatus({
@@ -30,11 +32,14 @@ export default function OperationalStatus({
   criticalCount: criticalCountOverride,
   mediumCount = 0,
   lowCount = 0,
+  countsUnavailable = false,
 }: Props) {
   const realtime = useOptionalRealtime();
   const realtimeMetrics = realtime?.metrics ?? null;
 
-  const hasLiveStats = realtimeMetrics !== null && initialTone !== 'neutral';
+  // Neutral also means "no operational scope", which live counts must not paper over; a transient
+  // read failure is different, so live metrics take over from it.
+  const hasLiveStats = realtimeMetrics !== null && (initialTone !== 'neutral' || countsUnavailable);
 
   // Use live realtime metrics once available; otherwise use server-rendered initial props
   const critical = realtimeMetrics

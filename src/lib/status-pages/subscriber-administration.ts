@@ -72,3 +72,60 @@ export async function removeStatusPageSubscribers(
   };
   return externalTx ? command(externalTx) : prisma.$transaction(command);
 }
+
+/**
+ * Deleting a service (or business service) cascades away its subscription picks. A subscriber whose
+ * only pick it was would then follow every service on the page, so revoke those subscriptions in the
+ * same transaction as the delete instead. Subscribers who also follow something else keep that.
+ */
+export async function revokeSubscriptionsLosingLastSelection(
+  tx: Prisma.TransactionClient,
+  target: { serviceId: string } | { businessServiceId: string }
+): Promise<number> {
+  const only: Prisma.StatusPageSubscriptionWhereInput =
+    'serviceId' in target
+      ? {
+          selectedServices: {
+            some: { serviceId: target.serviceId },
+            every: { serviceId: target.serviceId },
+          },
+          selectedBusinessServices: { none: {} },
+        }
+      : {
+          selectedBusinessServices: {
+            some: { businessServiceId: target.businessServiceId },
+            every: { businessServiceId: target.businessServiceId },
+          },
+          selectedServices: { none: {} },
+        };
+  const ids = (await tx.statusPageSubscription.findMany({ where: only, select: { id: true } })).map(
+    row => row.id
+  );
+  if (!ids.length) return 0;
+  await tx.statusPageSubscription.updateMany({
+    where: { id: { in: ids }, state: { in: REVOCABLE_SUBSCRIPTION_STATES } },
+    data: { unsubscribedAt: new Date(), state: 'UNSUBSCRIBED' },
+  });
+  // Complained/bounced/suppressed rows record the revocation but keep their suppression state.
+  await tx.statusPageSubscription.updateMany({
+    where: {
+      id: { in: ids },
+      unsubscribedAt: null,
+      state: { notIn: REVOCABLE_SUBSCRIPTION_STATES },
+    },
+    data: { unsubscribedAt: new Date() },
+  });
+  await tx.notification.updateMany({
+    where: {
+      recipientType: 'SUBSCRIBER',
+      recipientId: { in: ids },
+      status: { in: ['PENDING', 'FAILED'] },
+    },
+    data: {
+      status: 'SKIPPED',
+      payloadEncrypted: null,
+      errorMsg: 'Subscription was revoked before delivery.',
+    },
+  });
+  return ids.length;
+}

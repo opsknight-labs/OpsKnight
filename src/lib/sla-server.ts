@@ -10,6 +10,7 @@ import {
   calculatePercentile,
 } from './analytics-metrics';
 import { getServiceDynamicStatus } from './service-status';
+import { computeUptime, type UptimeResult } from './uptime';
 import { logger } from './logger';
 import { activeIncidentStatuses, activeIncidentStatusesForFilter } from './incident-status';
 import { getRetentionPolicy, getQueryDateBounds, shouldUseRollups } from './retention-policy';
@@ -955,6 +956,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   const heatmapStartRequested = new Date(now);
   heatmapStartRequested.setDate(now.getDate() - 365);
   const { start: heatmapStart } = await getQueryDateBounds(heatmapStartRequested, now, 'incident');
+  // Days are the viewer's calendar days, like the trend buckets (the zone is allow-listed above).
+  const heatmapTz = Prisma.raw(`'${userTimeZone.replace(/'/g, "''")}'`);
 
   // Previous-period window — same duration as the current window, ending
   // exactly where the current one starts. Filters live in
@@ -1124,7 +1127,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       shifts.map(s => ({ start: s.start, end: s.end, userId: s.userId }))
     ),
     getWindowOnCallShifts(finalStart, finalEnd, filters.scheduleScope).then(shifts =>
-      shifts.map(s => ({ start: s.start, end: s.end, userId: s.userId }))
+      shifts.map(s => ({ start: s.start, end: s.end, userId: s.userId, scheduleId: s.scheduleId }))
     ),
     prisma.onCallOverride.count({
       where: {
@@ -1174,13 +1177,14 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     prisma
       .$queryRaw<Array<{ date: string; count: bigint }>>(
         Prisma.sql`
-      SELECT DATE("createdAt") as date, COUNT(*) as count
+      SELECT to_char(("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE ${heatmapTz}, 'YYYY-MM-DD') as date,
+        COUNT(*) as count
       FROM "Incident"
       WHERE "createdAt" >= ${heatmapStart}
         AND "createdAt" <= ${now}
         ${fullIncidentFilterSql}
-      GROUP BY DATE("createdAt")
-      ORDER BY date
+      GROUP BY 1
+      ORDER BY 1
     `
       )
       .catch(err => {
@@ -1193,9 +1197,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       _count: { _all: true },
     }),
     // On-Call Widget (Resolved dynamically from active schedule layers)
-    getActiveOnCallShifts(now, { where: filters.scheduleScope }).then(shifts =>
-      shifts.slice(0, 5)
-    ),
+    getActiveOnCallShifts(now, { where: filters.scheduleScope }).then(shifts => shifts.slice(0, 5)),
     // resolved24h must honor the same filters as the rest of the metrics —
     // otherwise team/urgency/visibility-scoped queries surface a count
     // from an unrelated population, contradicting the dashboard above it.
@@ -2348,12 +2350,39 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     count: e._count._all,
   }));
 
+  // An incident is credited only to the schedules its service escalates to.
+  const incidentServiceIds = Array.from(new Set(recentIncidents.map(i => i.serviceId)));
+  const scheduleSteps = incidentServiceIds.length
+    ? await prisma.escalationRule.findMany({
+        where: {
+          targetScheduleId: { not: null },
+          policy: { services: { some: { id: { in: incidentServiceIds } } } },
+        },
+        select: {
+          targetScheduleId: true,
+          policy: {
+            select: {
+              services: { where: { id: { in: incidentServiceIds } }, select: { id: true } },
+            },
+          },
+        },
+      })
+    : [];
+  const serviceSchedules = new Map<string, Set<string>>();
+  for (const step of scheduleSteps) {
+    for (const service of step.policy.services) {
+      const schedules = serviceSchedules.get(service.id) ?? new Set<string>();
+      schedules.add(step.targetScheduleId as string);
+      serviceSchedules.set(service.id, schedules);
+    }
+  }
   const onCallLoad = buildOnCallLoad(
     windowShifts,
     recentIncidents,
     finalStart,
     finalEnd,
-    userNameMap
+    userNameMap,
+    serviceSchedules
   );
   const onCallUsersCount = onCallUserIds.length;
 
@@ -2932,26 +2961,30 @@ function calculateMergedDuration(intervals: Array<{ start: Date; end: Date }>): 
   }, 0);
 }
 
+type UptimeOptions =
+  | 'PUBLIC'
+  | 'PRIVATE'
+  | 'ALL'
+  | {
+      visibility?: 'PUBLIC' | 'PRIVATE' | 'ALL';
+      incidentWhere?: import('@prisma/client').Prisma.IncidentWhereInput;
+    };
+
 /**
- * Calculates uptime percentage for a set of services over a given period
- * Shared logic for Status Pages and Exports
+ * Uptime, downtime and measured period per service. The rule lives in computeUptime (lib/uptime.ts):
+ * recorded outage intervals regardless of snooze or suppress state minus the service's recorded
+ * maintenance windows, period clamped to the service's createdAt. Shared logic for SLO evaluation,
+ * analytics, Status Pages exports.
  */
-export async function calculateMultiServiceUptime(
+export async function calculateMultiServiceAvailability(
   serviceIds: string[],
   startDate: Date,
   endDate: Date = new Date(),
-  options:
-    | 'PUBLIC'
-    | 'PRIVATE'
-    | 'ALL'
-    | {
-        visibility?: 'PUBLIC' | 'PRIVATE' | 'ALL';
-        incidentWhere?: import('@prisma/client').Prisma.IncidentWhereInput;
-      } = {},
-  db?: Pick<import('@prisma/client').PrismaClient, 'incident'>
-): Promise<Record<string, number>> {
+  options: UptimeOptions = {},
+  db?: Pick<import('@prisma/client').PrismaClient, 'incident' | 'service' | 'maintenanceWindowService'>
+): Promise<Record<string, UptimeResult>> {
   const { default: prisma } = await import('./prisma');
-  const incidentReader = db ?? prisma;
+  const reader = db ?? prisma;
 
   const { start: effectiveStart, end: effectiveEnd } = await getQueryDateBounds(
     startDate,
@@ -2967,65 +3000,96 @@ export async function calculateMultiServiceUptime(
       ? { visibility: normalizedOptions.visibility }
       : {};
 
-  const incidents = await incidentReader.incident.findMany({
-    where: {
-      serviceId: { in: serviceIds },
-      ...visibilityFilter,
-      AND: [
-        normalizedOptions.incidentWhere ?? {},
-        { createdAt: { lt: effectiveEnd } },
-        {
-          OR: [
-            { resolvedAt: { gte: effectiveStart } },
-            { updatedAt: { gte: effectiveStart } },
-            { status: { in: activeIncidentStatuses() } },
-          ],
-        },
-      ],
-    },
-    select: {
-      serviceId: true,
-      createdAt: true,
-      resolvedAt: true,
-      updatedAt: true,
-      status: true,
-    },
-  });
+  const [services, incidents, windows] = await Promise.all([
+    reader.service.findMany({
+      where: { id: { in: serviceIds } },
+      select: { id: true, createdAt: true },
+    }),
+    reader.incident.findMany({
+      where: {
+        serviceId: { in: serviceIds },
+        ...visibilityFilter,
+        AND: [
+          normalizedOptions.incidentWhere ?? {},
+          { createdAt: { lt: effectiveEnd } },
+          {
+            // Any status can still be an outage: only a resolution ends one.
+            OR: [
+              { resolvedAt: { gte: effectiveStart } },
+              { resolvedAt: null, status: { not: 'RESOLVED' } },
+              { resolvedAt: null, status: 'RESOLVED', updatedAt: { gte: effectiveStart } },
+            ],
+          },
+        ],
+      },
+      select: {
+        serviceId: true,
+        createdAt: true,
+        resolvedAt: true,
+        updatedAt: true,
+        status: true,
+      },
+    }),
+    // shortcut: capped at 50,000 window rows across the services; past that the oldest are not subtracted (more downtime, never less).
+    reader.maintenanceWindowService.findMany({
+      where: {
+        serviceId: { in: serviceIds },
+        startsAt: { lt: effectiveEnd },
+        endsAt: { gt: effectiveStart },
+      },
+      orderBy: { startsAt: 'desc' },
+      take: 50_000,
+      select: { serviceId: true, startsAt: true, endsAt: true },
+    }),
+  ]);
 
-  const uptimeByService: Record<string, number> = {};
-  const totalMs = effectiveEnd.getTime() - effectiveStart.getTime();
-
-  for (const serviceId of serviceIds) {
-    if (totalMs <= 0) {
-      // Service IDs are authorized database values, not object-property paths.
-      // eslint-disable-next-line security/detect-object-injection
-      uptimeByService[serviceId] = 100;
-      continue;
-    }
-
-    const serviceIncidents = incidents.filter(
-      inc => inc.serviceId === serviceId && inc.status !== 'SUPPRESSED' && inc.status !== 'SNOOZED'
-    );
-
-    const intervals = serviceIncidents
-      .map(incident => {
-        const resolvedTime =
-          incident.resolvedAt ?? (incident.status === 'RESOLVED' ? incident.updatedAt : null);
-        return {
-          start: incident.createdAt > effectiveStart ? incident.createdAt : effectiveStart,
-          end: resolvedTime && resolvedTime < effectiveEnd ? resolvedTime : effectiveEnd,
-        };
-      })
-      .filter(interval => interval.start < interval.end);
-
-    const downtimeMs = calculateMergedDuration(intervals);
-    const uptime = ((totalMs - downtimeMs) / totalMs) * 100;
-    // Service IDs are authorized database values, not object-property paths.
-    // eslint-disable-next-line security/detect-object-injection
-    uptimeByService[serviceId] = Math.max(0, Math.min(100, uptime));
+  const windowsByService = new Map<string, Array<{ start: Date; end: Date }>>();
+  for (const window of windows) {
+    const list = windowsByService.get(window.serviceId) ?? [];
+    list.push({ start: window.startsAt, end: window.endsAt });
+    windowsByService.set(window.serviceId, list);
+  }
+  const createdAtById = new Map(services.map(service => [service.id, service.createdAt]));
+  const incidentsByService = new Map<string, typeof incidents>();
+  for (const incident of incidents) {
+    const list = incidentsByService.get(incident.serviceId) ?? [];
+    list.push(incident);
+    incidentsByService.set(incident.serviceId, list);
   }
 
-  return uptimeByService;
+  const result: Record<string, UptimeResult> = {};
+  for (const serviceId of serviceIds) {
+    // Service IDs are authorized database values, not object-property paths.
+    // eslint-disable-next-line security/detect-object-injection
+    result[serviceId] = computeUptime({
+      periodStart: effectiveStart,
+      periodEnd: effectiveEnd,
+      createdAt: createdAtById.get(serviceId),
+      incidents: incidentsByService.get(serviceId) ?? [],
+      maintenanceWindows: windowsByService.get(serviceId),
+    });
+  }
+  return result;
+}
+
+/** Uptime percentage per service; see calculateMultiServiceAvailability. */
+export async function calculateMultiServiceUptime(
+  serviceIds: string[],
+  startDate: Date,
+  endDate: Date = new Date(),
+  options: UptimeOptions = {},
+  db?: Pick<import('@prisma/client').PrismaClient, 'incident' | 'service' | 'maintenanceWindowService'>
+): Promise<Record<string, number>> {
+  const availability = await calculateMultiServiceAvailability(
+    serviceIds,
+    startDate,
+    endDate,
+    options,
+    db
+  );
+  return Object.fromEntries(
+    Object.entries(availability).map(([serviceId, row]) => [serviceId, row.uptimePercent])
+  );
 }
 
 /**

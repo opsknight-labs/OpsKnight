@@ -1700,15 +1700,16 @@ describe('service automation transaction certification', () => {
       ).count
     ).toBe(2);
   });
-  it('rejects credential-bearing builtin source values without persisting them in automation diagnostics', async () => {
+  it('drops credential-bearing builtin source values without persisting them or disabling the other rules', async () => {
     const { service } = await setup();
     await ingest(service.id, {
       ...event,
       payload: { ...event.payload, source: 'https://monitor.internal/?token=never-persist-me' },
     });
     const decision = await db.incidentAutomationDecision.findFirstOrThrow();
-    expect(decision.fallbackReason).toBe('EXTRACTION_LIMIT');
-    expect(decision.routeType).toBe('SERVICE_DEFAULT');
+    // The unusable source is dropped on its own; the rest of the rules still decide the route.
+    expect(decision.fallbackReason).toBeNull();
+    expect(decision.routeType).toBe('NO_ESCALATION');
     const trace = await db.automationTrace.findFirstOrThrow();
     expect(JSON.stringify(trace.detail)).not.toContain('never-persist-me');
     expect(JSON.stringify(decision.summary)).not.toContain('never-persist-me');

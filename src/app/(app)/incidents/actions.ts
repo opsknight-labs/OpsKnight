@@ -13,7 +13,9 @@ import {
 import {
   CAPABILITIES,
   PAGEABLE_USER_WHERE,
+  capabilitiesOf,
   hasCapability,
+  isAdministratorRole,
   type AppRole,
 } from '@/lib/authorization';
 import { AppError } from '@/lib/errors';
@@ -22,13 +24,23 @@ import {
   updateIncidentStatus as updateIncidentStatusWithLifecycle,
   resolveIncidentWithNote as resolveIncidentWithLifecycleNote,
 } from '@/lib/incidents/operator-lifecycle';
-import { executeIncidentCreation, type IncidentCreationSource } from '@/lib/incidents/creation';
+import {
+  executeIncidentCreation,
+  recordIncidentCreationTelemetry,
+  type IncidentCreationInput,
+  type IncidentCreationResult,
+  type IncidentCreationSource,
+} from '@/lib/incidents/creation';
+import { executeIdempotentIncidentCreation } from '@/lib/incidents/idempotent-commands';
 import { enqueueWarRoomSideEffects } from '@/lib/event-outbox';
+import { isIncidentPriority } from '@/lib/incidents/priority';
+import { applyIncidentPriorityChange } from '@/lib/incidents/priority-command';
 import { applyIncidentUrgencyChange } from '@/lib/incidents/urgency-command';
 import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
 import { loadTemplateDefaultRoles } from '@/lib/incidents/roles-command';
 import { setIncidentWatcher, deleteIncidentWatcher } from '@/lib/incidents/watchers';
 import { addIncidentNoteDomainCommand } from '@/lib/incidents/notes';
+import { withholdStatusPagesForService } from '@/lib/status-pages/snapshot';
 
 const allowedUrgencies = new Set<IncidentUrgency>(['LOW', 'MEDIUM', 'HIGH']);
 
@@ -68,29 +80,21 @@ export async function updateIncidentUrgency(id: string, urgency: string) {
   revalidatePath('/');
 }
 
-export async function updateIncidentPriority(id: string, priority: string | null) {
+export async function updateIncidentPriority(id: string, rawPriority: string | null) {
   await assertResponderOrAbove();
-
-  await prisma.$transaction(async tx => {
-    await tx.incident.update({
-      where: { id },
-      data: {
-        priority,
-        events: {
-          create: {
-            type: 'STATUS_CHANGE',
-            message: priority ? `Priority updated to ${priority}` : 'Priority cleared (Unassigned)',
-          },
-        },
-      },
+  // Escalation conditions match the exact P1-P5 strings; empty clears the priority.
+  const priority = rawPriority || null;
+  if (priority !== null && !isIncidentPriority(priority)) {
+    throw new AppError({
+      code: 'INCIDENT_INVALID_ARGUMENT',
+      userMessage: 'Priority must be one of P1, P2, P3, P4 or P5.',
+      fields: [
+        { field: 'priority', code: 'invalid', message: 'Priority must be one of P1 to P5.' },
+      ],
     });
-    await enqueueWarRoomSideEffects(tx, id, [
-      {
-        effect: 'WAR_ROOM_MESSAGE',
-        message: `🎯 *Priority updated to ${priority || 'Unassigned'}*`,
-      },
-    ]);
-  });
+  }
+
+  await prisma.$transaction(tx => applyIncidentPriorityChange(tx, { incidentId: id, priority }));
 
   revalidatePath(`/incidents/${id}`);
   revalidatePath('/incidents');
@@ -147,8 +151,8 @@ async function createIncidentFromFormData(formData: FormData, source: IncidentCr
   for (const [key, value] of formData.entries()) {
     if (!key.startsWith('customField_') || typeof value !== 'string') continue;
     const fieldId = key.slice('customField_'.length);
-    const fieldValue = value.trim();
-    if (fieldValue) customFieldMap.set(fieldId, fieldValue);
+    // An empty value is kept: it means "no value", so the field default is not applied.
+    customFieldMap.set(fieldId, value.trim());
   }
 
   const rawVisibility = formData.get('visibility');
@@ -164,7 +168,7 @@ async function createIncidentFromFormData(formData: FormData, source: IncidentCr
         },
       })
     : [];
-  const result = await executeIncidentCreation({
+  const creationInput: IncidentCreationInput = {
     ...(defaultRoles.length ? { defaultRoles } : {}),
     title,
     description,
@@ -178,7 +182,21 @@ async function createIncidentFromFormData(formData: FormData, source: IncidentCr
     customFields: [...customFieldMap].map(([fieldId, value]) => ({ fieldId, value })),
     source,
     actor: { id: currentUser.id, name: currentUser.name ?? undefined },
-  });
+  };
+  // A double submit (Cmd/Ctrl+Enter) sends the same key twice; the second call replays the first.
+  const idempotencyKey = String(formData.get('idempotencyKey') ?? '').trim();
+  let result: IncidentCreationResult;
+  if (idempotencyKey) {
+    const execution = await executeIdempotentIncidentCreation(creationInput, {
+      key: `${source}:${idempotencyKey}`,
+      principalId: currentUser.id,
+    });
+    if (!execution.replayed) recordIncidentCreationTelemetry(execution.value.telemetry);
+    const { telemetry: _telemetry, ...publicResult } = execution.value;
+    result = publicResult;
+  } else {
+    result = await executeIncidentCreation(creationInput);
+  }
   revalidatePath('/incidents');
   revalidatePath(`/incidents/${result.id}`);
   revalidatePath('/');
@@ -231,7 +249,9 @@ export async function reassignIncident(incidentId: string, assigneeId: string, t
 export async function addWatcher(incidentId: string, userId: string, role: string) {
   if (!userId) return;
   const currentUser = await getCurrentUser();
-  const canManage = hasCapability(currentUser.role as AppRole, CAPABILITIES.OPERATIONS_MANAGE);
+  // Effective capabilities, as the incident page used to decide whether to show the controls.
+  const capabilities = new Set(capabilitiesOf(currentUser));
+  const canManage = capabilities.has(CAPABILITIES.OPERATIONS_MANAGE);
   const watcherRole = role || 'FOLLOWER';
 
   if (!canManage) {
@@ -247,7 +267,7 @@ export async function addWatcher(incidentId: string, userId: string, role: strin
 
   await setIncidentWatcher(
     { incidentId, userId, role: watcherRole as 'FOLLOWER' | 'STAKEHOLDER' | 'EXEC' },
-    { id: currentUser.id, role: currentUser.role as AppRole }
+    { id: currentUser.id, role: currentUser.role as AppRole, capabilities }
   );
 
   revalidatePath(`/incidents/${incidentId}`);
@@ -255,12 +275,13 @@ export async function addWatcher(incidentId: string, userId: string, role: strin
 
 export async function removeWatcher(incidentId: string, watcherId: string) {
   const currentUser = await getCurrentUser();
-  const canManage = hasCapability(currentUser.role as AppRole, CAPABILITIES.OPERATIONS_MANAGE);
-  if (!canManage) await assertCanViewIncident(incidentId);
+  const capabilities = new Set(capabilitiesOf(currentUser));
+  if (!capabilities.has(CAPABILITIES.OPERATIONS_MANAGE)) await assertCanViewIncident(incidentId);
 
   await deleteIncidentWatcher(incidentId, watcherId, {
     id: currentUser.id,
     role: currentUser.role as AppRole,
+    capabilities,
   });
 
   revalidatePath(`/incidents/${incidentId}`);
@@ -269,7 +290,7 @@ export async function removeWatcher(incidentId: string, watcherId: string) {
 export async function updateIncidentVisibility(id: string, visibility: 'PUBLIC' | 'PRIVATE') {
   await assertResponderOrAbove();
 
-  await prisma.incident.update({
+  const updated = await prisma.incident.update({
     where: { id },
     data: {
       visibility,
@@ -280,7 +301,10 @@ export async function updateIncidentVisibility(id: string, visibility: 'PUBLIC' 
         },
       },
     },
+    select: { serviceId: true },
   });
+  // Going private narrows what the public status pages may show, so it takes effect now.
+  if (visibility === 'PRIVATE') await withholdStatusPagesForService(updated.serviceId);
 
   revalidatePath(`/incidents/${id}`);
   revalidatePath('/incidents');
@@ -351,7 +375,7 @@ export async function getIncidentCreationContext() {
     }),
     prisma.customField.findMany({ orderBy: { order: 'asc' } }),
     prisma.team.findMany({ where: teamScope, orderBy: { name: 'asc' } }),
-    getAllTemplates(permissions.id),
+    getAllTemplates(permissions.id, isAdministratorRole(permissions.role)),
   ]);
 
   return { canCreateIncident: true as const, services, users, teams, customFields, templates };

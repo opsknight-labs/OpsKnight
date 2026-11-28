@@ -241,6 +241,49 @@ describe('incident lifecycle command engine', () => {
     );
   });
 
+  it('ends the acknowledgement when an acknowledged incident is snoozed, so it wakes as a plain OPEN one', async () => {
+    tx.incident.findUnique.mockResolvedValue(
+      snapshot({
+        status: 'ACKNOWLEDGED',
+        acknowledgedAt: new Date(NOW.getTime() - 60_000),
+        slaAckElapsedMs: BigInt(60_000),
+        currentEscalationStep: 1,
+      })
+    );
+
+    await applyIncidentLifecycleCommand(asTransactionClient(tx), {
+      incidentId: 'inc-ack-snooze',
+      command: 'SNOOZE',
+      source: 'WEB',
+      snoozedUntil: new Date(NOW.getTime() + 60 * 60_000),
+      now: NOW,
+    });
+
+    const data = tx.incident.update.mock.calls[0][0].data;
+    expect(data).toMatchObject({
+      status: 'SNOOZED',
+      acknowledgedAt: null,
+      acknowledgedById: null,
+      acknowledgedVia: null,
+    });
+    // The lifetime first-ACK SLA sample is not touched.
+    expect(data).not.toHaveProperty('slaAckElapsedMs');
+  });
+
+  it('leaves acknowledgement fields alone when an incident that was never acknowledged is snoozed', async () => {
+    tx.incident.findUnique.mockResolvedValue(snapshot({ status: 'OPEN' }));
+
+    await applyIncidentLifecycleCommand(asTransactionClient(tx), {
+      incidentId: 'inc-open-snooze',
+      command: 'SNOOZE',
+      source: 'WEB',
+      snoozedUntil: new Date(NOW.getTime() + 60 * 60_000),
+      now: NOW,
+    });
+
+    expect(tx.incident.update.mock.calls[0][0].data).not.toHaveProperty('acknowledgedAt');
+  });
+
   it('rejects a stale expectedStatus for a real transition', async () => {
     tx.incident.findUnique.mockResolvedValue(snapshot({ status: 'ACKNOWLEDGED' }));
 

@@ -1,13 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   bulkAcknowledge,
+  bulkReassign,
   bulkResolve,
   bulkSnooze,
+  bulkUnsnooze,
+  bulkUpdatePriority,
   bulkUpdateStatus,
   bulkUpdateUrgency,
 } from '@/app/(app)/incidents/bulk-actions';
 import prisma from '@/lib/prisma';
-import { assertResponderOrAbove, getCurrentUser } from '@/lib/rbac';
+import { AppError } from '@/lib/errors';
+import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
+import { applyIncidentPriorityChange } from '@/lib/incidents/priority-command';
+import { assertResponderOrAbove, getCurrentAuthorizationActor, getCurrentUser } from '@/lib/rbac';
+import { incidentReadWhere } from '@/lib/authorization-filters';
 import {
   executeIncidentLifecycleBatch,
   executeIncidentLifecycleTargetBatch,
@@ -18,6 +25,7 @@ vi.mock('@/lib/prisma', () => {
     updateMany: vi.fn(),
     findUnique: vi.fn(),
     findMany: vi.fn(),
+    count: vi.fn(),
   };
   const incidentEvent = {
     create: vi.fn(),
@@ -30,6 +38,7 @@ vi.mock('@/lib/prisma', () => {
       async (callback: (tx: { incident: typeof incident; incidentEvent: typeof incidentEvent }) => unknown) =>
         callback({ incident, incidentEvent })
     ),
+    user: { findFirst: vi.fn() },
     auditLog: { create: vi.fn() },
     systemSettings: { findUnique: vi.fn(), upsert: vi.fn() },
   };
@@ -38,7 +47,20 @@ vi.mock('@/lib/prisma', () => {
 
 vi.mock('@/lib/rbac', () => ({
   getCurrentUser: vi.fn(),
+  getCurrentAuthorizationActor: vi.fn(),
   assertResponderOrAbove: vi.fn(),
+}));
+
+vi.mock('@/lib/authorization-filters', () => ({
+  incidentReadWhere: vi.fn(),
+}));
+
+vi.mock('@/lib/incidents/priority-command', () => ({
+  applyIncidentPriorityChange: vi.fn(),
+}));
+
+vi.mock('@/lib/incidents/assignment', () => ({
+  assignIncidentDomainCommand: vi.fn(),
 }));
 
 vi.mock('@/lib/incidents/lifecycle', () => ({
@@ -61,6 +83,54 @@ describe('Bulk Actions', () => {
       role: 'RESPONDER',
     } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
     vi.mocked(prisma.incident.findMany).mockResolvedValue([]);
+    vi.mocked(getCurrentAuthorizationActor).mockResolvedValue({ id: 'user-1' } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+    vi.mocked(incidentReadWhere).mockReturnValue({});
+  });
+
+  describe('read scope of the selection', () => {
+    const scoped = { OR: [{ assigneeId: 'user-1' }] };
+
+    it('refuses a selection that includes an incident outside the actor read scope', async () => {
+      vi.mocked(incidentReadWhere).mockReturnValue(scoped);
+      vi.mocked(prisma.incident.count).mockResolvedValue(1);
+
+      const result = await bulkResolve(['mine', 'someone-elses'], 'Rolled back the bad deploy');
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Unauthorized. You cannot act on one or more of the selected incidents.',
+      });
+      expect(prisma.incident.count).toHaveBeenCalledWith({
+        where: { AND: [{ id: { in: ['mine', 'someone-elses'] } }, scoped] },
+      });
+      expect(executeIncidentLifecycleBatch).not.toHaveBeenCalled();
+    });
+
+    it('applies the same scope to the non-lifecycle bulk writes', async () => {
+      vi.mocked(incidentReadWhere).mockReturnValue(scoped);
+      vi.mocked(prisma.incident.count).mockResolvedValue(0);
+
+      await expect(bulkUpdatePriority(['x'], 'P1')).resolves.toMatchObject({ success: false });
+      await expect(bulkUpdateUrgency(['x'], 'HIGH')).resolves.toMatchObject({ success: false });
+      expect(prisma.incident.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('lets a fully readable selection through, counting each id once', async () => {
+      vi.mocked(incidentReadWhere).mockReturnValue(scoped);
+      vi.mocked(prisma.incident.count).mockResolvedValue(1);
+      vi.mocked(executeIncidentLifecycleBatch).mockResolvedValue([]);
+
+      await expect(bulkAcknowledge(['a', 'a'])).resolves.toEqual({ success: true, count: 0 });
+      expect(executeIncidentLifecycleBatch).toHaveBeenCalled();
+    });
+
+    it('skips the lookup when the actor reads every incident', async () => {
+      vi.mocked(executeIncidentLifecycleBatch).mockResolvedValue([]);
+
+      await bulkAcknowledge(['a']);
+
+      expect(prisma.incident.count).not.toHaveBeenCalled();
+    });
   });
 
   describe('bulkAcknowledge', () => {
@@ -145,14 +215,29 @@ describe('Bulk Actions', () => {
         },
       ]);
 
-      const result = await bulkResolve(['incident-1', 'incident-2']);
+      const result = await bulkResolve(['incident-1', 'incident-2'], 'Rolled back the bad deploy');
 
       expect(result).toEqual({ success: true, count: 1 });
       expect(executeIncidentLifecycleBatch).toHaveBeenCalledWith([
-        expect.objectContaining({ incidentId: 'incident-1', command: 'RESOLVE', source: 'BULK' }),
+        expect.objectContaining({
+          incidentId: 'incident-1',
+          command: 'RESOLVE',
+          source: 'BULK',
+          resolutionNote: 'Rolled back the bad deploy',
+        }),
         expect.objectContaining({ incidentId: 'incident-2', command: 'RESOLVE', source: 'BULK' }),
       ]);
       expect(prisma.incident.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('requires the same resolution note as resolving a single incident', async () => {
+      for (const note of ['', '   ', 'too short', 'x'.repeat(1001)]) {
+        await expect(bulkResolve(['incident-1'], note)).resolves.toMatchObject({
+          success: false,
+          error: expect.stringContaining('Resolution note must be'),
+        });
+      }
+      expect(executeIncidentLifecycleBatch).not.toHaveBeenCalled();
     });
 
     it('does not bypass lifecycle required-field validation', async () => {
@@ -160,10 +245,79 @@ describe('Bulk Actions', () => {
         new Error('Complete required custom fields before resolving: Root Cause')
       );
 
-      const result = await bulkResolve(['incident-1']);
+      const result = await bulkResolve(['incident-1'], 'Rolled back the bad deploy');
 
       expect(result).toEqual({ success: false, error: 'Failed to resolve incidents' });
       expect(prisma.incident.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('bulkReassign', () => {
+    beforeEach(() => {
+      vi.mocked(prisma.user.findFirst).mockResolvedValue({ id: 'user-2', role: 'RESPONDER' } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+    });
+
+    it('reassigns each open incident through the canonical assignment command', async () => {
+      vi.mocked(prisma.incident.findMany).mockResolvedValue([{ id: 'open-1' }, { id: 'open-2' }] as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+
+      const result = await bulkReassign(['open-1', 'open-2', 'done-1', 'open-1'], 'user-2');
+
+      expect(prisma.incident.findMany).toHaveBeenCalledWith({
+        where: { id: { in: ['open-1', 'open-2', 'done-1'] }, status: { not: 'RESOLVED' } },
+        select: { id: true },
+      });
+      expect(assignIncidentDomainCommand).toHaveBeenCalledTimes(2);
+      expect(assignIncidentDomainCommand).toHaveBeenCalledWith(
+        { incidentId: 'open-1', assigneeId: 'user-2', actor: { id: 'user-1', name: 'Test User' } },
+        expect.anything()
+      );
+      expect(result).toEqual({ success: true, count: 2 });
+      expect(prisma.incident.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('refuses more incidents than one transaction should carry', async () => {
+      const ids = Array.from({ length: 101 }, (_, i) => `inc-${i}`);
+
+      await expect(bulkReassign(ids, 'user-2')).resolves.toMatchObject({ success: false });
+      expect(assignIncidentDomainCommand).not.toHaveBeenCalled();
+    });
+
+    it('says why the command refused and that nothing changed', async () => {
+      vi.mocked(prisma.incident.findMany).mockResolvedValue([{ id: 'open-1' }] as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      vi.mocked(assignIncidentDomainCommand).mockRejectedValue(
+        new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'User was not found.' })
+      );
+
+      await expect(bulkReassign(['open-1'], 'user-2')).resolves.toEqual({
+        success: false,
+        error: 'User was not found. No incidents were changed.',
+      });
+    });
+  });
+
+  describe('bulkUnsnooze', () => {
+    it('tells the user why the selection was refused and that nothing changed', async () => {
+      vi.mocked(executeIncidentLifecycleBatch).mockRejectedValue(
+        new AppError({
+          code: 'INCIDENT_INVALID_TRANSITION',
+          userMessage: 'Cannot unsnooze an incident while it is ACKNOWLEDGED.',
+        })
+      );
+
+      const result = await bulkUnsnooze(['snoozed-1', 'acked-1']);
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Cannot unsnooze an incident while it is ACKNOWLEDGED. No incidents were changed.',
+      });
+    });
+
+    it('keeps the generic message for unexpected failures', async () => {
+      vi.mocked(executeIncidentLifecycleBatch).mockRejectedValue(new Error('connection reset'));
+
+      const result = await bulkUnsnooze(['snoozed-1']);
+
+      expect(result).toEqual({ success: false, error: 'Failed to unsnooze incidents' });
     });
   });
 
@@ -197,6 +351,13 @@ describe('Bulk Actions', () => {
   });
 
   describe('bulkUpdateStatus', () => {
+    it('does not resolve through the generic status change, which has no resolution note', async () => {
+      const result = await bulkUpdateStatus(['incident-1'], 'RESOLVED');
+
+      expect(result).toMatchObject({ success: false });
+      expect(executeIncidentLifecycleTargetBatch).not.toHaveBeenCalled();
+    });
+
     it('delegates OPEN to target-status translation so source state selects the semantic command', async () => {
       vi.mocked(executeIncidentLifecycleTargetBatch).mockResolvedValue([
         {
@@ -256,6 +417,48 @@ describe('Bulk Actions', () => {
       });
       expect(executeIncidentLifecycleBatch).not.toHaveBeenCalled();
       expect(executeIncidentLifecycleTargetBatch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('bulkUpdatePriority', () => {
+    it('applies each priority through the canonical command (P1-P5, or cleared with an empty value)', async () => {
+      vi.mocked(prisma.incident.findMany).mockResolvedValue([{ id: 'incident-1' }] as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+
+      await expect(bulkUpdatePriority(['incident-1', 'incident-1'], 'P2')).resolves.toEqual({
+        success: true,
+        count: 1,
+      });
+      expect(prisma.incident.findMany).toHaveBeenLastCalledWith({
+        where: { id: { in: ['incident-1'] } },
+        select: { id: true },
+      });
+      expect(applyIncidentPriorityChange).toHaveBeenLastCalledWith(expect.anything(), {
+        incidentId: 'incident-1',
+        priority: 'P2',
+        eventMessage: 'Bulk priority updated to P2 by Test User',
+      });
+      await bulkUpdatePriority(['incident-1'], '');
+      expect(applyIncidentPriorityChange).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({ priority: null })
+      );
+      expect(prisma.incident.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects values that escalation conditions could never match', async () => {
+      for (const bad of ['p1', 'P6', ' P1', 'x'.repeat(5000)]) {
+        await expect(bulkUpdatePriority(['incident-1'], bad)).resolves.toMatchObject({
+          success: false,
+        });
+      }
+      expect(applyIncidentPriorityChange).not.toHaveBeenCalled();
+    });
+
+    it('refuses a selection larger than one transaction should carry', async () => {
+      const ids = Array.from({ length: 101 }, (_, i) => `inc-${i}`);
+
+      await expect(bulkUpdatePriority(ids, 'P1')).resolves.toMatchObject({ success: false });
+      expect(applyIncidentPriorityChange).not.toHaveBeenCalled();
     });
   });
 });

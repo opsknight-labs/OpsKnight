@@ -36,6 +36,7 @@ import {
 import type { ChartType } from './widgets/ChartWidget';
 import type { SerializedSLAMetrics } from '@/lib/sla';
 import { getWidgetById, getAllWidgets } from '@/lib/reports/widget-registry';
+import { flowLayout, sortByPosition } from '@/lib/reports/grid-layout';
 
 type Widget = {
   id: string;
@@ -83,10 +84,7 @@ const DashboardGrid = memo(function DashboardGrid({
 
   // Sort widgets by position for consistent rendering
   const sortedWidgets = useMemo(() => {
-    return [...widgets].sort((a, b) => {
-      if (a.position.y !== b.position.y) return a.position.y - b.position.y;
-      return a.position.x - b.position.x;
-    });
+    return sortByPosition(widgets);
   }, [widgets]);
 
   // Configure sensors for drag detection
@@ -125,7 +123,7 @@ const DashboardGrid = memo(function DashboardGrid({
 
     if (oldIndex !== -1 && newIndex !== -1) {
       const newOrder = arrayMove(sortedWidgets, oldIndex, newIndex);
-      const recalculated = recalculatePositions(newOrder, columns);
+      const recalculated = flowLayout(newOrder, columns);
       onUpdateLayout(recalculated);
     }
   };
@@ -283,45 +281,6 @@ const SortableWidgetItem = memo(function SortableWidgetItem({
     </div>
   );
 });
-
-/**
- * Recalculate widget positions based on order (flow layout)
- */
-function recalculatePositions(widgets: Widget[], columns: number): Widget[] {
-  let currentX = 0;
-  let currentY = 0;
-  let rowHeight = 1;
-
-  return widgets.map(widget => {
-    const w = widget.position.w;
-    const h = widget.position.h;
-
-    // If widget doesn't fit in current row, move to next row
-    if (currentX + w > columns) {
-      currentX = 0;
-      currentY += rowHeight;
-      rowHeight = 1;
-    }
-
-    const newPosition = {
-      x: currentX,
-      y: currentY,
-      w,
-      h,
-    };
-
-    // Update row height if this widget is taller
-    rowHeight = Math.max(rowHeight, h);
-
-    // Move x position for next widget
-    currentX += w;
-
-    return {
-      ...widget,
-      position: newPosition,
-    };
-  });
-}
 
 /**
  * WidgetContent - Renders the appropriate widget component based on type

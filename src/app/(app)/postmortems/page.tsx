@@ -18,6 +18,8 @@ import PostmortemsListTable from '@/components/postmortem/PostmortemsListTable';
 import PostmortemsFilters from '@/components/postmortem/PostmortemsFilters';
 import { parsePageParam, parseEnumValue } from '@/lib/pagination-parser';
 import { requirePageAccess } from '@/lib/access/server';
+import { CAPABILITIES } from '@/lib/authorization';
+import { actorHasCapability } from '@/lib/authorization-policy';
 
 export default async function PostmortemsPage({
   searchParams,
@@ -31,7 +33,11 @@ export default async function PostmortemsPage({
   }
 
   const params = await searchParams;
-  const status = parseEnumValue(params.status, ['DRAFT', 'PUBLISHED', 'ARCHIVED'] as const);
+  const requestedStatus = parseEnumValue(params.status, [
+    'DRAFT',
+    'PUBLISHED',
+    'ARCHIVED',
+  ] as const);
   const search = params.search;
   const serviceId = params.serviceId;
   const page = parsePageParam(params.page);
@@ -39,6 +45,10 @@ export default async function PostmortemsPage({
     getUserPermissions(),
     getCurrentAuthorizationActor(),
   ]);
+
+  // Drafts and archived rows are working material: only draft readers see them, their counts or tabs.
+  const canViewDrafts = actorHasCapability(actor, CAPABILITIES.POSTMORTEM_DRAFT_READ);
+  const status = canViewDrafts || requestedStatus === 'PUBLISHED' ? requestedStatus : undefined;
 
   const [{ postmortems, pagination }, services] = await Promise.all([
     getAllPostmortems({ status, search, serviceId, page }),
@@ -125,22 +135,26 @@ export default async function PostmortemsPage({
             href: '/postmortems?status=PUBLISHED',
             active: status === 'PUBLISHED',
           },
-          {
-            label: 'Drafts',
-            value: draftCount,
-            icon: <Clock className="h-3.5 w-3.5 text-amber-200" />,
-            valueClassName: draftCount > 0 ? 'text-amber-200' : undefined,
-            href: '/postmortems?status=DRAFT',
-            active: status === 'DRAFT',
-          },
-          {
-            label: 'Archived',
-            value: archivedCount,
-            icon: <Archive className="h-3.5 w-3.5 text-slate-200" />,
-            valueClassName: archivedCount > 0 ? 'text-slate-200' : undefined,
-            href: '/postmortems?status=ARCHIVED',
-            active: status === 'ARCHIVED',
-          },
+          ...(canViewDrafts
+            ? [
+                {
+                  label: 'Drafts',
+                  value: draftCount,
+                  icon: <Clock className="h-3.5 w-3.5 text-amber-200" />,
+                  valueClassName: draftCount > 0 ? 'text-amber-200' : undefined,
+                  href: '/postmortems?status=DRAFT',
+                  active: status === 'DRAFT',
+                },
+                {
+                  label: 'Archived',
+                  value: archivedCount,
+                  icon: <Archive className="h-3.5 w-3.5 text-slate-200" />,
+                  valueClassName: archivedCount > 0 ? 'text-slate-200' : undefined,
+                  href: '/postmortems?status=ARCHIVED',
+                  active: status === 'ARCHIVED',
+                },
+              ]
+            : []),
         ]}
       />
 
@@ -148,6 +162,7 @@ export default async function PostmortemsPage({
         {/* Unified Search & Filters Toolbar */}
         <PostmortemsFilters
           currentStatus={status}
+          canViewDrafts={canViewDrafts}
           currentSearch={search}
           currentServiceId={serviceId}
           services={services}

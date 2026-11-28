@@ -9,12 +9,16 @@ import {
 
 const session = vi.hoisted(() => ({ user: null as null | { id: string; role: string } }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
-vi.mock('@/lib/rbac', () => ({
-  assertResponderOrAbove: vi.fn(async () => session.user),
-  getCurrentUser: vi.fn(async () => session.user),
-  getCurrentAuthorizationActor: vi.fn(),
-  getUserPermissions: vi.fn(),
-}));
+vi.mock('@/lib/rbac', async () => {
+  const { resolveUserActor } = await import('@/lib/authorization-actors');
+  return {
+    assertResponderOrAbove: vi.fn(async () => session.user),
+    getCurrentUser: vi.fn(async () => session.user),
+    // Creating a postmortem checks the caller can read the incident, so the actor must be real.
+    getCurrentAuthorizationActor: vi.fn(async () => resolveUserActor(session.user!.id)),
+    getUserPermissions: vi.fn(),
+  };
+});
 import { upsertPostmortem, type PostmortemData } from '@/app/(app)/postmortems/actions';
 
 beforeEach(async () => {

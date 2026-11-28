@@ -18,6 +18,8 @@ import { assertCanReadServiceMetrics, getUserPermissions } from '@/lib/rbac';
 export const dynamic = 'force-dynamic';
 
 const BATCH_SIZE = 100;
+const DEFAULT_WINDOW_DAYS = 30;
+const MAX_WINDOW_DAYS = 365;
 const RATE_LIMIT_MAX = 30;
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -58,7 +60,11 @@ export async function GET(req: NextRequest) {
   // Parse query parameters
   const searchParams = req.nextUrl.searchParams;
   const serviceId = searchParams.get('serviceId');
-  const windowDays = parseInt(searchParams.get('windowDays') || '7', 10);
+  // Not a number, or out of range, must not become an invalid date or a full-history scan.
+  const requestedDays = Number.parseInt(searchParams.get('windowDays') ?? '', 10);
+  const windowDays = Number.isFinite(requestedDays)
+    ? Math.min(Math.max(requestedDays, 1), MAX_WINDOW_DAYS)
+    : DEFAULT_WINDOW_DAYS;
 
   // ADMIN/RESPONDER may request the global stream. Regular users must supply
   // an explicit service they are entitled to read; omission must not widen
@@ -98,8 +104,10 @@ export async function GET(req: NextRequest) {
           )
         );
 
-        // Stream incidents in batches
-        let skip = 0;
+        // Stream incidents in batches. A keyset (not OFFSET) keeps pages stable while incidents
+        // are created, and every page is an index range instead of a scan from the start.
+        let after: { createdAt: Date; id: string } | null = null;
+        let sent = 0;
         let batchNumber = 0;
 
         while (true) {
@@ -121,7 +129,19 @@ export async function GET(req: NextRequest) {
           }
 
           const batch = await prisma.incident.findMany({
-            where,
+            where: after
+              ? {
+                  AND: [
+                    where,
+                    {
+                      OR: [
+                        { createdAt: { lt: after.createdAt } },
+                        { createdAt: after.createdAt, id: { lt: after.id } },
+                      ],
+                    },
+                  ],
+                }
+              : where,
             select: {
               id: true,
               title: true,
@@ -150,8 +170,7 @@ export async function GET(req: NextRequest) {
               },
             },
             take: BATCH_SIZE,
-            skip,
-            orderBy: { createdAt: 'desc' },
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           });
 
           if (batch.length === 0 || req.signal.aborted || isCancelled) break;
@@ -170,11 +189,14 @@ export async function GET(req: NextRequest) {
             type: 'batch',
             batchNumber,
             incidents,
-            remaining: Math.max(0, totalCount - skip - batch.length),
+            remaining: Math.max(0, totalCount - sent - batch.length),
           });
           controller.enqueue(encoder.encode(`data: ${data}\n\n`));
 
-          skip += BATCH_SIZE;
+          // Typed explicitly: the next page's filter depends on it, which would otherwise be a circular inference.
+          const last: { createdAt: Date; id: string } = batch[batch.length - 1];
+          after = { createdAt: last.createdAt, id: last.id };
+          sent += batch.length;
           batchNumber++;
 
           // Small delay to prevent overwhelming the client

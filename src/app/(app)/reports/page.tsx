@@ -74,9 +74,12 @@ export default async function ReportsPage() {
 
   const userTimeZone = getUserTimeZone(user);
   // The weekly paragraph: behind the small-helpers switch and for people who may read intelligence.
+  const actor = await getCurrentAuthorizationActor();
   const showNarrative =
     (await opsHelpersOn().catch(() => false)) &&
-    actorHasCapability(await getCurrentAuthorizationActor(), CAPABILITIES.INTELLIGENCE_READ);
+    actorHasCapability(actor, CAPABILITIES.INTELLIGENCE_READ);
+  // Same capability the dashboard APIs enforce: read-only roles see dashboards but cannot change them.
+  const canManage = actorHasCapability(actor, CAPABILITIES.REPORT_MANAGE);
   const userTeamIds = user.teamMemberships.map(m => m.teamId);
 
   // Fetch user's dashboards and shared team/public dashboards
@@ -124,15 +127,17 @@ export default async function ReportsPage() {
         }
         statsPlacement="bottom"
         actions={
-          <Button
-            asChild
-            className="gap-2 shadow-xs font-semibold bg-background text-foreground hover:bg-background/90"
-          >
-            <Link href="/reports/executive/new">
-              <Plus className="h-4 w-4" />
-              Create Dashboard
-            </Link>
-          </Button>
+          canManage ? (
+            <Button
+              asChild
+              className="gap-2 shadow-xs font-semibold bg-background text-foreground hover:bg-background/90"
+            >
+              <Link href="/reports/executive/new">
+                <Plus className="h-4 w-4" />
+                Create Dashboard
+              </Link>
+            </Button>
+          ) : undefined
         }
         stats={[
           {
@@ -169,7 +174,9 @@ export default async function ReportsPage() {
             <Sparkles className="h-5 w-5 text-primary" />
             <h2 className="text-lg font-bold text-foreground">Dashboard Templates</h2>
           </div>
-          <span className="text-xs text-muted-foreground">Click to preview or clone</span>
+          <span className="text-xs text-muted-foreground">
+            {canManage ? 'Click to preview or clone' : 'Click to preview'}
+          </span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
@@ -209,7 +216,7 @@ export default async function ReportsPage() {
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-foreground">My Dashboards</h2>
-          {dashboards.length > 0 && (
+          {canManage && dashboards.length > 0 && (
             <Link href="/reports/executive/new">
               <Button variant="outline" size="sm" className="gap-1">
                 <Plus className="h-4 w-4" />
@@ -223,22 +230,28 @@ export default async function ReportsPage() {
           <EmptyState
             icon={<LayoutDashboard className="h-6 w-6 text-muted-foreground/60" />}
             title="No custom dashboards yet"
-            description="Create your first custom operational dashboard or start from an executive template."
+            description={
+              canManage
+                ? 'Create your first custom operational dashboard or start from an executive template.'
+                : 'Dashboards you own appear here. Your role can view dashboards but not create them.'
+            }
             action={
-              <div className="flex flex-wrap items-center justify-center gap-3">
-                <Button asChild size="sm">
-                  <Link href="/reports/executive/new">
-                    <Plus className="mr-1.5 h-4 w-4" />
-                    Create from scratch
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" size="sm">
-                  <Link href={`/reports/executive?template=executive-summary`}>
-                    <Sparkles className="mr-1.5 h-4 w-4" />
-                    Use template
-                  </Link>
-                </Button>
-              </div>
+              canManage ? (
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <Button asChild size="sm">
+                    <Link href="/reports/executive/new">
+                      <Plus className="mr-1.5 h-4 w-4" />
+                      Create from scratch
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={`/reports/executive?template=executive-summary`}>
+                      <Sparkles className="mr-1.5 h-4 w-4" />
+                      Use template
+                    </Link>
+                  </Button>
+                </div>
+              ) : undefined
             }
           />
         ) : (
@@ -251,6 +264,7 @@ export default async function ReportsPage() {
                 description={dashboard.description}
                 widgetCount={dashboard._count.widgets}
                 isDefault={dashboard.isDefault}
+                canDelete={canManage}
                 updatedAt={formatDateTime(dashboard.updatedAt, userTimeZone, {
                   format: 'relative',
                 })}

@@ -107,6 +107,28 @@ describe('personal notification control-plane routing', () => {
     });
   });
 
+  it('judges a failed intent by its own attempt budget, so a CRITICAL page still retrying is not terminal', async () => {
+    centralMocks.enqueue.mockResolvedValue({ id: 'notification-failed', created: false });
+    const failed = { id: 'notification-failed', status: 'FAILED', attempts: 3, errorMsg: 'down' };
+
+    vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+      ...failed,
+      maxAttempts: 8,
+    } as never);
+    await expect(sendNotification('inc-1', 'user-1', 'EMAIL', 'page')).resolves.toMatchObject({
+      outcome: 'QUEUED',
+    });
+
+    vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+      ...failed,
+      maxAttempts: 3,
+    } as never);
+    await expect(sendNotification('inc-1', 'user-1', 'EMAIL', 'page')).resolves.toMatchObject({
+      outcome: 'PERMANENT_FAILURE',
+      terminal: true,
+    });
+  });
+
   it('does not restore the retired feature-flag fallback', async () => {
     process.env.NOTIFICATION_CONTROL_PLANE_PERSONAL = 'false';
     await sendNotification('inc-1', 'user-1', 'EMAIL', 'page');

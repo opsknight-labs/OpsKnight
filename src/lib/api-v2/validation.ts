@@ -1,8 +1,10 @@
 import { z } from 'zod/v3';
-import { STATUS_ANNOUNCEMENT_TYPES } from '@/lib/validation';
+import { STATUS_ANNOUNCEMENT_TYPES, isStatusPageSlug } from '@/lib/validation';
 import { APP_ROLES, isApiScope } from '@/lib/authorization';
 import { INTEGRATION_TYPES } from '@/lib/integrations/catalog';
 import { isValidTimeZone } from '@/lib/timezone';
+import { MAX_ESCALATION_DELAY_MINUTES } from '@/lib/escalation/policy-validation';
+import { MAX_ESCALATION_STEPS } from '@/lib/escalation/automation-snapshot';
 
 const IanaTimeZoneSchema = z
   .string()
@@ -91,6 +93,8 @@ export const IncidentUpdateV2Schema = z.object({
   priority: z.enum(['P1', 'P2', 'P3', 'P4', 'P5']).optional().nullable(),
   urgency: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
   status: z.enum(['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'SNOOZED', 'SUPPRESSED']).optional(),
+  // Required (10-1000 characters) when status moves the incident to RESOLVED.
+  resolutionNote: z.string().trim().max(1000).optional(),
   assigneeId: z.string().trim().nullable().optional(),
 });
 
@@ -190,7 +194,7 @@ export const EscalationStepConditionSchema = z.object({
 });
 
 export const EscalationStepSchema = z.object({
-  delayMinutes: z.number().int().min(0).max(1440),
+  delayMinutes: z.number().int().min(0).max(MAX_ESCALATION_DELAY_MINUTES),
   targetType: z.enum(['USER', 'SCHEDULE', 'TEAM']),
   targetId: z.string().trim().min(1),
   notificationChannels: z
@@ -202,16 +206,22 @@ export const EscalationStepSchema = z.object({
   conditions: z.array(EscalationStepConditionSchema).optional(),
 });
 
+// Same cap as the UI and the responder snapshot; an empty list would leave the engine with NO_POLICY.
+const EscalationStepsSchema = z
+  .array(EscalationStepSchema)
+  .min(1, 'At least one escalation step is required')
+  .max(MAX_ESCALATION_STEPS, `A policy can have at most ${MAX_ESCALATION_STEPS} steps`);
+
 export const EscalationPolicyCreateV2Schema = z.object({
   name: z.string().trim().min(2).max(100),
   description: z.string().trim().max(1000).optional().nullable(),
-  steps: z.array(EscalationStepSchema).min(1, 'At least one escalation step is required'),
+  steps: EscalationStepsSchema,
 });
 
 export const EscalationPolicyUpdateV2Schema = z.object({
   name: z.string().trim().min(2).max(100).optional(),
   description: z.string().trim().max(1000).optional().nullable(),
-  steps: z.array(EscalationStepSchema).optional(),
+  steps: EscalationStepsSchema.optional(),
 });
 
 export const IntegrationUpdateV2Schema = z
@@ -277,8 +287,8 @@ export const StatusPageCreateV2Schema = z.object({
     .string()
     .trim()
     .min(2)
-    .max(100)
-    .regex(/^[a-z0-9-]+$/, 'Slug must consist of lowercase letters, numbers, and hyphens'),
+    .max(80)
+    .refine(isStatusPageSlug, 'Use lowercase letters, numbers, and single hyphens only.'),
   isDefault: z.boolean().default(false),
   // Status pages have no description column; reject rather than silently drop it.
   description: z
@@ -292,8 +302,8 @@ export const StatusPageUpdateV2Schema = z.object({
     .string()
     .trim()
     .min(2)
-    .max(100)
-    .regex(/^[a-z0-9-]+$/)
+    .max(80)
+    .refine(isStatusPageSlug, 'Use lowercase letters, numbers, and single hyphens only.')
     .optional(),
   isDefault: z.boolean().optional(),
   description: z

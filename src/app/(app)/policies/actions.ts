@@ -3,8 +3,14 @@ import { z } from 'zod/v3';
 import { transitionPolicyArchive } from '@/lib/escalation/policy-lifecycle';
 import {
   assertResponderPolicySnapshotSafe,
+  bumpResponderPolicyRevision,
   lockResponderPolicy,
 } from '@/lib/escalation/automation-snapshot';
+import {
+  countOpenIncidentsMidEscalation,
+  readEscalationStepOrder,
+  remapOpenIncidentEscalationCursors,
+} from '@/lib/escalation/step-cursor';
 
 import {
   ESCALATION_STEP_CHANNELS_SUBMITTED,
@@ -314,17 +320,33 @@ export async function deletePolicy(policyId: string) {
     };
   }
 
+  const actorId = currentUser.id;
   try {
     await prisma.$transaction(async tx => {
+      // A service assigning this policy takes a key-share FK lock; FOR UPDATE serializes that
+      // assignment with this check, so the foreign key cannot silently null a service's policy.
+      await tx.$queryRaw`SELECT "id" FROM "EscalationPolicy" WHERE "id" = ${policyId} FOR UPDATE`;
+      const [services, versionRefs, decisions] = await Promise.all([
+        tx.service.count({ where: { escalationPolicyId: policyId } }),
+        tx.automationVersionPolicyRef.count({ where: { escalationPolicyId: policyId } }),
+        tx.incidentAutomationDecision.count({ where: { escalationPolicyId: policyId } }),
+      ]);
+      if (services || versionRefs || decisions) {
+        throw new Error(
+          'Cannot delete policy: a service or automation started using it. Nothing was deleted; reassign them first.'
+        );
+      }
       await tx.escalationRule.deleteMany({ where: { policyId } });
       await tx.escalationPolicy.delete({ where: { id: policyId } });
-    });
-
-    await logAudit({
-      action: 'escalation_policy.deleted',
-      entityType: 'ESCALATION_POLICY',
-      entityId: policyId,
-      actorId: currentUser.id,
+      await logAudit(
+        {
+          action: 'escalation_policy.deleted',
+          entityType: 'ESCALATION_POLICY',
+          entityId: policyId,
+          actorId,
+        },
+        tx
+      );
     });
 
     revalidatePath('/policies');
@@ -368,6 +390,7 @@ export async function addPolicyStep(
   try {
     const nextStepOrder = await prisma.$transaction(async tx => {
       await lockResponderPolicy(tx, policyId);
+      await bumpResponderPolicyRevision(tx, policyId);
       const targetId = step.targetUserId ?? step.targetTeamId ?? (step.targetScheduleId as string);
       if (!(await escalationTargetExists(tx, targetType, targetId))) {
         throw new Error(`The selected ${targetType.toLowerCase()} no longer exists.`);
@@ -457,6 +480,7 @@ export async function updatePolicyStep(
   try {
     await prisma.$transaction(async tx => {
       await lockResponderPolicy(tx, existing.policyId);
+      await bumpResponderPolicyRevision(tx, existing.policyId);
       const targetId = step.targetUserId ?? step.targetTeamId ?? (step.targetScheduleId as string);
       if (!(await escalationTargetExists(tx, step.targetType, targetId))) {
         throw new Error(`The selected ${step.targetType.toLowerCase()} no longer exists.`);
@@ -512,6 +536,8 @@ export async function deletePolicyStep(stepId: string): Promise<{ error?: string
   try {
     await prisma.$transaction(async tx => {
       await lockResponderPolicy(tx, policyId);
+      await bumpResponderPolicyRevision(tx, policyId);
+      const orderBefore = await readEscalationStepOrder(tx, policyId);
       await tx.escalationRule.delete({
         where: { id: stepId },
       });
@@ -531,6 +557,12 @@ export async function deletePolicyStep(stepId: string): Promise<{ error?: string
           });
         }
       }
+      // In-flight escalations track their next tier by index; keep each on the same tier.
+      await remapOpenIncidentEscalationCursors(tx, {
+        policyId,
+        before: orderBefore,
+        after: remainingSteps.map(remaining => remaining.id),
+      });
       await assertResponderPolicySnapshotSafe(tx, policyId);
     });
 
@@ -602,6 +634,8 @@ export async function movePolicyStep(
     // Swap step orders and positional delays via temporary negative index to satisfy @@unique([policyId, stepOrder])
     await prisma.$transaction(async tx => {
       await lockResponderPolicy(tx, policyId);
+      await bumpResponderPolicyRevision(tx, policyId);
+      const orderBefore = await readEscalationStepOrder(tx, policyId);
       await tx.escalationRule.update({
         where: { id: stepId },
         data: { stepOrder: -1 },
@@ -615,6 +649,11 @@ export async function movePolicyStep(
       await tx.escalationRule.update({
         where: { id: stepId },
         data: { stepOrder: newOrder, delayMinutes: targetDelay },
+      });
+      await remapOpenIncidentEscalationCursors(tx, {
+        policyId,
+        before: orderBefore,
+        after: await readEscalationStepOrder(tx, policyId),
       });
       await assertResponderPolicySnapshotSafe(tx, policyId);
     });
@@ -659,6 +698,7 @@ export async function reorderPolicySteps(
   try {
     await prisma.$transaction(async tx => {
       await lockResponderPolicy(tx, policyId);
+      await bumpResponderPolicyRevision(tx, policyId);
       // Verify all steps belong to the policy
       const steps = await tx.escalationRule.findMany({
         where: {
@@ -671,6 +711,7 @@ export async function reorderPolicySteps(
       if (steps.length !== orderIds.length) {
         throw new Error('Invalid step IDs provided for reordering');
       }
+      const orderBefore = await readEscalationStepOrder(tx, policyId);
 
       // Step 1: Temporarily set all steps to negative indices to prevent @@unique([policyId, stepOrder]) collisions
       for (const [i, stepId] of orderIds.entries()) {
@@ -693,6 +734,11 @@ export async function reorderPolicySteps(
           },
         });
       }
+      await remapOpenIncidentEscalationCursors(tx, {
+        policyId,
+        before: orderBefore,
+        after: await readEscalationStepOrder(tx, policyId),
+      });
       await assertResponderPolicySnapshotSafe(tx, policyId);
     });
 
@@ -707,6 +753,19 @@ export async function reorderPolicySteps(
     revalidatePath(`/policies/${policyId}`);
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Failed to reorder escalation steps' };
+  }
+}
+
+/** Open incidents mid-escalation on this policy, read before the console deletes or reorders a step. */
+export async function countPolicyIncidentsMidEscalation(
+  policyId: string
+): Promise<{ count?: number; error?: string }> {
+  try {
+    await assertAdmin();
+    const id = z.string().min(1).max(100).parse(policyId);
+    return { count: await countOpenIncidentsMidEscalation(prisma, id) };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to count open escalations' };
   }
 }
 

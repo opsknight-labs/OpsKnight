@@ -43,6 +43,7 @@ import {
 import { cn } from '@/lib/utils';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import type { SerializedSLAMetrics } from '@/lib/sla';
+import { flowLayout, sortByPosition } from '@/lib/reports/grid-layout';
 import type { DashboardTemplate } from '@/lib/reports/dashboard-templates';
 import type { WidgetDefinition } from '@/lib/reports/widget-registry';
 import WidgetLibrary from '@/components/reports/WidgetLibrary';
@@ -82,6 +83,10 @@ type DashboardViewerProps = {
   isTemplate: boolean;
   dashboardId?: string;
   layout?: { columns?: number; rowHeight?: number };
+  /** report.manage: without it the dashboard is read-only (no clone, edit, share settings or delete). */
+  canManage: boolean;
+  /** The signed-in user owns this saved dashboard; only the owner can save edits or delete it. */
+  isOwner?: boolean;
 };
 
 const TIME_WINDOWS = [
@@ -109,14 +114,21 @@ export default function DashboardViewer({
   isTemplate,
   dashboardId,
   layout,
+  canManage,
+  isOwner = false,
 }: DashboardViewerProps) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
+  // A template is edited as a local preview (no save); a saved dashboard only by its owner.
+  const canEdit = canManage && (isTemplate || isOwner);
   const [isCloning, setIsCloning] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isWidgetLibraryOpen, setIsWidgetLibraryOpen] = useState(false);
   const [dashboardTitle, setDashboardTitle] = useState(dashboardName);
   const [dashboardDesc, setDashboardDesc] = useState(dashboardDescription);
+  // What was last saved; the props only change when the server re-renders, not after a save.
+  const [savedTitle, setSavedTitle] = useState(dashboardName);
+  const [savedDesc, setSavedDesc] = useState(dashboardDescription);
   const [savedBaseline, setSavedBaseline] = useState(widgets);
   const [localWidgets, setLocalWidgets] = useState(widgets);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -155,6 +167,8 @@ export default function DashboardViewer({
       setLocalWidgets(widgets);
       setDashboardTitle(dashboardName);
       setDashboardDesc(dashboardDescription);
+      setSavedTitle(dashboardName);
+      setSavedDesc(dashboardDescription);
     }
     const vis = savedDashboards.find(d => d.id === dashboardId)?.visibility;
     if (vis === 'PRIVATE' || vis === 'TEAM' || vis === 'PUBLIC') {
@@ -334,16 +348,22 @@ export default function DashboardViewer({
   };
 
   const handleSaveWidgetConfig = (updatedWidget: ConfigurableWidget) => {
-    setLocalWidgets(prev =>
-      prev.map(w => (w.id === updatedWidget.id ? (updatedWidget as Widget) : w))
-    );
+    setLocalWidgets(prev => {
+      const next = prev.map(w => (w.id === updatedWidget.id ? (updatedWidget as Widget) : w));
+      const before = prev.find(w => w.id === updatedWidget.id)?.position;
+      const resized =
+        before !== undefined &&
+        (before.w !== updatedWidget.position.w || before.h !== updatedWidget.position.h);
+      // A wider widget at x=3 would start past the last column; re-flow the rows like a drag does.
+      return resized ? flowLayout(sortByPosition(next), layout?.columns ?? 4) : next;
+    });
     notify.success('Widget settings updated. Click "Save Changes" to persist.');
   };
 
   const isDirty =
     JSON.stringify(localWidgets) !== JSON.stringify(savedBaseline) ||
-    dashboardTitle !== dashboardName ||
-    dashboardDesc !== dashboardDescription;
+    dashboardTitle !== savedTitle ||
+    dashboardDesc !== savedDesc;
 
   useEffect(() => {
     preserveEditsRef.current = isEditing;
@@ -496,9 +516,15 @@ export default function DashboardViewer({
       }));
       setSavedBaseline(updatedWidgets);
       setLocalWidgets(updatedWidgets);
-      if (data.dashboard?.name) setDashboardTitle(data.dashboard.name);
-      if (data.dashboard?.description !== undefined)
-        setDashboardDesc(data.dashboard.description || '');
+      const nextTitle = data.dashboard?.name || dashboardTitle;
+      const nextDesc =
+        data.dashboard?.description !== undefined
+          ? data.dashboard.description || ''
+          : dashboardDesc;
+      setDashboardTitle(nextTitle);
+      setSavedTitle(nextTitle);
+      setDashboardDesc(nextDesc);
+      setSavedDesc(nextDesc);
       setIsEditing(false);
       notify.success('Dashboard saved successfully');
     } catch (error) {
@@ -776,7 +802,7 @@ export default function DashboardViewer({
         ]}
         actions={
           <>
-            {isTemplate && (
+            {isTemplate && canManage && (
               <Button
                 variant="secondary"
                 className="gap-2 font-semibold"
@@ -885,10 +911,12 @@ export default function DashboardViewer({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setIsEditing(!isEditing)}>
-                  <LayoutDashboard className="h-4 w-4 mr-2" />
-                  {isEditing ? 'Exit Edit Mode' : 'Edit Dashboard'}
-                </DropdownMenuItem>
+                {canEdit && (
+                  <DropdownMenuItem onClick={() => setIsEditing(!isEditing)}>
+                    <LayoutDashboard className="h-4 w-4 mr-2" />
+                    {isEditing ? 'Exit Edit Mode' : 'Edit Dashboard'}
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={toggleKioskMode}>
                   <Tv className="h-4 w-4 mr-2" />
                   {isKioskMode ? 'Exit Presentation Mode' : 'Presentation Mode (F)'}
@@ -902,7 +930,7 @@ export default function DashboardViewer({
                   <Share2 className="h-4 w-4 mr-2" />
                   Share Dashboard
                 </DropdownMenuItem>
-                {!isTemplate && dashboardId && (
+                {canManage && isOwner && !isTemplate && dashboardId && (
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
@@ -1085,7 +1113,7 @@ export default function DashboardViewer({
         columns={layout?.columns ?? 4}
         rowHeight={layout?.rowHeight ?? 150}
         gap={16}
-        onAddWidget={() => setIsWidgetLibraryOpen(true)}
+        onAddWidget={isEditing ? () => setIsWidgetLibraryOpen(true) : undefined}
         onUpdateLayout={newWidgets => setLocalWidgets(newWidgets)}
         onRemoveWidget={widgetId => setLocalWidgets(prev => prev.filter(w => w.id !== widgetId))}
         onConfigureWidget={widgetId => {
@@ -1139,8 +1167,8 @@ export default function DashboardViewer({
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  setDashboardTitle(dashboardName);
-                  setDashboardDesc(dashboardDescription);
+                  setDashboardTitle(savedTitle);
+                  setDashboardDesc(savedDesc);
                   setLocalWidgets(savedBaseline);
                   setIsEditing(false);
                 }}
@@ -1224,11 +1252,13 @@ export default function DashboardViewer({
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
         dashboardId={dashboardId}
+        templateId={currentTemplateId}
         dashboardName={dashboardTitle}
         isTemplate={isTemplate}
         currentVisibility={currentVisibility}
         currentFilters={currentFilters}
         onVisibilityChange={setCurrentVisibility}
+        canManage={canManage}
       />
 
       {/* Widget Configuration Modal */}

@@ -23,5 +23,12 @@ export function DashboardAnalyticsHeatmap() {
       </p>
     );
   }
-  return <IncidentHeatmapWidget data={data.heatmapData} year={new Date().getFullYear()} />;
+  if (data.heatmapAvailable === false) {
+    return (
+      <p className="p-3 text-sm text-muted-foreground" role="status">
+        Incident history is temporarily unavailable.
+      </p>
+    );
+  }
+  return <IncidentHeatmapWidget data={data.heatmapData} />;
 }

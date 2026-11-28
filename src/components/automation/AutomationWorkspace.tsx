@@ -134,6 +134,7 @@ export default function AutomationWorkspace({
   const [reviewData, setReviewData] = useState<Data | null>(null);
   const [restoreVersion, setRestoreVersion] = useState<RestorableVersion | null>(null);
   const [confirmDisable, setConfirmDisable] = useState(false);
+  const [confirmShadow, setConfirmShadow] = useState(false);
   const [confirmDiscardCandidate, setConfirmDiscardCandidate] = useState(false);
   const [deleteField, setDeleteField] = useState<Field | null>(null);
   const [ruleSearch, setRuleSearch] = useState('');
@@ -150,6 +151,7 @@ export default function AutomationWorkspace({
         review !== null ||
         restoreVersion !== null ||
         confirmDisable ||
+        confirmShadow ||
         confirmDiscardCandidate ||
         deleteField !== null
       ) {
@@ -192,7 +194,7 @@ export default function AutomationWorkspace({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [review, restoreVersion, confirmDisable, confirmDiscardCandidate, deleteField]);
+  }, [review, restoreVersion, confirmDisable, confirmShadow, confirmDiscardCandidate, deleteField]);
   // eslint-disable-next-line security/detect-object-injection -- `area` is a closed union.
   const data = areaData[area] ?? null;
   // Keeps the header populated while a newly selected section loads.
@@ -416,6 +418,7 @@ export default function AutomationWorkspace({
     (mode: string) => {
       if (mode === 'LIVE') openReview('LIVE');
       else if (mode === 'DISABLED' && status?.mode !== 'DISABLED') setConfirmDisable(true);
+      else if (mode === 'SHADOW' && status?.mode === 'LIVE') setConfirmShadow(true);
       else
         void command(
           { action: 'mode', mode },
@@ -432,6 +435,15 @@ export default function AutomationWorkspace({
       'Automation mode set to DISABLED.'
     ).then(success => {
       if (success) setConfirmDisable(false);
+    });
+  };
+  const confirmShadowMode = () => {
+    void command(
+      { action: 'mode', mode: 'SHADOW' },
+      status?.activeVersionId ?? null,
+      'Automation mode set to SHADOW.'
+    ).then(success => {
+      if (success) setConfirmShadow(false);
     });
   };
   const restore = useCallback(
@@ -651,6 +663,14 @@ export default function AutomationWorkspace({
         busy={busy}
         onCancel={() => setConfirmDisable(false)}
         onConfirm={confirmDisableMode}
+      />
+      <DisableModeDialog
+        open={confirmShadow}
+        currentMode={status?.mode ?? 'LIVE'}
+        targetMode="SHADOW"
+        busy={busy}
+        onCancel={() => setConfirmShadow(false)}
+        onConfirm={confirmShadowMode}
       />
       <AlertDialog
         open={confirmDiscardCandidate}

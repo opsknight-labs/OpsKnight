@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   executeIncidentCreation: vi.fn(),
+  executeIdempotentIncidentCreation: vi.fn(),
   assertCanCreateIncidentForService: vi.fn(),
   getCurrentUser: vi.fn(),
   revalidatePath: vi.fn(),
@@ -10,6 +11,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/prisma', () => ({ default: {} }));
 vi.mock('@/lib/incidents/creation', () => ({
   executeIncidentCreation: mocks.executeIncidentCreation,
+  recordIncidentCreationTelemetry: vi.fn(),
+}));
+vi.mock('@/lib/incidents/idempotent-commands', () => ({
+  executeIdempotentIncidentCreation: mocks.executeIdempotentIncidentCreation,
 }));
 vi.mock('@/lib/incidents/operator-lifecycle', () => ({
   updateIncidentStatus: vi.fn(),
@@ -26,7 +31,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }));
 
-import { createIncident, createMobileIncident } from './actions';
+import { createIncident, createMobileIncident, updateIncidentPriority } from './actions';
 
 describe('incident creation action adapters', () => {
   beforeEach(() => {
@@ -48,6 +53,22 @@ describe('incident creation action adapters', () => {
     form.append('customField_impact', 'customer-facing');
     return form;
   }
+
+  it('passes an explicitly empty custom field through, so its default is not re-applied', async () => {
+    const form = formData();
+    form.append('customField_tier', '   ');
+
+    await createIncident(form);
+
+    expect(mocks.executeIncidentCreation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customFields: [
+          { fieldId: 'impact', value: 'customer-facing' },
+          { fieldId: 'tier', value: '' },
+        ],
+      })
+    );
+  });
 
   it('authorizes the service and delegates WEB creation to the domain engine', async () => {
     const result = await createIncident(formData());
@@ -94,6 +115,24 @@ describe('incident creation action adapters', () => {
     expect(result).toEqual({ id: 'inc-existing', outcome: 'MERGED' });
   });
 
+  it('replays a double submit through the idempotent engine when the form carries a key', async () => {
+    mocks.executeIdempotentIncidentCreation.mockResolvedValue({
+      value: { id: 'inc-1', outcome: 'CREATED', telemetry: { urgency: 'HIGH' } },
+      replayed: false,
+    });
+    const form = formData();
+    form.append('idempotencyKey', 'attempt-1');
+
+    const result = await createIncident(form);
+
+    expect(mocks.executeIdempotentIncidentCreation).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Database latency', source: 'WEB' }),
+      { key: 'WEB:attempt-1', principalId: 'user-1' }
+    );
+    expect(mocks.executeIncidentCreation).not.toHaveBeenCalled();
+    expect(result).toEqual({ id: 'inc-1', outcome: 'CREATED' });
+  });
+
   it('rejects an invalid urgency before invoking the domain engine', async () => {
     const form = formData();
     form.set('urgency', 'CRITICAL');
@@ -102,5 +141,13 @@ describe('incident creation action adapters', () => {
       code: 'INCIDENT_INVALID_ARGUMENT',
     });
     expect(mocks.executeIncidentCreation).not.toHaveBeenCalled();
+  });
+
+  it('rejects a priority outside P1-P5 before touching the database', async () => {
+    for (const bad of ['p1', 'P0', 'x'.repeat(5000)]) {
+      await expect(updateIncidentPriority('inc-1', bad)).rejects.toMatchObject({
+        code: 'INCIDENT_INVALID_ARGUMENT',
+      });
+    }
   });
 });

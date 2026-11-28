@@ -70,6 +70,12 @@ import { Textarea } from '@/components/ui/shadcn/textarea';
 import { useCreateIncidentModal } from '@/contexts/IncidentCreationModalContext';
 import { cn } from '@/lib/utils';
 
+// crypto.randomUUID is undefined on plain-http self-hosted installs.
+const newSubmitKey = () =>
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
 type EscalationStep = {
   id: string;
   stepOrder: number;
@@ -515,11 +521,16 @@ function CreateIncidentModalContent({
   const templates = useMemo(() => contextData?.templates || [], [contextData?.templates]);
   const customFields = useMemo(() => contextData?.customFields || [], [contextData?.customFields]);
 
+  // A repeated Cmd/Ctrl+Enter must not queue a second create: ignore submits while one is in
+  // flight, and send a per-attempt key so the server replays the first result if one slips through.
+  const submitInFlightRef = useRef(false);
+  const submitKeyRef = useRef(newSubmitKey());
   const [state, formAction, isPending] = useActionState(
     async (_prevState: { id: string } | null, formData: FormData) => {
       try {
         return await createIncident(formData);
       } catch (err) {
+        submitInFlightRef.current = false;
         toast.error(err, {
           description: 'Failed to create incident. Please check the fields and try again.',
         });
@@ -531,6 +542,8 @@ function CreateIncidentModalContent({
 
   useEffect(() => {
     if (state?.id) {
+      submitInFlightRef.current = false;
+      submitKeyRef.current = newSubmitKey();
       onClose();
       router.push(`/incidents/${state.id}`);
     }
@@ -574,6 +587,7 @@ function CreateIncidentModalContent({
 
   const onSubmit = useCallback(
     (data: FormValues) => {
+      if (submitInFlightRef.current) return;
       const missingCustomFields = customFields.filter(field => {
         if (!field.required) return false;
         const effectiveValue = (customFieldValues[field.id] ?? field.defaultValue ?? '').trim();
@@ -609,12 +623,16 @@ function CreateIncidentModalContent({
       if (selectedTemplateId) formData.append('templateId', selectedTemplateId);
 
       customFields.forEach(field => {
-        const effectiveValue = (customFieldValues[field.id] ?? field.defaultValue ?? '').trim();
-        if (effectiveValue) {
+        const entered = customFieldValues[field.id];
+        const effectiveValue = (entered ?? field.defaultValue ?? '').trim();
+        // A cleared field is sent empty on purpose; leaving it out would apply its default.
+        if (effectiveValue || entered !== undefined) {
           formData.append(`customField_${field.id}`, effectiveValue);
         }
       });
 
+      formData.append('idempotencyKey', submitKeyRef.current);
+      submitInFlightRef.current = true;
       React.startTransition(() => {
         formAction(formData);
       });
@@ -1830,7 +1848,7 @@ function CreateIncidentModalContent({
                           <CustomFieldInput
                             key={field.id}
                             field={field}
-                            value={customFieldValues[field.id] || ''}
+                            value={customFieldValues[field.id]}
                             onChange={value =>
                               setCustomFieldValues(previous => ({
                                 ...previous,

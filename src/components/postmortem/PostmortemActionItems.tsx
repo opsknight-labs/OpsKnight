@@ -14,7 +14,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/shadcn/select';
-import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 import UserAvatar from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
@@ -25,6 +24,7 @@ import type { JiraIssueReference } from '@/lib/jira-references';
 import ActionItemJiraContext from '@/components/action-items/ActionItemJiraContext';
 import IncidentJiraContext from '@/components/jira/IncidentJiraContext';
 import ActionItemSuggestions from './ActionItemSuggestions';
+import { actionItemOverdueBefore } from '@/lib/action-item-due-dates';
 import { ACTION_ITEM_STATUS_CONFIG, ACTION_ITEM_PRIORITY_CONFIG } from './shared';
 
 interface PostmortemActionItemsProps {
@@ -54,7 +54,6 @@ export default function PostmortemActionItems({
   incidentJiraIssues = [],
   incidentId,
 }: PostmortemActionItemsProps) {
-  const { userTimeZone } = useTimezone();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftItemIds, setDraftItemIds] = useState<Set<string>>(() => new Set());
   const [newItem, setNewItem] = useState<Partial<ActionItem>>({
@@ -247,7 +246,9 @@ export default function PostmortemActionItems({
         <div className="flex flex-col gap-2">
           {actionItems.map(item => {
             const isOverdue =
-              item.dueDate && new Date(item.dueDate) < new Date() && item.status !== 'COMPLETED';
+              item.dueDate &&
+              new Date(item.dueDate) < actionItemOverdueBefore(new Date()) &&
+              item.status !== 'COMPLETED';
             const isPersisted = !draftItemIds.has(item.id);
             const owner = users.find(u => u.id === item.owner);
             const statusConfig =
@@ -323,7 +324,7 @@ export default function PostmortemActionItems({
                         {item.dueDate && (
                           <span className="flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
-                            Due: {formatDateTime(item.dueDate, userTimeZone, { format: 'date' })}
+                            Due: {formatDateTime(item.dueDate, 'UTC', { format: 'date' })}
                           </span>
                         )}
                       </div>

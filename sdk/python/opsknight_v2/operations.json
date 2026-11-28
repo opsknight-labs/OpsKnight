@@ -3031,6 +3031,14 @@
     "requiredHeaders": [],
     "bodyRequired": true
   },
+  "endStatusPageAnnouncement": {
+    "method": "POST",
+    "path": "/status-pages/{id}/announcements/{announcementId}/end",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "getStatusPage": {
     "method": "GET",
     "path": "/status-pages/{id}",

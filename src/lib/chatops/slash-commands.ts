@@ -870,7 +870,7 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
         rethrowIfTransient(pmErr, payload);
         return {
           response_type: 'ephemeral',
-          text: '⚠️ Failed to generate postmortem draft.',
+          text: `⚠️ ${chatOpsLifecycleErrorMessage(pmErr)}`,
         };
       }
     }

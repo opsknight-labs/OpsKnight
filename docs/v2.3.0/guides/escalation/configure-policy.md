@@ -59,7 +59,9 @@ Under **Steps**, choose **Add Escalation Step** and set:
 6. For a Team, enable **Notify only team lead** only when the lead should replace normal member fan-out.
 7. Choose **Add Step**.
 
-Selected channels are an allow-list. Delivery also respects recipient preferences and requires a configured endpoint.
+Selected channels narrow which of a responder's own enabled channels the step uses. If none of the selected channels is enabled for a responder, OpsKnight pages that responder on the channels they do have enabled instead of leaving them with only the in-app record, the same as a direct notification. Delivery also respects recipient preferences and quiet hours, and requires a configured endpoint.
+
+A policy holds at most 50 steps, and its responder snapshot must stay under 65,536 bytes. The console and API v2 enforce the same limits and the same delay range, so a policy built in the console can be read and written back through `GET` and `PATCH /api/v2/escalation-policies/{id}`. API v2 rejects a `steps` list that is empty or has more than 50 steps with a validation error (`At least one escalation step is required`, `A policy can have at most 50 steps`), and answers `422 INVALID_ESCALATION_STEP` when a write would push the snapshot over its size limit. A `PATCH` that rewrites steps locks the policy while it runs, so two concurrent edits cannot both pass the size check.
 
 ## 3. Add fallbacks and verify timing
 
@@ -96,4 +98,8 @@ Targets resolve at execution time. Matching steps run in displayed order, and pa
 
 **Conditional step is skipped:** compare the incident's actual priority, urgency, and support-hours state with every condition.
 
-**Policy cannot be deleted:** reassign or remove it from every linked service first; OpsKnight identifies the blocking services.
+An incident with no priority is not in any listed set, so a Priority condition with a negative operator (`NOT_IN` or `NOT_EQUALS`) matches it, and `IN` or `EQUALS` do not.
+
+**Escalation ended as failed or completed:** if the last step is skipped because its conditions do not match, the escalation ends as completed ("Escalation completed: no conditional steps remain.") when an earlier step already paged someone. If no step ever reached a responder, it ends as failed ("Escalation failed: no step reached a responder.").
+
+**Policy cannot be deleted:** reassign or remove it from every linked service first; OpsKnight identifies the blocking services. Automation versions and incidents pinned to the policy also block the delete. The console locks the policy and checks again inside the delete, so if a service or automation starts using it at that moment the delete answers "Cannot delete policy: a service or automation started using it. Nothing was deleted; reassign them first." and the policy stays.

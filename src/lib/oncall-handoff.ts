@@ -23,6 +23,8 @@ function shiftsBySchedule(shifts: Awaited<ReturnType<typeof getActiveOnCallShift
   return grouped;
 }
 
+const SHIFT_REMINDER_TITLE = 'Upcoming On-Call Shift';
+
 /**
  * Dispatches advance reminders to incoming responders (e.g. 60m and 15m prior to shift start)
  */
@@ -56,6 +58,9 @@ export async function processUpcomingShiftReminders(
                 where: {
                   userId: shift.userId,
                   type: 'SCHEDULE',
+                  // Only an earlier reminder suppresses this one, not any other schedule notice
+                  // (an override set or a member added) the user received for the same schedule.
+                  title: SHIFT_REMINDER_TITLE,
                   entityId: shift.scheduleId,
                   createdAt: { gte: new Date(now.getTime() - 45 * 60 * 1000) },
                 },
@@ -116,7 +121,7 @@ export async function processUpcomingShiftReminders(
           await createInAppNotifications({
             userIds: [shift.userId],
             type: 'SCHEDULE',
-            title: 'Upcoming On-Call Shift',
+            title: SHIFT_REMINDER_TITLE,
             message: `You are scheduled to go on-call for "${shift.schedule.name}" in approximately ${minutesUntilStart} minute(s).`,
             entityType: 'SCHEDULE',
             entityId: shift.scheduleId,

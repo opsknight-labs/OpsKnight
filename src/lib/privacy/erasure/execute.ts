@@ -12,6 +12,14 @@ import { buildSubjectErasurePlan } from './plan';
 import { verifySubjectErasure } from './verify';
 import { discoverErasureBlockersTx, type ErasureDomainCounts } from './discover';
 import { acquireRetentionResourceLock } from '@/lib/retention/resource-lock';
+import { auditRowsOutsideHeldUsers, getHeldUserIds } from '@/lib/retention/lifecycle';
+import { resolveUserActor } from '@/lib/authorization-actors';
+import { actorHasCapability } from '@/lib/authorization-policy';
+import { CAPABILITIES } from '@/lib/authorization';
+import {
+  pseudonymiseSubjectAuditRows,
+  pseudonymiseSubjectIncidentText,
+} from './audit-pseudonymise';
 
 export interface ErasureActor {
   id: string;
@@ -209,11 +217,13 @@ export async function executeErasure(
   try {
     const subjectRow = await prisma.user.findUnique({
       where: { id: subjectId },
-      select: { email: true },
+      select: { email: true, name: true, phoneNumber: true },
     });
 
     let domainCounts: ErasureDomainCounts;
     let manualReviewRequired: boolean;
+    // True when the incident text scrub hit its row bounds (see MAX_ERASURE_TEXT_ROWS).
+    let incidentTextTruncated = false;
 
     if (subjectRow) {
       const plan = await buildSubjectErasurePlan(subjectId);
@@ -227,6 +237,12 @@ export async function executeErasure(
       }
 
       const subjectEmail = subjectRow.email?.toLowerCase() ?? null;
+      const subjectIdentity = {
+        id: subjectId,
+        email: subjectEmail,
+        name: subjectRow.name,
+        phoneNumber: subjectRow.phoneNumber,
+      };
       domainCounts = plan.domains.reduce<ErasureDomainCounts>((acc, domain) => {
         acc[domain.id] = domain.count;
         return acc;
@@ -246,6 +262,11 @@ export async function executeErasure(
         where: { id: executionId },
         data: { resultSummary: domainCounts, manualReviewRequired },
       });
+
+      const actorIdentity = await resolveUserActor(actor.id);
+      const actorIsAdmin = Boolean(
+        actorIdentity && actorHasCapability(actorIdentity, CAPABILITIES.ADMIN_MANAGE)
+      );
 
       await runSerializableTransaction(async tx => {
         // Must hold USER_ADMIN_INVARIANT *before* PRIVACY_ERASURE so the
@@ -288,21 +309,48 @@ export async function executeErasure(
           });
         }
 
+        // --- ANONYMIZE: pseudonymise the subject's own audit rows (IP cleared, their identifiers
+        // replaced inside `details`) while the identifier columns below still find them. Rows a
+        // legal hold on another user protects are left as they are.
+        await pseudonymiseSubjectAuditRows(tx, subjectIdentity);
+        // The subject's own notes and the timeline lines naming them, before the notes are detached.
+        incidentTextTruncated = (await pseudonymiseSubjectIncidentText(tx, subjectIdentity))
+          .truncated;
+
         // --- ANONYMIZE: scrub the immutable audit-log PII snapshot in place.
         // actorId itself is left alone here; it is SetNull automatically when
         // the User row is deleted below. We match by both actorId and actorEmail
         // because auth and session events (LOGIN_SUCCESS, SESSION_HEARTBEAT, etc.)
         // record actorEmail while actorId is null.
+        // The same legal-hold protection as the pseudonymisation above: rows a held user performed
+        // or that are about a held user's account keep their identifiers.
+        const unprotected = auditRowsOutsideHeldUsers(await getHeldUserIds(tx));
         await tx.auditLog.updateMany({
           where: {
-            OR: [{ actorId: subjectId }, ...(subjectEmail ? [{ actorEmail: subjectEmail }] : [])],
+            AND: [
+              {
+                OR: [
+                  { actorId: subjectId },
+                  ...(subjectEmail ? [{ actorEmail: subjectEmail }] : []),
+                ],
+              },
+              unprotected,
+            ],
           },
           data: { actorEmail: null, actorName: null },
         });
         if (subjectEmail) {
           await tx.auditLog.updateMany({
-            where: { targetEmail: subjectEmail },
+            where: { AND: [{ targetEmail: subjectEmail }, unprotected] },
             data: { targetEmail: null },
+          });
+          // Failed sign-ins for an unrecognised account are keyed by the typed email, so the
+          // address survives in entityId (and audit search) after the columns above are scrubbed.
+          await tx.auditLog.updateMany({
+            where: {
+              AND: [{ entityId: { equals: subjectEmail, mode: 'insensitive' } }, unprotected],
+            },
+            data: { entityId: null },
           });
         }
 
@@ -364,9 +412,23 @@ export async function executeErasure(
           where: { createdById: subjectId },
           data: { createdById: null },
         });
+        // Hand templates to an administrator: a private template with no owner would be invisible
+        // in the UI while its globally unique name stays reserved. A privacy operator without
+        // ADMIN_MANAGE must not end up able to read the subject's private templates, so they go to
+        // the first active administrator instead.
+        const templateOwnerId =
+          actorIsAdmin && actor.id !== subjectId
+            ? actor.id
+            : ((
+                await tx.user.findFirst({
+                  where: { role: 'ADMIN', status: 'ACTIVE', id: { not: subjectId } },
+                  orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+                  select: { id: true },
+                })
+              )?.id ?? null);
         await tx.incidentTemplate.updateMany({
           where: { createdById: subjectId },
-          data: { createdById: null },
+          data: { createdById: templateOwnerId },
         });
         await tx.actionItem.updateMany({ where: { ownerId: subjectId }, data: { ownerId: null } });
         // Structured recipient fields, not just the userId reference — the
@@ -478,7 +540,7 @@ export async function executeErasure(
       source: 'UI',
       target: { type: 'PRIVACY_ERASURE_EXECUTION', id: completed.id },
       actor: { type: 'USER', id: actor.id },
-      metadata: { requestId, domainCounts, manualReviewRequired },
+      metadata: { requestId, domainCounts, manualReviewRequired, incidentTextTruncated },
     });
 
     if (manualReviewRequired) {

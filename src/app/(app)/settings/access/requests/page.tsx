@@ -4,13 +4,14 @@ import { CheckCircle2, History, Inbox, Lock, Route, Users } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { requirePageAccessSnapshot } from '@/lib/access/server';
 import {
+  closedByApprover,
   describeAccessRequest,
   effectiveAccessRequestStatus,
   getReviewableAccessRequest,
   listDecidableAccessRequests,
   listRecentAccessRequestHistory,
 } from '@/lib/access/requests';
-import { roleLabel, type AppRole } from '@/lib/authorization';
+import { permanentRoleKeepsAccess, roleLabel, type AppRole } from '@/lib/authorization';
 import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
 import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
@@ -87,7 +88,9 @@ function decisionText(request: ReviewRequest, status: string, timeZone: string) 
   const by = request.decidedByName ? ` by ${request.decidedByName}` : '';
   if (status === 'APPROVED') return `Approved${by}${when}`;
   if (status === 'DENIED') return `Declined${by}${when}`;
-  if (status === 'CANCELLED') return 'Cancelled by the requester';
+  if (status === 'CANCELLED') {
+    return closedByApprover(request) ? `Closed${by}${when}` : 'Cancelled by the requester';
+  }
   if (status === 'EXPIRED') return 'Expired before anyone decided it';
   return '';
 }
@@ -259,6 +262,10 @@ export default async function AccessRequestsPage({
                       }
                       requestKind={request.kind}
                       roleManagedExternally={request.requester.roleSource !== 'MANUAL'}
+                      permanentWouldDemote={
+                        request.kind === 'ORG_ROLE' &&
+                        !permanentRoleKeepsAccess(request.requester.role, request.requestedRole)
+                      }
                     />
                   </div>
                 </li>

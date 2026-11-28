@@ -674,6 +674,12 @@ export const MCP_APPROVAL_HANDLERS = new Map<string, () => Promise<Handler>>([
     async () => (await import('@/app/api/v2/status-pages/[id]/announcements/route')).POST,
   ],
   [
+    'endStatusPageAnnouncement',
+    async () =>
+      (await import('@/app/api/v2/status-pages/[id]/announcements/[announcementId]/end/route'))
+        .POST,
+  ],
+  [
     'setTeamMember',
     async () => (await import('@/app/api/v2/teams/[id]/members/[userId]/route')).PUT,
   ],

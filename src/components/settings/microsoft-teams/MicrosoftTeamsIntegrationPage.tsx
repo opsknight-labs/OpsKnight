@@ -7,16 +7,7 @@ import DetailTabs, { DetailTabContent } from '@/components/ui/DetailTabs';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Badge } from '@/components/ui/shadcn/badge';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/shadcn/alert-dialog';
+import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 import { notify as toast } from '@/lib/toast';
 import { MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
 import MicrosoftTeamsSetupWizard from './MicrosoftTeamsSetupWizard';
@@ -123,6 +114,9 @@ export type MicrosoftTeamsIntegrationPageProps = {
   healthChecklist?: HealthChecklistData | null;
 };
 
+/** The integration name an admin types to confirm a disconnect. */
+const TEAMS_DISCONNECT_CONFIRM_NAME = 'Microsoft Teams';
+
 const READINESS_LABEL: Record<string, string> = {
   HEALTHY: 'Healthy',
   DEGRADED: 'Degraded',
@@ -221,23 +215,24 @@ export default function MicrosoftTeamsIntegrationPage({
     } else toast.error('Failed to update war room routing.');
   };
 
-  const onDisconnect = async () => {
+  const onDisconnect = async (): Promise<{ error?: string } | void> => {
     setDisconnecting(true);
     try {
       const res = await fetch('/api/settings/microsoft-teams', { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data?.error || 'Failed to disconnect Microsoft Teams');
+        return { error: data?.error || 'Failed to disconnect Microsoft Teams' };
       }
       toast.success('Microsoft Teams disconnected', {
-        description: 'Credentials and destinations have been removed.',
+        description: 'Credentials, installations, channel destinations and the card ledger were removed.',
       });
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to disconnect Microsoft Teams');
+      return {
+        error: err instanceof Error ? err.message : 'Failed to disconnect Microsoft Teams',
+      };
     } finally {
       setDisconnecting(false);
-      setConfirmDisconnect(false);
     }
   };
 
@@ -794,35 +789,42 @@ export default function MicrosoftTeamsIntegrationPage({
         </DetailTabContent>
       </DetailTabs>
 
-      {/* Disconnect Confirmation Alert Dialog */}
-      <AlertDialog open={confirmDisconnect} onOpenChange={setConfirmDisconnect}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-5 w-5 shrink-0" />
-              Disconnect Microsoft Teams?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs leading-relaxed">
-              This will remove all Azure AD App credentials, delete installations, and wipe channel
-              destinations across all services. In-flight war rooms will be safely settled. You can
-              reconnect with fresh credentials at any time.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={disconnecting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={e => {
-                e.preventDefault();
-                void onDisconnect();
-              }}
-              disabled={disconnecting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs"
-            >
-              {disconnecting ? 'Disconnecting…' : 'Yes, Disconnect Integration'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Disconnect confirmation: lists exactly what is deleted and needs the name typed. */}
+      <DeleteConfirmDialog
+        open={confirmDisconnect}
+        onOpenChange={setConfirmDisconnect}
+        title="Disconnect Microsoft Teams?"
+        confirmText="Disconnect and delete"
+        requireMatchText={TEAMS_DISCONNECT_CONFIRM_NAME}
+        matchPrompt={`Type ${TEAMS_DISCONNECT_CONFIRM_NAME} to confirm`}
+        disabled={disconnecting}
+        onConfirm={onDisconnect}
+        description={
+          // The dialog description renders a paragraph, so the list is made of block spans.
+          <span className="block space-y-2">
+            <span className="block">This permanently deletes, and it cannot be undone:</span>
+            <span className="block pl-3">
+              • the Azure AD app credentials and Microsoft Teams settings
+            </span>
+            <span className="block pl-3">
+              • {installationCount} bot installation{installationCount === 1 ? '' : 's'}: every team
+              must install the bot again
+            </span>
+            <span className="block pl-3">
+              • {destinations.length} channel mapping{destinations.length === 1 ? '' : 's'}: every
+              service must be linked to its channel again
+            </span>
+            <span className="block pl-3">
+              • the card ledger: OpsKnight can no longer update or reply to cards it already posted
+              in Teams
+            </span>
+            <span className="block">
+              Services stop routing to Teams and in-flight war rooms are settled. You can connect
+              again with fresh credentials, but none of the above comes back.
+            </span>
+          </span>
+        }
+      />
     </div>
   );
 }

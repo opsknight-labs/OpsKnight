@@ -21,7 +21,10 @@ beforeEach(async () => {
 async function postmortem(title: string, teamId: string) {
   const service = await createTestService(title, teamId);
   const incident = await createTestIncident(title, service.id, { status: 'RESOLVED' });
-  return db.postmortem.create({ data: { incidentId: incident.id, title, summary: title } });
+  // Published, because callers without postmortem.draft.read only see published postmortems.
+  return db.postmortem.create({
+    data: { incidentId: incident.id, title, summary: title, status: 'PUBLISHED' },
+  });
 }
 
 let sequence = 0;
@@ -84,6 +87,14 @@ async function fixture() {
 }
 
 describe('listActionItems', () => {
+  it('hides items of draft postmortems from callers who cannot read drafts', async () => {
+    const { member, admin, first } = await fixture();
+    await db.postmortem.update({ where: { id: first.id }, data: { status: 'DRAFT' } });
+    const visible = await list(member.token);
+    expect(visible.titles).toEqual(['undated', 'future blocked']);
+    expect((await list(admin.token)).titles).toHaveLength(5);
+  });
+
   it('lists only items of postmortems the caller may read, newest first', async () => {
     const { member, admin, first, restricted } = await fixture();
     const visible = await list(member.token);

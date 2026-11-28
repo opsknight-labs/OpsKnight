@@ -16,6 +16,9 @@ export type NotificationProviderKey = z.infer<typeof notificationProviderKeySche
 const secret = z.string().max(2048);
 const label = z.string().trim().max(256);
 const email = z.string().trim().email().max(320);
+/** Retired VAPID keys kept so devices still on an older key keep receiving pushes. */
+export const VAPID_KEY_HISTORY_LIMIT = 10;
+
 const configSchemas = {
   twilio: z
     .object({
@@ -79,7 +82,7 @@ const configSchemas = {
       vapidSubject: z.string().trim().max(320).optional(),
       vapidKeyHistory: z
         .array(z.object({ publicKey: secret, privateKey: secret }).strict())
-        .max(3)
+        .max(VAPID_KEY_HISTORY_LIMIT)
         .optional(),
     })
     .strict(),

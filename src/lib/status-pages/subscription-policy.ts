@@ -30,6 +30,20 @@ export function subscriptionRequestAction(
   }
 }
 
+/** The service and business-service picks in a preferences value, order-insensitive; none means all. */
+function pickedServices(value: unknown) {
+  const { selectedServiceIds, selectedBusinessServiceIds } =
+    value && typeof value === 'object'
+      ? (value as { selectedServiceIds?: unknown; selectedBusinessServiceIds?: unknown })
+      : {};
+  const ids = (list: unknown) => (Array.isArray(list) ? list.map(String).sort() : []);
+  return JSON.stringify([ids(selectedServiceIds), ids(selectedBusinessServiceIds)]);
+}
+
+export function sameSubscriptionPicks(a: unknown, b: unknown) {
+  return pickedServices(a) === pickedServices(b);
+}
+
 /**
  * Subscribers who should hear about an update touching `serviceIds`: everyone who follows the
  * whole page (no service or business-service picks), anyone who picked one of the services, and

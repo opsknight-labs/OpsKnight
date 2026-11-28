@@ -2663,6 +2663,14 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'item',
     'StatusPageAnnouncement'
   ),
+  op(
+    'post',
+    '/status-pages/{id}/announcements/{announcementId}/end',
+    'endStatusPageAnnouncement',
+    'status-pages:write',
+    'item',
+    'StatusPageAnnouncement'
+  ),
   op('get', '/status-pages/{id}', 'getStatusPage', 'status-pages:read', 'item', 'StatusPage'),
   op('patch', '/status-pages/{id}', 'updateStatusPage', 'status-pages:write', 'item', 'StatusPage'),
   op('get', '/status-pages', 'listStatusPages', 'status-pages:read', 'list', 'StatusPage'),

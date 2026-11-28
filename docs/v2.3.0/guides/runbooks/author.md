@@ -32,7 +32,10 @@ policy before deployment.
 ## Create a draft
 
 1. Open **Runbooks → Library → New Runbook**.
-2. Enter a name, unique slug, and optional description.
+2. Enter a name, unique slug, and optional description. If the slug is already
+   in use, the dialog stays open with what you typed and shows "A runbook with
+   this slug already exists. Choose a different slug." inline and as a message;
+   other validation errors appear the same way.
 3. Select a template:
    - **Empty** — blank workflow.
    - **Diagnostics** — read-only system inspection.
@@ -218,6 +221,9 @@ Reference inputs in step configuration using the `${{ inputs.key }}` syntax:
 - Keys must be lowercase.
 
 `SECRET_REF` inputs use the `secret://` protocol: `secret://payments-api-token`.
+Only `SECRET_REF` inputs may hold a `secret://` value. A `STRING` or `SELECT`
+input, including a value mapped from incident context, rejects one, so a plain
+text input can never be used to make an Agent decrypt a secret.
 Never paste plaintext credentials into definitions or binding values. Secrets
 require HTTPS transport and a scoped grant on the target Agent or pool.
 
@@ -341,7 +347,9 @@ failure but not after UNKNOWN, non-idempotent steps never auto-retry.
    3600 seconds. Agent claims use a renewable 300-second lease.
 3. Select **Publish draft**, review the confirmation, and confirm.
 4. Only the **saved** draft is published — unsaved editor contents are not
-   included.
+   included. While the builder shows **Unsaved changes** or **Unapplied JSON**,
+   the **Publish draft** confirmation says so and its button stays disabled, so
+   publishing cannot discard your edits. Save (or discard) them first.
 5. Verify the published version in **Versions** before attaching it to a
    service.
 
@@ -359,19 +367,42 @@ safely rejected.
 
 ### Version management operations
 
+**Unpublish** (on the live version in the version history, with a confirmation)
+retires that version so the runbook has no published version until you publish
+again. Service rules that follow the latest version stop starting runs and show
+that no version is available. A rule pinned to the retired version keeps running
+that exact version until you detach or re-pin it. Nothing is detached or
+deleted, and the action is written to the audit log as `runbook.unpublished`.
+
 | Operation              | Required permission | Notes                                         |
 | ---------------------- | ------------------- | --------------------------------------------- |
 | Create Runbook         | `runbook.manage`    | Supports templates and JSON import            |
 | Save draft             | `runbook.manage`    | Optimistic locking via `draftRevision`        |
 | Publish draft          | `runbook.publish`   | Draft → PUBLISHED; immutable after            |
-| Clone version to draft | `runbook.manage`    | Creates new draft from any version            |
+| Clone version to draft | `runbook.manage`    | Creates new draft from any version; see below |
 | Retire version         | `runbook.publish`   | Only non-current published versions           |
+| Unpublish Runbook      | `runbook.publish`   | Retires the live version; none stays published |
 | Archive Runbook        | `runbook.manage`    | Soft-delete; preserves history                |
 | Restore Runbook        | `runbook.manage`    | Un-archives; bindings remain disabled         |
 | Delete Runbook         | `runbook.manage`    | Only if no executions or published versions   |
 | Duplicate Runbook      | `runbook.manage`    | Creates a new draft copy                      |
 | Export                 | `runbook.read.all`  | JSON portable format, max 512 KiB             |
 | Import                 | `runbook.manage`    | Parse + slug deduplication (up to 5 attempts) |
+
+A Runbook holds one draft. Cloning a version while a draft exists returns that
+draft only when it was created from the same version (a repeated request is
+safe). Cloning a different version is refused with `409 RESOURCE_CONFLICT`, and
+the message names the existing draft (its version and id), so an API or MCP
+client never edits or publishes a draft built from the wrong base. Edit or
+publish the existing draft first, then clone again.
+
+## Run statistics on the runbook page
+
+**Total Runs** counts every recorded run. **Succeeded**, **Failed / Timeout**
+and **Success Rate** count only the newest 30 runs, and the tile says so (for
+example "Last 30 of 350 runs"). The rate is succeeded over finished runs; a
+runbook with no runs shows **No runs**, and one whose sampled runs are all still
+in flight shows **No finished runs**, never 100%.
 
 ## Compare publication impact
 
@@ -380,8 +411,22 @@ rule's pin:
 
 - Review added/removed/changed actions, derived risk, masked configuration,
   prechecks, verification, and input changes side by side.
-- Rules using latest publication track future publications; pinned rules and
-  existing executions retain their frozen versions.
+- A step that only moved to a different position shows as **Changed** with a
+  note that its order changed, and a changed default timeout or retry count
+  for the whole runbook is called out above the steps. The API diff returns the
+  run defaults as `defaults`.
+- **Changed Inputs** lists an input that kept its key but changed its type,
+  became required (or stopped being required), or changed its default value or
+  options. A newly required input breaks rules that do not pass it, so check
+  those rules before publishing. The API diff returns the same list as
+  `inputChanges`, naming a changed default without returning its value.
+- Rules using latest publication track future publications; existing executions
+  retain their frozen versions. A pinned rule keeps running exactly its pinned
+  version even after a newer publication or an unpublish retires it. The rule list is labelled
+  for the versions you compare: **tracks new publication** only when the
+  version you compare to is the draft or the live version, otherwise
+  **tracks live version**. Detached rules never run and are not listed, and a
+  list longer than 500 rules shows the latest-publication rules first.
 - Comparison performs no action and cannot establish platform permission.
 
 ## Diagnostics and smart targets

@@ -75,7 +75,7 @@ export async function createTemplateAction(_prevState: null, formData: FormData)
   return null; // Won't be reached due to redirect
 }
 
-export async function getAllTemplates(userId?: string) {
+export async function getAllTemplates(userId?: string, admin = false) {
   let effectiveUserId = userId;
   if (!effectiveUserId) {
     const user = await getCurrentUser();
@@ -83,7 +83,7 @@ export async function getAllTemplates(userId?: string) {
   }
 
   const where = effectiveUserId
-    ? incidentTemplateReadWhere(effectiveUserId, false)
+    ? incidentTemplateReadWhere(effectiveUserId, admin)
     : { isPublic: true };
 
   const templates = await prisma.incidentTemplate.findMany({

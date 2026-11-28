@@ -95,6 +95,8 @@ Open **SLA Objectives (P1–P5)**:
 5. Review the effective-target summary, then select **Save SLA policy**.
 6. Confirm the success message and new policy version.
 
+Saving a service-specific SLA policy needs an administrator, the same as the workspace policy and the REST endpoints: a responder on the owning team cannot change a service's SLA targets. For everyone else the **Incident SLA** tab on the service page is read-only. The **Alert Classification** and **Support Hours & Coverage** tabs still follow team permission.
+
 For a service-specific policy:
 
 1. Open the service's **Response Policy → Incident SLA**.
@@ -142,6 +144,10 @@ explicit priority:
 
 An individual row set to **No automatic priority** overrides an enabled general
 fallback. Select **Use urgency fallback** on that row when you want derivation.
+
+On a service or integration with no policy yet, every row starts on
+**Inherit workspace**, so saving one edited row leaves the other severities
+following the workspace policy.
 
 Configure all four severity rows, review the fallback selection, and select
 **Save classification policy**. Rules apply when future alert signals are
@@ -226,6 +232,17 @@ breach only when elapsed SLA time is strictly greater than the target.
 Unacknowledging or reopening does not erase first-ACK historical truth. Do not
 recompute old compliance from the current policy.
 
+## Turn on SLA warnings for a service
+
+Every incident carries its SLA countdown, but warnings and breach alerts are opt-in
+per service and **off by default** for every new service. Until a service has **SLA
+Breach Warning** enabled, its incidents get no `SLA_WARNING` or `SLA_BREACHED`
+timeline entry, no breach notification and no scheduler wake-up for the deadline.
+To enable it, open the service's **Notification settings**, tick **SLA Breach Warning**
+and choose where the alert goes (or set `serviceNotifyOnSlaBreach` to `true` with
+`PATCH /api/v2/services/{id}/notification-settings`). It applies to the
+service's active incidents from the next scheduler tick.
+
 ## Verify the policy end to end
 
 Use a controlled non-production service or approved test window:
@@ -284,6 +301,11 @@ change.
   selected rule (`P1`–`P5` or `BASE`), policy source, and version.
 - **A changed target did not update an incident:** expected; the incident contract
   is immutable. Create a controlled new incident to verify the new version.
+- **SLA breach warnings are missing for a tick:** the breach check runs on every scheduler
+  tick. If it throws (for example on a database error while queueing a Slack alert), the
+  scheduler logs `[Cron] SLA breach check failed; continuing the tick` and still runs
+  maintenance windows, daily rollups, drift detection and cleanup; the check runs again on
+  the next tick.
 - **LOW notification arrived later but SLA breached:** support hours can defer
   engagement and do not pause the clock.
 - **Deadline moved:** inspect snooze/suppression pause history and accumulated

@@ -39,8 +39,18 @@ describe('approval review summary', () => {
             .query?.properties ?? {}) as object
         ).length > 0
     );
-    // Today none do. If one is added, the summary above already displays its query inputs.
-    expect(withQuery.map(operation => operation.operationId)).toEqual([]);
+    // deleteCustomFieldDefinition takes the opt-in cascade flag; the summary displays it (below).
+    expect(withQuery.map(operation => operation.operationId)).toEqual([
+      'deleteCustomFieldDefinition',
+    ]);
+  });
+  it('shows the reviewer that a custom-field delete also removes its stored values', () => {
+    const summary = reviewSummary('deleteCustomFieldDefinition', {
+      path: { id: 'cabc123456789012345678901' },
+      query: { cascade: 'true' },
+    });
+    expect(summary.query).toEqual([['cascade', 'true']]);
+    expect(reviewSummary('deleteCustomFieldDefinition', { path: { id: 'cabc123456789012345678901' } }).query).toEqual([]);
   });
 });
 

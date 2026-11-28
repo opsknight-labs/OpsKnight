@@ -26,6 +26,7 @@ import IncidentRespondersCard from '@/components/incident/detail/IncidentRespond
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import DedupRecurrenceChip from '@/components/incident/detail/DedupRecurrenceChip';
 import { CHAT_EVENT_DISPLAY_MAX, LIFECYCLE_EVENT_WHERE } from '@/lib/incidents/event-filters';
+import { keepSince, TIMELINE_PAGE, timelineCompleteSince } from '@/lib/incidents/timeline-window';
 import { Suspense } from 'react';
 import UserAvatar from '@/components/UserAvatar';
 import { incidentStatusTone } from '@/lib/design/status-palette';
@@ -185,12 +186,12 @@ export default async function IncidentDetailScreen({
       events: {
         where: LIFECYCLE_EVENT_WHERE,
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        take: 200,
+        take: TIMELINE_PAGE.events,
       },
       notes: {
         include: { user: { select: CLIENT_USER_SELECT } },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        take: 100,
+        take: TIMELINE_PAGE.notes,
       },
       notifications: {
         select: {
@@ -206,7 +207,7 @@ export default async function IncidentDetailScreen({
           user: { select: { id: true, name: true, email: true } },
         },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        take: 50,
+        take: TIMELINE_PAGE.notifications,
       },
       watchers: {
         include: { user: { select: CLIENT_USER_SELECT } },
@@ -316,12 +317,20 @@ export default async function IncidentDetailScreen({
   );
 
   const totalActivityCount = totalEventsCount + totalNotesCount + totalNotificationsCount;
+  // The timeline shows only the span every table is complete for; load-older fetches the rest.
+  const timelineSince = timelineCompleteSince([
+    { rows: storedIncident.events, take: TIMELINE_PAGE.events },
+    { rows: chatEvents, take: CHAT_EVENT_DISPLAY_MAX },
+    { rows: storedIncident.notes, take: TIMELINE_PAGE.notes },
+    { rows: storedIncident.notifications, take: TIMELINE_PAGE.notifications },
+  ]);
 
   const incidentJiraCapability = await getJiraCapabilities({
     serviceId: incident.serviceId,
     canManage: canManageIncident,
   });
-  const postmortem = incident.status === 'RESOLVED' ? await getPostmortem(id) : null;
+  // Not gated on RESOLVED: a reopened incident still has its postmortem.
+  const postmortem = await getPostmortem(id);
 
   // Rendering an incident must not perform hidden Jira or provider network I/O.
   // Persisted state is refreshed by background webhooks or explicit sync actions.
@@ -340,7 +349,12 @@ export default async function IncidentDetailScreen({
       where: { incidentId: id, provider: 'JIRA' },
       orderBy: { createdAt: 'desc' },
     }),
-    getIncidentCollaborationView({ incidentId: id, userId: user.id }),
+    // A war-room or meeting read failure must not blank the page responders need; the
+    // controls simply stay hidden.
+    getIncidentCollaborationView({ incidentId: id, userId: user.id }).catch(error => {
+      logger.warn('incident.collaboration_view.unavailable', { incidentId: id, error });
+      return undefined;
+    }),
     // A health read failure must not block the incident page.
     getEscalationExecutionHealth(id).catch(() => null),
     // "Post status update": the status-page publish permission (admin), like the announcement API.
@@ -428,20 +442,20 @@ export default async function IncidentDetailScreen({
 
   const timelineProps = {
     incidentId: id,
-    events: events.map(event => ({
+    events: keepSince(events, timelineSince).map(event => ({
       id: event.id,
       message: event.message,
       type: event.type,
       createdAt: event.createdAt,
       channel: event.channel,
     })),
-    notes: incident.notes.map(note => ({
+    notes: keepSince(incident.notes, timelineSince).map(note => ({
       id: note.id,
       content: note.content,
       user: note.user,
       createdAt: note.createdAt,
     })),
-    notifications: incident.notifications.map(notif => ({
+    notifications: keepSince(incident.notifications, timelineSince).map(notif => ({
       id: notif.id,
       channel: notif.channel,
       status: notif.status,

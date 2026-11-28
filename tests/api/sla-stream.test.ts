@@ -152,6 +152,60 @@ describe('SLA Streaming API', () => {
     );
   });
 
+  it('pages by a keyset on (createdAt, id) instead of an offset', async () => {
+    const { getServerSession } = await import('next-auth');
+    vi.mocked(getServerSession).mockResolvedValue(session);
+    const { default: prisma } = await import('@/lib/prisma');
+    vi.mocked(prisma.incident.count).mockResolvedValue(2);
+    const newer = new Date('2026-01-02T00:00:00.000Z');
+    const older = new Date('2026-01-01T00:00:00.000Z');
+    vi.mocked(prisma.incident.findMany)
+      .mockResolvedValueOnce([
+        { id: 'inc-2', title: 'b', status: 'OPEN', createdAt: newer },
+        { id: 'inc-1', title: 'a', status: 'OPEN', createdAt: older },
+      ] as unknown as Awaited<ReturnType<typeof prisma.incident.findMany>>)
+      .mockResolvedValueOnce([]);
+
+    await (await GET(new NextRequest('http://localhost:3000/api/sla/stream'))).text();
+
+    const [first, second] = vi.mocked(prisma.incident.findMany).mock.calls.map(([args]) => args);
+    expect(first?.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
+    expect(first).not.toHaveProperty('skip');
+    expect(second).not.toHaveProperty('skip');
+    expect(second?.where).toMatchObject({
+      AND: [
+        expect.anything(),
+        {
+          OR: [{ createdAt: { lt: older } }, { createdAt: older, id: { lt: 'inc-1' } }],
+        },
+      ],
+    });
+  });
+
+  it.each([
+    ['abc', 30],
+    ['0', 1],
+    ['-5', 1],
+    ['3650', 365],
+    ['14', 14],
+  ])('reads windowDays=%s as a %i day window', async (windowDays, expectedDays) => {
+    const { getServerSession } = await import('next-auth');
+    vi.mocked(getServerSession).mockResolvedValue(session);
+    const { default: prisma } = await import('@/lib/prisma');
+    vi.mocked(prisma.incident.count).mockResolvedValue(0);
+    vi.mocked(prisma.incident.findMany).mockResolvedValue([]);
+
+    await (
+      await GET(new NextRequest(`http://localhost:3000/api/sla/stream?windowDays=${windowDays}`))
+    ).text();
+
+    const { createdAt } = vi.mocked(prisma.incident.count).mock.calls[0][0]!.where as {
+      createdAt: { gte: Date; lte: Date };
+    };
+    const days = Math.round((createdAt.lte.getTime() - createdAt.gte.getTime()) / 86_400_000);
+    expect(days).toBe(expectedDays);
+  });
+
   it('returns 403 instead of streaming global data when scope authorization fails', async () => {
     const { getServerSession } = await import('next-auth');
     const { assertCanReadServiceMetrics } = await import('@/lib/rbac');

@@ -74,14 +74,31 @@ async function run(
   }
 }
 
+/** "Start now" sends a duration instead of times, so the server clock decides when it starts. */
+export type MaintenanceWindowActionInput =
+  | MaintenanceWindowCreateInput
+  | (Omit<MaintenanceWindowCreateInput, 'startsAt' | 'endsAt'> & { startNowForMinutes: number });
+
 export async function createMaintenanceWindowAction(
   pathServiceId: string,
-  input: MaintenanceWindowCreateInput
+  input: MaintenanceWindowActionInput
 ): Promise<MaintenanceActionResult> {
   return run(pathServiceId, 'create', async () => {
     const serviceIds = Array.isArray(input?.serviceIds) ? input.serviceIds : [];
     const actorId = await assertCanModifyAll(serviceIds);
-    await createMaintenanceWindow(input, { id: actorId, source: 'UI' });
+    let window: MaintenanceWindowCreateInput;
+    if ('startNowForMinutes' in input) {
+      const { startNowForMinutes, ...rest } = input;
+      const startsAt = new Date();
+      window = {
+        ...rest,
+        startsAt,
+        endsAt: new Date(startsAt.getTime() + startNowForMinutes * 60_000),
+      };
+    } else {
+      window = input;
+    }
+    await createMaintenanceWindow(window, { id: actorId, source: 'UI' });
   });
 }
 

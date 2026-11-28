@@ -189,11 +189,58 @@ describe('useEntitySearch', () => {
     expect(hook.current.results.map(r => r.id)).toEqual(['new']);
   });
 
+  it.each([
+    [429, true],
+    [503, false],
+  ])('reports a %i answer as a failure, not as an empty result', async (status, limited) => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: false, status, json: async () => ({}) }) as Response)
+    );
+    const { result: hook } = renderHook(() => useEntitySearch('database'));
+    await act(async () => {
+      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+    });
+
+    expect(hook.current.failed).toBe(true);
+    expect(hook.current.limited).toBe(limited);
+    expect(hook.current.loading).toBe(false);
+    expect(hook.current.results).toEqual([]);
+  });
+
+  it('runs the same search again on retry', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({}) })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ results: [result('service', 'api')] }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+    const { result: hook } = renderHook(() => useEntitySearch('database'));
+    await act(async () => {
+      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+    });
+    expect(hook.current.failed).toBe(true);
+
+    act(() => hook.current.retry());
+    await act(async () => {
+      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(hook.current.failed).toBe(false);
+    expect(hook.current.results.map(r => r.id)).toEqual(['api']);
+  });
+
   it('does not search below two characters', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const { result: hook } = renderHook(() => useEntitySearch(' a '));
-    expect(hook.current).toEqual({ results: [], loading: false, failed: false });
+    expect(hook.current).toMatchObject({ results: [], loading: false, failed: false });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

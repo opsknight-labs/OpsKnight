@@ -68,6 +68,44 @@ describe('OperationalStatus', () => {
     expect(screen.getByText(/H 0 · M 0 · L 0/i)).toBeInTheDocument();
   });
 
+  describe('after a server render that could not read incident counts', () => {
+    const critical = {
+      open: 3,
+      acknowledged: 0,
+      resolved24h: 0,
+      highUrgency: 2,
+      mediumUrgency: 0,
+      lowUrgency: 1,
+      active: 3,
+    };
+
+    it('switches from Metrics Unavailable to the live status', () => {
+      mockRealtimeMetrics.current = critical;
+      render(
+        <OperationalStatus
+          tone="neutral"
+          label="Metrics Unavailable"
+          detail="Operational status temporarily unavailable"
+          countsUnavailable
+        />
+      );
+      expect(screen.getByText('Critical Alert')).toBeInTheDocument();
+      expect(screen.queryByText('Metrics Unavailable')).not.toBeInTheDocument();
+    });
+
+    it('stays neutral for a user with no operational scope', () => {
+      mockRealtimeMetrics.current = critical;
+      render(
+        <OperationalStatus
+          tone="neutral"
+          label="No operational scope"
+          detail="Join a team or receive an incident assignment to see operational status"
+        />
+      );
+      expect(screen.getByText('No operational scope')).toBeInTheDocument();
+    });
+  });
+
   it('updates dynamically from RealtimeProvider metrics without HTTP polling', () => {
     mockRealtimeMetrics.current = {
       open: 5,

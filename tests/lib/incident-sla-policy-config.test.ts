@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   permissions: vi.fn(),
-  authorizeService: vi.fn(),
   transaction: vi.fn(),
   lock: vi.fn(),
   find: vi.fn(),
@@ -14,7 +13,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/prisma', () => ({ default: { $transaction: mocks.transaction } }));
 vi.mock('@/lib/rbac', () => ({
   getUserPermissions: mocks.permissions,
-  assertCanModifyService: mocks.authorizeService,
 }));
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidate }));
 import { saveIncidentSlaPolicy } from '@/lib/incident-sla/policy-config';
@@ -81,13 +79,17 @@ describe('versioned SLA configuration commands', () => {
     expect(mocks.audit).not.toHaveBeenCalled();
     expect(mocks.revalidate).not.toHaveBeenCalled();
   });
-  it('requires workspace admin and scoped service permission', async () => {
+  it('requires workspace admin for the workspace and for every service scope', async () => {
     mocks.permissions.mockResolvedValue({ id: 'reader', authenticated: true, capabilities: [] });
     await expect(saveIncidentSlaPolicy(input)).rejects.toThrow('Admin');
-    expect(mocks.transaction).not.toHaveBeenCalled();
-    mocks.authorizeService.mockRejectedValue(new Error('Unauthorized service'));
+    // A responder on the owning team (operations.manage) could otherwise loosen the service targets.
+    mocks.permissions.mockResolvedValue({
+      id: 'responder',
+      authenticated: true,
+      capabilities: ['operations.manage'],
+    });
     await expect(saveIncidentSlaPolicy({ ...input, scopeKey: 'service:s1' })).rejects.toThrow(
-      'Unauthorized service'
+      'Admin'
     );
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
@@ -108,7 +110,6 @@ describe('versioned SLA configuration commands', () => {
       baseAckTargetMs: null,
       baseResolveTargetMs: null,
     });
-    expect(mocks.authorizeService).toHaveBeenCalledWith('s1');
     expect(mocks.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
