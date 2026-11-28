@@ -7,7 +7,7 @@ type Scripted = {
   status?: number;
   /** With `toolCall`, streamed before the call (a model narrating what it is about to do). */
   content?: string;
-  toolCall?: { name: string; args: string };
+  toolCall?: { name: string; args: string; id?: string };
   usage?: [number, number];
   /** Prompt tokens reported as served from the provider's prompt cache. */
   cachedTokens?: number;
@@ -101,7 +101,7 @@ export async function startFakeModel(): Promise<FakeServer> {
             content: null,
             tool_calls: [
               {
-                id: 'call_1',
+                id: next.toolCall.id ?? 'call_1',
                 type: 'function',
                 function: { name: next.toolCall.name, arguments: next.toolCall.args },
               },
@@ -121,7 +121,7 @@ export async function startFakeModel(): Promise<FakeServer> {
               tool_calls: [
                 {
                   index: 0,
-                  id: 'call_1',
+                  id: next.toolCall.id ?? 'call_1',
                   type: 'function',
                   function: { name: next.toolCall.name, arguments: next.toolCall.args },
                 },

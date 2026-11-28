@@ -7,7 +7,11 @@ import {
   DEFAULT_POLICY_DEFINITION,
   INTELLIGENCE_SETTINGS_DEFAULTS,
 } from '@/lib/intelligence/contract';
-import { breakers, invalidateGatewayCache } from '@/lib/intelligence/ai/gateway';
+import {
+  breakers,
+  invalidateGatewayCache,
+  REASONING_ROOM_TOKENS,
+} from '@/lib/intelligence/ai/gateway';
 import { getAiSettings, saveAiProvider, updateAiSettings } from '@/lib/intelligence/ai/settings';
 import { DEFAULT_HANDLERS } from '@/lib/intelligence/jobs/runner';
 import { claimWorkItems, WORK_KINDS } from '@/lib/intelligence/jobs/work-queue';
@@ -463,8 +467,9 @@ describe('proactive Squire with a model', () => {
       'Checkout is slow for some customers; a fix is underway.'
     );
     expect(model.requests).toHaveLength(1);
-    const body = JSON.stringify(model.requests[0].body);
-    expect(body).toContain('"max_tokens":250');
+    const sent = model.requests[0].body;
+    expect(sent.max_tokens ?? sent.max_completion_tokens).toBe(250 + REASONING_ROOM_TOKENS);
+    const body = JSON.stringify(sent);
     expect(body).not.toContain('possibleCauses');
     // Its own prompt, not the incident summary's.
     expect(body).toContain('status update about one incident for stakeholders');
