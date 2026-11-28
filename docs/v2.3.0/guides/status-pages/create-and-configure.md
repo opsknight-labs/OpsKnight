@@ -1,6 +1,6 @@
 ---
 title: Create and configure the status page
-description: Configure the single supported status page, services, routing, access, and publication state.
+description: Configure up to two status pages, services, routing, access, and publication state.
 type: how-to
 product_area: status-pages
 audience: [administrator, responder]
@@ -8,12 +8,18 @@ reader: { status: READER_COMPLETE, task: Create and publish the OpsKnight status
 verification:
   level: source
   verified_at: 2026-10-01
-  evidence: ["src/app/(app)/settings/status-pages/page.tsx", "src/app/(app)/settings/status-pages/[pageId]/page.tsx", "src/components/status-page/StatusPageWorkspace.tsx", "docs/v2.3.0/assets/status-pages.png"]
+  evidence:
+    [
+      'src/app/(app)/settings/status-pages/page.tsx',
+      'src/app/(app)/settings/status-pages/[pageId]/page.tsx',
+      'src/components/status-page/StatusPageWorkspace.tsx',
+      'docs/v2.3.0/assets/status-pages.png',
+    ]
 ---
 
 # Create and configure the status page
 
-OpsKnight 2.0 supports one status page. The control center may use plural route names, but it deliberately disables additional creation after the first page exists.
+OpsKnight supports up to two status pages. One is the default and serves `/status`; the other serves `/status/{slug}`. Creation is disabled once both exist. Deleting the default page promotes the remaining one.
 
 ## Before you begin
 
@@ -23,7 +29,7 @@ List customer-facing services, choose a stable slug/domain, decide public versus
 
 Open **Settings → Status Pages**. If no page exists, select **Create Status Page**; otherwise open the existing page workspace.
 
-![Status-page administration for the single supported page, mapped services, and publication state](/docs/v2.3.0/assets/status-pages.png)
+![Status-page administration for the status pages, mapped services, and publication state](/docs/v2.3.0/assets/status-pages.png)
 
 ## Configure the page
 
@@ -52,7 +58,7 @@ Disable the page before risky routing/privacy changes. Preserve the old domain u
 
 ## Troubleshooting
 
-- **Cannot create another page:** one page is supported in 2.0; configure the existing page.
+- **Cannot create another page:** two pages are supported; delete a page you no longer need first.
 - **Page unavailable:** confirm enabled state, route resolution, DNS/TLS, and access mode.
 - **Service missing:** map it and enable **Show on page**.
 - **Private data visible:** disable the page, correct allowed fields/privacy, rebuild snapshot, and retest signed out.

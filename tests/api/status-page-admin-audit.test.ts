@@ -30,7 +30,7 @@ vi.mock('@/lib/status-pages/admin', () => ({
   makeDefaultStatusPage: m.makeDefaultStatusPage,
   deleteStatusPage: vi.fn(),
   StatusPageAdminError: class StatusPageAdminError extends Error {},
-  MAX_STATUS_PAGES: 5,
+  MAX_STATUS_PAGES: 2,
 }));
 vi.mock('@/lib/status-pages/announcement-commands', () => ({
   cancelPendingAnnouncementJobs: vi.fn(),
@@ -134,9 +134,7 @@ describe('status page admin routes write an audit record', () => {
   it('records deleting an announcement inside the same transaction', async () => {
     m.tx.statusPageAnnouncement.findFirst.mockResolvedValue({ id: 'an_1', title: 'Maintenance' });
     m.tx.statusPageAnnouncement.delete.mockResolvedValue({});
-    const res = await announcements.DELETE(
-      request('DELETE', { statusPageId: 'sp_1', id: 'an_1' })
-    );
+    const res = await announcements.DELETE(request('DELETE', { statusPageId: 'sp_1', id: 'an_1' }));
     expect(res.status).toBe(200);
     expect(audited()[0]).toMatchObject({
       action: 'status_page.announcement.deleted',

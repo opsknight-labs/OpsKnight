@@ -95,6 +95,21 @@ describe('status-page drafts', () => {
     );
   });
 
+  it('gives each page its own draft id, page id and page-specific name for one transition', async () => {
+    await draftStatusPageUpdates({
+      businessService: bs,
+      pages: [{ statusPageId: 'p1' }, { statusPageId: 'p2', displayName: 'Partner checkout' }],
+      from: 'OPERATIONAL',
+      to: 'DEGRADED',
+      changeKey: 'k9',
+      now,
+    });
+    const data = mocks.create.mock.calls.map(c => c[0].data);
+    expect(data.map(d => d.statusPageId)).toEqual(['p1', 'p2']);
+    expect(data[0].id).not.toBe(data[1].id);
+    expect(data[1].title).toBe('Partner checkout: degraded performance');
+  });
+
   it('is idempotent: a retried transition finds its draft and writes nothing', async () => {
     mocks.findUnique.mockResolvedValue({ id: 'existing' });
     expect(

@@ -339,7 +339,7 @@ ownership and full incident data are not automatically public. For a
 customer-facing service:
 
 1. Set an intentional default incident visibility.
-2. Add the relevant service/component to the single supported status page.
+2. Add the relevant service/component to the relevant status page.
 3. Trigger a test public incident.
 4. Verify only intended title/status/message fields appear externally.
 5. Resolve it and confirm the public component recovers.

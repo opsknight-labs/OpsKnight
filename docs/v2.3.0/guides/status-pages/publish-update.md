@@ -6,7 +6,7 @@ product_area: status-pages
 audience: [responder, administrator]
 reader:
   status: READER_COMPLETE
-  task: Publish, verify, update, and close an incident on the single supported status page.
+  task: Publish, verify, update, and close an incident on the status page.
   evidence: [docs/v2.3.0/assets/status-pages.png]
 verification:
   level: source
@@ -18,11 +18,11 @@ verification:
 
 # Publish a status update
 
-![Status-page administration for the single supported public page](/docs/v2.3.0/assets/status-pages.png)
+![Status-page administration for the public page](/docs/v2.3.0/assets/status-pages.png)
 
 ## Before you begin
 
-Configure the single supported status page and map the affected services.
+Configure the status page and map the affected services.
 
 Identify the customer-facing impact, approved wording, affected services/components, intended component state, privacy settings, and person authorized to publish. Internal incident visibility does not automatically define public output.
 

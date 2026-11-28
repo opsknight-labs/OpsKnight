@@ -13,6 +13,7 @@ import { getStatusPagePublicUrl } from '@/lib/status-page-url';
 import { Button } from '@/components/ui/shadcn/button';
 import { Globe, ShieldCheck, Layers, Users, ExternalLink, ArrowRight, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { MAX_STATUS_PAGES } from '@/lib/status-pages/limits';
 import { requirePageAccess } from '@/lib/access/server';
 
 export default async function StatusPagesControlCenter() {
@@ -57,7 +58,7 @@ export default async function StatusPagesControlCenter() {
         title="Status Pages"
         description="Public pages that tell customers what is affected. Configure branding, mapped services, custom domains and subscriber notifications."
         icon={Globe}
-        primaryAction={<StatusPageManager canCreate={totalPages < 1} />}
+        primaryAction={<StatusPageManager canCreate={totalPages < MAX_STATUS_PAGES} />}
         stats={[
           {
             label: 'Total Pages',
@@ -92,7 +93,7 @@ export default async function StatusPagesControlCenter() {
           icon={<Globe />}
           title="No status pages yet"
           description="Create a draft page, map the services customers care about, and publish when it's ready."
-          action={<StatusPageManager variant="default" canCreate={totalPages < 1} />}
+          action={<StatusPageManager variant="default" canCreate={totalPages < MAX_STATUS_PAGES} />}
         />
       ) : (
         <ul className="grid gap-4 md:grid-cols-2" aria-label="Status pages">
