@@ -165,8 +165,8 @@ async function buildProviderModel(
       return createAnthropic({ ...common, apiKey: apiKeyOf(provider), baseURL })(provider.model);
     }
     case 'GOOGLE': {
-      const { createGoogleGenerativeAI } = await import('@ai-sdk/google');
-      const client = createGoogleGenerativeAI({ ...common, apiKey: apiKeyOf(provider), baseURL });
+      const { createGoogle } = await import('@ai-sdk/google');
+      const client = createGoogle({ ...common, apiKey: apiKeyOf(provider), baseURL });
       return kind === 'chat' ? client(provider.model) : client.textEmbeddingModel(embeddingId);
     }
     case 'OPENAI_COMPATIBLE': {
@@ -315,7 +315,7 @@ export function toToolSet(
     const providerOptions =
       definition === last && kind === 'ANTHROPIC' ? CACHE_HINTS.ANTHROPIC : undefined;
     set[definition.name] = execute
-      ? tool<unknown, unknown>({
+      ? tool({
           description: definition.description,
           inputSchema,
           ...(providerOptions ? { providerOptions } : {}),
@@ -333,7 +333,7 @@ export function toToolSet(
         })
       : // A proposal is acknowledged so the model can carry on and explain it, but nothing is executed: the
         // caller receives the call and decides whether to show it to a person for confirmation.
-        tool<unknown, string>({
+        tool({
           description: definition.description,
           inputSchema,
           ...(providerOptions ? { providerOptions } : {}),
@@ -378,6 +378,7 @@ const CACHE_HINTS: Partial<
   BEDROCK: { bedrock: { cachePoint: { type: 'default' } } },
 };
 
+// Callers build trusted system messages and attach provider-specific cache metadata to them.
 export const toMessages = (
   request: AiGenerateRequest,
   kind?: GatewayProvider['kind']
@@ -402,9 +403,13 @@ export const toMessages = (
  * the history's markers at most four are live per request, Anthropic's limit.
  */
 export function withRollingCacheBreakpoint(
-  messages: ModelMessage[],
-  kind: GatewayProvider['kind']
+  initialMessages: ModelMessage[],
+  kind: GatewayProvider['kind'],
+  responseMessages: ModelMessage[] = []
 ): ModelMessage[] {
+  const messages = responseMessages.length
+    ? [...initialMessages, ...responseMessages]
+    : initialMessages;
   // eslint-disable-next-line security/detect-object-injection -- kind is a member of the closed provider-kind union
   const hint = CACHE_HINTS[kind];
   const last = messages.at(-1);
@@ -731,8 +736,18 @@ class GatewayPort implements LanguageModelPort {
   /** Per-step options for a tool loop: the rolling cache breakpoint. */
   private stepper(provider: GatewayProvider, request: AiGenerateRequest, loop: LoopState) {
     const last = clampSteps(request.maxSteps) - 1;
-    return ({ messages, stepNumber }: { messages: ModelMessage[]; stepNumber: number }) => ({
-      messages: withRollingCacheBreakpoint(messages, provider.kind),
+    return ({
+      initialMessages,
+      responseMessages,
+      stepNumber,
+    }: {
+      initialMessages: ModelMessage[];
+      responseMessages: ModelMessage[];
+      stepNumber: number;
+    }) => ({
+      // SDK 7 carries message overrides forward. Rebuild the transcript so the previous
+      // step's temporary marker never accumulates alongside the stable prefix markers.
+      messages: withRollingCacheBreakpoint(initialMessages, provider.kind, responseMessages),
       // The last allowed step (or the one the budget leaves) must answer from what was read: a tool loop never
       // ends without a word.
       ...((last > 0 && stepNumber >= last) || loop.budgetLimited
@@ -756,7 +771,10 @@ class GatewayPort implements LanguageModelPort {
     const maxSteps = clampSteps(request.maxSteps);
     return async ({ steps }) => {
       if (steps.length >= maxSteps || loop.budgetLimited) return true;
-      const sent = JSON.stringify([request.messages, steps.at(-1)?.response.messages ?? []]);
+      const sent = JSON.stringify([
+        request.messages,
+        steps.flatMap(step => step.response.messages),
+      ]);
       const funded = await this.hold(
         request,
         provider,
@@ -821,6 +839,7 @@ class GatewayPort implements LanguageModelPort {
       const run = streamText({
         onError: () => undefined,
         model: await buildModel(provider),
+        allowSystemInMessages: true,
         messages: withRollingCacheBreakpoint(messages, provider.kind),
         tools,
         toolChoice: 'none',
@@ -829,7 +848,7 @@ class GatewayPort implements LanguageModelPort {
         timeout: timeouts(this.data.settings.requestTimeoutMs, 1, true),
         maxRetries: 0,
       });
-      for await (const part of run.fullStream) {
+      for await (const part of run.stream) {
         if (part.type === 'text-delta') {
           text += part.text;
           yield { type: 'text-delta', delta: part.text };
@@ -839,7 +858,7 @@ class GatewayPort implements LanguageModelPort {
           throw new DOMException('AI request timed out', 'TimeoutError');
         }
       }
-      return { text, usage: usageOf(await run.totalUsage) };
+      return { text, usage: usageOf(await run.usage) };
     } catch (error) {
       if (request.context.signal?.aborted) throw error;
       logger.warn('[AI] Answer from reads failed', {
@@ -969,9 +988,10 @@ class GatewayPort implements LanguageModelPort {
           async span => {
             const generated = await generateText({
               model: await buildModel(provider),
+              allowSystemInMessages: true,
               messages: toMessages(request, provider.kind),
               output: Output.object({
-                schema: zodSchema(request.schema as Parameters<typeof zodSchema>[0]),
+                schema: zodSchema(request.schema as unknown as Parameters<typeof zodSchema>[0]),
                 name: request.schemaName,
               }),
               // Never cut off and rejected as invalid: room for thinking plus the document (see structuredCap).
@@ -981,12 +1001,12 @@ class GatewayPort implements LanguageModelPort {
               timeout: this.data.settings.requestTimeoutMs,
               maxRetries: 1,
             });
-            span.setAttribute('ai.tokens.input', generated.totalUsage.inputTokens ?? 0);
-            span.setAttribute('ai.tokens.output', generated.totalUsage.outputTokens ?? 0);
+            span.setAttribute('ai.tokens.input', generated.usage.inputTokens ?? 0);
+            span.setAttribute('ai.tokens.output', generated.usage.outputTokens ?? 0);
             return generated;
           }
         );
-        const usage = usageOf(result.totalUsage);
+        const usage = usageOf(result.usage);
         const served = { providerId: provider.id, model: provider.model, fallbackDepth: depth };
         // Validated again here, independently of the SDK, so nothing unchecked ever reaches a caller.
         let candidate: unknown;
@@ -1073,18 +1093,19 @@ class GatewayPort implements LanguageModelPort {
           async span => {
             const generated = await generateText({
               model: await buildModel(provider),
+              allowSystemInMessages: true,
               messages: toMessages(request, provider.kind),
               tools: toToolSet(request.tools, provider.kind),
               stopWhen: this.stopper(request, provider, reservation, loop),
               prepareStep: this.stepper(provider, request, loop),
-              onStepFinish: step => recordStep(loop, step),
+              onStepEnd: step => recordStep(loop, step),
               maxOutputTokens: this.answerCap(request),
               abortSignal: this.signalFor(request),
               timeout: timeouts(this.data.settings.requestTimeoutMs, request.maxSteps, false),
               maxRetries: 1,
             });
-            span.setAttribute('ai.tokens.input', generated.totalUsage.inputTokens ?? 0);
-            span.setAttribute('ai.tokens.output', generated.totalUsage.outputTokens ?? 0);
+            span.setAttribute('ai.tokens.input', generated.usage.inputTokens ?? 0);
+            span.setAttribute('ai.tokens.output', generated.usage.outputTokens ?? 0);
             return generated;
           }
         );
@@ -1092,7 +1113,7 @@ class GatewayPort implements LanguageModelPort {
         const served: AiGenerateResult = {
           text: result.text,
           toolCalls: proposedCalls(result.steps, request.tools),
-          usage: usageOf(result.totalUsage),
+          usage: usageOf(result.usage),
           served: {
             providerId: provider.id,
             model: provider.model,
@@ -1191,11 +1212,12 @@ class GatewayPort implements LanguageModelPort {
           // handler below records bounded error categories and preserves fallback/cancellation instead.
           onError: () => undefined,
           model: await buildModel(provider),
+          allowSystemInMessages: true,
           messages: toMessages(request, provider.kind),
           tools: toToolSet(request.tools, provider.kind),
           stopWhen: this.stopper(request, provider, reservation, loop),
           prepareStep: this.stepper(provider, request, loop),
-          onStepFinish: step => {
+          onStepEnd: step => {
             recordStep(loop, step);
             pendingText = '';
           },
@@ -1205,7 +1227,7 @@ class GatewayPort implements LanguageModelPort {
           maxRetries: 0,
         });
         const proposals = proposalTools(request.tools);
-        for await (const part of run.fullStream) {
+        for await (const part of run.stream) {
           if (part.type === 'text-delta') {
             emitted = true;
             text += part.text;
@@ -1231,7 +1253,7 @@ class GatewayPort implements LanguageModelPort {
         }
         breakers.recordSuccess(provider.id);
         const steps = await run.steps;
-        let usage = usageOf(await run.totalUsage);
+        let usage = usageOf(await run.usage);
         const toolCalls = proposedCalls(steps, request.tools);
         if (!text.trim()) {
           // Never the person's text: enough to tell an empty final step from a cut-off or a stop without words.
@@ -1245,7 +1267,7 @@ class GatewayPort implements LanguageModelPort {
           if (loop.toolsRan && toolCalls.length === 0) {
             const extra = yield* this.answerFromReads(request, provider, reservation, loop, [
               ...toMessages(request, provider.kind),
-              ...(await run.response).messages,
+              ...(await run.responseMessages),
             ]);
             if (extra) {
               text += extra.text;
@@ -1555,8 +1577,8 @@ export async function testProviderConnection(
     });
     accounted = true;
     const usage = {
-      inputTokens: result.totalUsage.inputTokens ?? 0,
-      outputTokens: result.totalUsage.outputTokens ?? 0,
+      inputTokens: result.usage.inputTokens ?? 0,
+      outputTokens: result.usage.outputTokens ?? 0,
     };
     await recordAiUsage(usage, new Date(), actorId, reservation, attribution(usage)).catch(
       () => undefined
