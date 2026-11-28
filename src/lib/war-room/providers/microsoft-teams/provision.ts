@@ -1036,11 +1036,8 @@ export async function provisionMicrosoftTeamsWarRoom(
       provisioningToken: expectedProvisioningToken,
       state: { in: ['PROVISIONING', 'AMBIGUOUS'] },
     },
-    data: {
-      provisioningStartedAt: new Date(),
-      createAttemptedAt: new Date(),
-      createOperationId: operationId,
-    },
+    // Renew the lease only; the one-way create fence is set right before the POST, after the capacity scan.
+    data: { provisioningStartedAt: new Date() },
   });
   if (renewed.count !== 1) return;
 
@@ -1061,6 +1058,16 @@ export async function provisionMicrosoftTeamsWarRoom(
     );
     return;
   }
+
+  const fenced = await prisma.incidentWarRoom.updateMany({
+    where: {
+      id: room.id,
+      provisioningToken: expectedProvisioningToken,
+      state: { in: ['PROVISIONING', 'AMBIGUOUS'] },
+    },
+    data: { createAttemptedAt: new Date(), createOperationId: operationId },
+  });
+  if (fenced.count !== 1) return;
 
   const created = await createChannel({
     tenantId: room.providerTenantId,
@@ -1092,8 +1099,15 @@ export async function provisionMicrosoftTeamsWarRoom(
       created.code === 'RATE_LIMITED' ||
       created.code === 'GRAPH_TOKEN_FAILED' ||
       created.code === 'TRANSIENT_READ'
-    )
+    ) {
+      // Graph rejected the request before creating anything, so the one-way gate is lifted:
+      // otherwise the retry would treat the outcome as unknown, never POST again, and fail the room.
+      await prisma.incidentWarRoom.updateMany({
+        where: { id: room.id, provisioningToken: expectedProvisioningToken },
+        data: { createAttemptedAt: null, createOperationId: null },
+      });
       throw new WarRoomRetryableError(created.message, created.retryAfterMs);
+    }
     await markFailed(room.id, expectedProvisioningToken, created.code, created.message);
     return;
   }

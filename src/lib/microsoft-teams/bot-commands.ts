@@ -72,7 +72,7 @@ export function buildTeamsHelpCard(input: {
   const where =
     input.conversation === 'channel' || input.conversation === 'unknown'
       ? 'Mention @OpsKnight followed by a command.'
-      : 'Incident commands work best in an incident channel. Here you can ask Squire general questions.';
+      : 'Commands and Squire answers work in an incident channel: mention @OpsKnight there. Direct messages are not answered yet.';
   const body: unknown[] = [
     { type: 'TextBlock', text: 'What OpsKnight can do here', weight: 'Bolder', wrap: true },
     { type: 'TextBlock', text: where, wrap: true, isSubtle: true },
