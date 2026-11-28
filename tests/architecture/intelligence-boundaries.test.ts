@@ -628,14 +628,14 @@ describe('intelligence architecture boundaries', () => {
     expect(gateway).toMatch(/const common = \{[^}]*fetch: fetchImpl[^}]*\}/);
     const creators = [
       ...gateway.matchAll(
-        /\b(create(?:OpenAICompatible|OpenAI|Anthropic|GoogleGenerativeAI|Azure|AmazonBedrock|Vertex|Mistral|Groq))\(\{/g
+        /\b(create(?:OpenAICompatible|OpenAI|Anthropic|Google|Azure|AmazonBedrock|Vertex|Mistral|Groq))\(\{/g
       ),
     ];
     expect(creators.map(match => match[1]).sort()).toEqual([
       'createAmazonBedrock',
       'createAnthropic',
       'createAzure',
-      'createGoogleGenerativeAI',
+      'createGoogle',
       'createGroq',
       'createMistral',
       'createOpenAI',
