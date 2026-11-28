@@ -52,7 +52,8 @@ export async function POST(request: NextRequest) {
             priority: rule.priority,
             ackTargetMs: rule.ackTargetMs,
             resolveTargetMs: rule.resolveTargetMs,
-            label: rule.label,
+            // A policy saved without labels stores NULL, which the input schema rejects.
+            label: rule.label ?? undefined,
           })),
         },
         actor

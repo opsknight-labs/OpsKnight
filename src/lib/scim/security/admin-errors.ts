@@ -1,5 +1,6 @@
 import { AppError } from '@/lib/errors';
 import { ZodError } from 'zod/v3';
+import { logger } from '@/lib/logger';
 export type ScimAdminFailure = { scimError: string };
 /** Return actionable expected failures without leaking database errors through Server Actions. */
 export function adminFailure(error: unknown): ScimAdminFailure {
@@ -29,6 +30,10 @@ export function adminFailure(error: unknown): ScimAdminFailure {
       scimError:
         'The selected resource no longer exists. Refresh the workspace and select it again.',
     };
+  logger.error('[SCIM] Unexpected error in an administration action', {
+    component: 'scim',
+    error,
+  });
   return {
     scimError:
       'SCIM administration is temporarily unavailable. Retry the operation and check server diagnostics if it continues.',

@@ -10,7 +10,7 @@
  */
 
 import prisma from '@/lib/prisma';
-import { getUserPermissions } from '@/lib/rbac';
+import { getIncidentOperatorPermissions } from '@/lib/rbac';
 import type {
   IncidentCollaborationView,
   IncidentMeetingReadiness,
@@ -88,7 +88,9 @@ export async function getIncidentCollaborationView(
         },
       },
     }),
-    getUserPermissions(),
+    // The same decision assertCanManageWarRoom makes at mutation time, so the UI never hides controls
+    // the API accepts (scoped assignee, on-call, team and elevated actors) or shows ones it rejects.
+    getIncidentOperatorPermissions(incidentId).catch(() => null),
     getIncidentMeeting(incidentId),
   ]);
 
@@ -134,7 +136,7 @@ export async function getIncidentCollaborationView(
     },
   });
 
-  const canManageWarRooms = Boolean(userPermissions?.isResponderOrAbove);
+  const canManageWarRooms = Boolean(userPermissions?.canManage);
 
   // Integration connectivity
   const hasSlackIntegration = Boolean(

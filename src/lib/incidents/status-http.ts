@@ -8,6 +8,7 @@ import { getAuthOptions } from '@/lib/auth';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
 import { logger, withRequestContext } from '@/lib/logger';
+import prisma from '@/lib/prisma';
 import { updateIncidentStatus } from '@/lib/incidents/operator-lifecycle';
 import type { IncidentLifecycleSource } from '@/lib/incidents/lifecycle';
 
@@ -100,6 +101,22 @@ export function createIncidentStatusRoute(
       // unchanged for older service workers and servers.
       const pushNotificationId = req.headers.get('x-opsknight-notification-id')?.trim();
       const sessionUserId = (session.user as { id?: string }).id;
+
+      // The page was sent to one account. Whoever signed in on this browser afterwards must not
+      // be able to act as themselves through it.
+      if (pushNotificationId && sessionUserId) {
+        const notification = await prisma.notification.findUnique({
+          where: { id: pushNotificationId },
+          select: { userId: true },
+        });
+        if (notification?.userId && notification.userId !== sessionUserId) {
+          throw new AppError({
+            code: 'AUTHORIZATION_DENIED',
+            userMessage:
+              'This notification was sent to a different account. Open the incident to act on it.',
+          });
+        }
+      }
 
       const idempotency = idempotencyKey
         ? {

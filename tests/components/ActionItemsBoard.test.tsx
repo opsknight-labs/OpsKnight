@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import ActionItemsBoard, { type BoardActionItem } from '@/components/action-items/ActionItemsBoard';
+import { updateActionItemStatus } from '@/app/(app)/action-items/actions';
+import { notify } from '@/lib/toast';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
@@ -10,6 +12,8 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/contexts/TimezoneContext', () => ({
   useTimezone: () => ({ userTimeZone: 'UTC' }),
 }));
+
+vi.mock('@/lib/toast', () => ({ notify: { success: vi.fn(), error: vi.fn() } }));
 
 vi.mock('@/app/(app)/action-items/actions', () => ({
   updateActionItemStatus: vi.fn(async () => ({ success: true })),
@@ -99,5 +103,46 @@ describe('ActionItemsBoard directory', () => {
     // The view choice is also kept in memory (module scope), so reset it explicitly.
     fireEvent.click(screen.getByRole('button', { name: 'Table view' }));
     expect(screen.getByText('No action items found')).toBeInTheDocument();
+  });
+});
+
+describe('ActionItemsBoard inline status changes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.localStorage.clear();
+    window.HTMLElement.prototype.hasPointerCapture = () => false;
+    window.HTMLElement.prototype.setPointerCapture = () => {};
+    window.HTMLElement.prototype.releasePointerCapture = () => {};
+    window.HTMLElement.prototype.scrollIntoView = () => {};
+  });
+
+  async function pick(title: string, option: RegExp) {
+    fireEvent.keyDown(screen.getByRole('combobox', { name: `Status of ${title}` }), {
+      key: 'ArrowDown',
+    });
+    fireEvent.click(await screen.findByRole('option', { name: option }));
+  }
+
+  it('reverts only the item whose update failed and shows why', async () => {
+    let finishFirst: (value: { success: boolean }) => void = () => {};
+    vi.mocked(updateActionItemStatus)
+      .mockImplementationOnce(() => new Promise(resolve => (finishFirst = resolve)))
+      .mockResolvedValueOnce({ success: false, error: 'Forbidden' });
+    renderBoard();
+
+    await pick('Overdue task', /^in progress$/i);
+    await pick('Blocked task', /^open$/i);
+
+    await waitFor(() => expect(notify.error).toHaveBeenCalledWith('Forbidden'));
+    finishFirst({ success: true });
+
+    expect(screen.getByRole('combobox', { name: 'Status of Blocked task' })).toHaveTextContent(
+      /blocked/i
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'Status of Overdue task' })).toHaveTextContent(
+        /in progress/i
+      )
+    );
   });
 });

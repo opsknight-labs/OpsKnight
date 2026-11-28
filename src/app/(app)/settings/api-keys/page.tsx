@@ -264,7 +264,7 @@ export default async function ApiKeysSettingsPage({
       : key.user.email,
     createdAt: formatDateTime(key.createdAt, timeZone, { format: 'date' }),
     lastUsedAt: key.lastUsedAt
-      ? formatDateTime(key.lastUsedAt, timeZone, { format: 'date' })
+      ? formatDateTime(key.lastUsedAt, timeZone, { format: 'datetime' })
       : null,
     revokedAt: key.revokedAt ? formatDateTime(key.revokedAt, timeZone, { format: 'date' }) : null,
     expiresAt: key.expiresAt ? formatDateTime(key.expiresAt, timeZone, { format: 'date' }) : null,
@@ -374,7 +374,9 @@ export default async function ApiKeysSettingsPage({
       prefix: t.prefix,
       scopes: t.scopes,
       createdAt: formatDateTime(t.createdAt, timeZone, { format: 'date' }),
-      lastUsedAt: t.lastUsedAt ? formatDateTime(t.lastUsedAt, timeZone, { format: 'date' }) : null,
+      lastUsedAt: t.lastUsedAt
+        ? formatDateTime(t.lastUsedAt, timeZone, { format: 'datetime' })
+        : null,
       expiresAt: t.expiresAt ? formatDateTime(t.expiresAt, timeZone, { format: 'date' }) : null,
     })),
   }));

@@ -3,6 +3,7 @@
  * Handles custom webhook integrations with flexible payload mapping
  */
 
+import { createHash } from 'crypto';
 import { matchesActionValue } from './normalization';
 
 export type WebhookPayload = {
@@ -38,6 +39,30 @@ const DEFAULT_CONFIG: WebhookConfig = {
     low: 'info',
   },
 };
+
+// Fields a generic sender commonly uses to say WHICH host or series fired. They separate alerts that
+// share a summary ("High CPU" from every host) when the sender gives no id or dedup key.
+const IDENTITY_FIELDS = ['host', 'hostname', 'instance', 'node', 'resource', 'component', 'labels'];
+
+function identitySuffix(payload: WebhookPayload): string {
+  const parts: string[] = [];
+  for (const field of IDENTITY_FIELDS) {
+    // eslint-disable-next-line security/detect-object-injection -- fixed field names above
+    const value = payload[field];
+    if (typeof value === 'string' || typeof value === 'number') {
+      parts.push(`${field}=${value}`);
+    } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const pairs = Object.entries(value as Record<string, unknown>)
+        .filter(([, v]) => typeof v === 'string' || typeof v === 'number')
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([k, v]) => `${k}=${v}`);
+      if (pairs.length) parts.push(`${field}={${pairs.join(',')}}`);
+    }
+  }
+  return parts.length
+    ? `-${createHash('sha256').update(parts.join('\n')).digest('hex').slice(0, 16)}`
+    : '';
+}
 
 function getNestedValue(obj: unknown, path: string): unknown {
   return path.split('.').reduce<unknown>(
@@ -76,12 +101,13 @@ export function transformWebhookToEvent(
     payload.priority ||
     'warning';
 
-  // Use configured field, id, alert_id, or create stable key from summary (avoids Date.now() which defeats dedup)
+  // Use configured field, id, alert_id, or a stable key from the summary plus the sender's host/instance
+  // identity when present (avoids Date.now(), which defeats dedup)
   const dedupKey =
     getNestedValue(payload, finalConfig.dedupKeyField || 'dedup_key') ||
     payload.id ||
     payload.alert_id ||
-    `webhook-${(summary || 'unknown').replace(/\s+/g, '-').toLowerCase().slice(0, 100)}`;
+    `webhook-${(summary || 'unknown').replace(/\s+/g, '-').toLowerCase().slice(0, 100)}${identitySuffix(payload)}`;
 
   const source =
     getNestedValue(payload, finalConfig.sourceField || 'source') ||

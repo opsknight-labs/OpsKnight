@@ -124,6 +124,7 @@ export const PATCH = withV2Observability(async function PATCH(
       description: validated.description,
       priority: validated.priority,
       status: validated.status,
+      resolutionNote: validated.resolutionNote,
       urgency: validated.urgency,
       assigneeId: hasAssigneeUpdate ? (validated.assigneeId ?? null) : undefined,
       hasAssigneeUpdate,

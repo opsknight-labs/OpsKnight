@@ -584,6 +584,8 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           const email = typeof token?.email === 'string' ? token.email : null;
           const userId = typeof token?.sub === 'string' ? token.sub : null;
           if (!email || !userId) return;
+          const { revokeSessionForSignOut } = await import('@/lib/signout-session');
+          await revokeSessionForSignOut(token);
           try {
             const { logLogout } = await import('@/lib/login-audit');
             const { ip, ua } = await requestHeadersForAudit();

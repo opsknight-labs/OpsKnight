@@ -1,23 +1,8 @@
-import type { AuditEntityType } from '@prisma/client';
+import { AuditEntityType } from '@prisma/client';
 
-export const AUDIT_ENTITY_TYPES = [
-  'USER',
-  'TEAM',
-  'TEAM_MEMBER',
-  'SERVICE',
-  'ESCALATION_POLICY',
-  'API_KEY',
-  'SSO_CONFIG',
-  'SCHEDULE',
-  'CUSTOM_FIELD',
-  'STATUS_PAGE',
-  'DASHBOARD',
-  'SAVED_REPORT',
-  'REPORT_EXPORT',
-  'AUDIT_EXPORT',
-  'SYSTEM_CONFIG',
-  'BUSINESS_SERVICE',
-] as const satisfies readonly AuditEntityType[];
+// Derived from the Prisma enum so a new entity type is filterable without a second edit here;
+// a hand-kept list silently ignored the types it forgot (PRIVACY_*, COMPLIANCE_*, INCIDENT, ...).
+export const AUDIT_ENTITY_TYPES: readonly AuditEntityType[] = Object.values(AuditEntityType);
 
 function isAuditEntityType(value: string): value is AuditEntityType {
   return (AUDIT_ENTITY_TYPES as readonly string[]).includes(value);

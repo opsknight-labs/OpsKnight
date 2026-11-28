@@ -47,4 +47,38 @@ describe('status page subscription preferences', () => {
     const { data } = db.statusPageSubscription.create.mock.calls[0][0];
     expect(data.preferences).toBe(Prisma.DbNull);
   });
+
+  it('answers a double-submitted first subscribe with the generic 200, not an error', async () => {
+    db.statusPageSubscription.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test',
+      })
+    );
+
+    const response = await subscribeStatusPageRequest(
+      new NextRequest('http://localhost/api/status-page/subscribe', {
+        method: 'POST',
+        body: JSON.stringify({ statusPageId: 'page-1', email: 'a@example.com' }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      data: { success: true, message: expect.stringContaining('If this email can receive') },
+    });
+  });
+
+  it('still fails on a database error that is not a duplicate', async () => {
+    db.statusPageSubscription.create.mockRejectedValue(new Error('connection lost'));
+
+    const response = await subscribeStatusPageRequest(
+      new NextRequest('http://localhost/api/status-page/subscribe', {
+        method: 'POST',
+        body: JSON.stringify({ statusPageId: 'page-1', email: 'a@example.com' }),
+      })
+    );
+
+    expect(response.status).toBe(500);
+  });
 });

@@ -1,6 +1,6 @@
 /* eslint-disable security/detect-object-injection -- Paths reject prototype and sensitive keys and use own-property reads only. */
 import { LIMITS, type CompiledField, type Context } from '../contract';
-import { normalizeValue } from './normalize';
+import { normalizeEventValue } from './normalize';
 export const forbiddenSegment = (key: string): boolean =>
   /authorization|cookie|password|secret|token|signature|integration.?key|api.?key|credential/i.test(
     key
@@ -76,12 +76,16 @@ export function extractContextWithProvenance(input: {
         break;
       }
     }
-    context[field.key] = normalizeValue(raw, field);
+    const { canonical, rejected } = normalizeEventValue(raw, field);
+    context[field.key] = canonical;
     normalization.push({
       fieldKey: field.key,
       raw:
-        typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean' ? raw : null,
-      canonical: context[field.key],
+        !rejected &&
+        (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean')
+          ? raw
+          : null,
+      canonical,
       sourcePath,
       source: raw !== undefined && raw !== null ? source : null,
     });

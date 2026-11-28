@@ -305,6 +305,8 @@ metrics:
 
 The template fails deliberately if ServiceMonitor is enabled without an existing scrape-token Secret. Confirm the CRD exists before installation.
 
+With `runtime.mode=split` the Service, and so the ServiceMonitor, selects only the web pods. The chart then also renders a `PodMonitor` named `<release>-roles` that scrapes the scheduler and every worker pod (labelled with `app.kubernetes.io/component`) with the same token, interval and path. When `networkPolicy.enabled` is true, the scheduler and worker policies deny all ingress, so add a policy that allows your Prometheus namespace to reach port `http` on those pods.
+
 ## Validation before installation
 
 Run all validation against the exact production values and chart revision:

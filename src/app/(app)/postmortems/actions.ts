@@ -4,13 +4,10 @@ import prisma from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod/v3';
 import { revalidatePath } from 'next/cache';
-import {
-  getCurrentAuthorizationActor,
-  getCurrentUser,
-  assertResponderOrAbove,
-  getUserPermissions,
-} from '@/lib/rbac';
-import { postmortemReadWhere } from '@/lib/authorization-filters';
+import { getCurrentAuthorizationActor, getCurrentUser, assertResponderOrAbove } from '@/lib/rbac';
+import { incidentReadWhere, postmortemReadWhere } from '@/lib/authorization-filters';
+import { postmortemEditWhere } from '@/lib/postmortems/authorization';
+import { logAudit } from '@/lib/audit';
 import { CAPABILITIES, hasCapability, capabilitiesOf } from '@/lib/authorization';
 import {
   getStoredActionItemId,
@@ -18,6 +15,7 @@ import {
   resolveStoredActionItems,
   type ActionItem,
 } from '@/lib/action-items';
+import { MAX_POSTMORTEM_ACTION_ITEMS } from '@/lib/postmortems/action-item-commands';
 import { logger } from '@/lib/logger';
 import { applyEvidenceToDraft } from '@/lib/intelligence/postmortems/evidence-draft';
 import {
@@ -66,7 +64,7 @@ export type PostmortemData = {
   resolution?: string;
   actionItems?: ActionItem[];
   lessons?: string;
-  status?: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+  status?: 'DRAFT' | 'IN_REVIEW' | 'PUBLISHED' | 'ARCHIVED';
   isPublic?: boolean;
   /** Revision the editor loaded; required when editing an existing postmortem. */
   expectedRevision?: number;
@@ -136,10 +134,11 @@ const postmortemInputSchema = z.object({
         completedAt: z.union([z.string().max(64), z.date(), z.null()]).optional(),
       })
     )
-    .max(200)
+    // The API and MCP refuse any postmortem holding more than 100 items, so the editor must too.
+    .max(MAX_POSTMORTEM_ACTION_ITEMS, 'A postmortem can have at most 100 action items.')
     .optional(),
   lessons: text(10_000).optional(),
-  status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).optional(),
+  status: z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'ARCHIVED']).optional(),
   isPublic: z.boolean().optional(),
   expectedRevision: z.number().int().positive().optional(),
 });
@@ -189,14 +188,22 @@ export async function upsertPostmortem(incidentId: string, input: PostmortemData
     throw new Error('Incident not found');
   }
 
-  if (incident.status !== 'RESOLVED') {
-    throw new Error('Postmortems can only be created for resolved incidents');
-  }
-
   const existing = await prisma.postmortem.findUnique({
     where: { incidentId },
     select: { createdById: true },
   });
+
+  if (!existing) {
+    // A reopened incident keeps its postmortem editable; only creating one needs a resolution.
+    if (incident.status !== 'RESOLVED') {
+      throw new Error('Postmortems can only be created for resolved incidents');
+    }
+    // Creating makes the caller the author and so an editor, so they must be able to read the incident.
+    const readable = await prisma.incident.count({
+      where: { AND: [{ id: incidentId }, incidentReadWhere(await getCurrentAuthorizationActor())] },
+    });
+    if (!readable) throw new Error('Incident not found');
+  }
 
   if (
     existing &&
@@ -408,15 +415,10 @@ export async function getAllPostmortems(
   const safePage = parsePageParam(options.page);
   const safeLimit = parsePageSizeParam(options.limit, 50, 100);
 
-  const [permissions, actor] = await Promise.all([
-    getUserPermissions(),
-    getCurrentAuthorizationActor(),
-  ]);
-  const selectedWhere: Prisma.PostmortemWhereInput = permissions.isResponderOrAbove
-    ? status
-      ? { status }
-      : {}
-    : { status: 'PUBLISHED' as const };
+  const actor = await getCurrentAuthorizationActor();
+  // postmortemReadWhere already limits actors without draft access to published rows, so asking
+  // for DRAFT or ARCHIVED returns nothing for them instead of silently listing published ones.
+  const selectedWhere: Prisma.PostmortemWhereInput = status ? { status } : {};
 
   if (serviceId && serviceId !== 'all') {
     selectedWhere.incident = { serviceId };
@@ -523,6 +525,12 @@ export async function generatePostmortemDraft(incidentId: string, userTimeZone?:
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
+
+  // The draft copies the incident's timeline and notes, so the caller must be able to read it.
+  const readable = await prisma.incident.count({
+    where: { AND: [{ id: incidentId }, incidentReadWhere(await getCurrentAuthorizationActor())] },
+  });
+  if (!readable) throw new Error('Incident not found');
 
   const incident = await prisma.incident.findUnique({
     where: { id: incidentId },
@@ -723,8 +731,9 @@ export async function togglePostmortemPublicStatus(
   postmortemId: string,
   isPublic: boolean
 ): Promise<{ success: boolean; error?: string; isPublic?: boolean }> {
+  let user;
   try {
-    await assertResponderOrAbove();
+    user = await assertResponderOrAbove();
   } catch (error) {
     return {
       success: false,
@@ -733,6 +742,21 @@ export async function togglePostmortemPublicStatus(
   }
 
   try {
+    // Same edit rule as upsert/API v2: admin, author, incident assignee or owning-team member.
+    const actor = await getCurrentAuthorizationActor();
+    const current = await prisma.postmortem.findFirst({
+      where: {
+        AND: [{ id: postmortemId }, postmortemReadWhere(actor), postmortemEditWhere(actor)],
+      },
+      select: { isPublic: true },
+    });
+    if (!current) {
+      return {
+        success: false,
+        error: 'Forbidden: You do not have permission to change this postmortem',
+      };
+    }
+
     const updated = await prisma.postmortem.update({
       where: { id: postmortemId },
       data: {
@@ -740,6 +764,16 @@ export async function togglePostmortemPublicStatus(
         updatedAt: new Date(),
       },
       select: { id: true, incidentId: true, isPublic: true },
+    });
+
+    await logAudit({
+      action: 'postmortem.visibility.changed',
+      entityType: 'INCIDENT',
+      entityId: updated.incidentId,
+      actorId: user.id,
+      details: { postmortemId: updated.id },
+      oldValue: { isPublic: current.isPublic },
+      newValue: { isPublic: updated.isPublic },
     });
 
     revalidatePath('/postmortems');

@@ -12,6 +12,7 @@ import { getJiraCapabilitiesByServiceIds } from '@/lib/jira-capabilities';
 import { serializeJiraIssueReference } from '@/lib/jira-references';
 import { recurredActionItemIds } from '@/lib/intelligence/helpers/action-item-suggest-loader';
 import { formatActionItemDueDate } from '@/lib/action-items';
+import { actionItemOverdueBefore } from '@/lib/action-item-due-dates';
 import { parsePageParam, calculatePaginationBounds, parseEnumValue } from '@/lib/pagination-parser';
 import { requirePageAccess, redirectWithoutIncidentRead } from '@/lib/access/server';
 
@@ -94,7 +95,7 @@ export default async function ActionItemsPage({
       }),
       prisma.actionItem.count({
         where: {
-          AND: [baseWhere, { dueDate: { lt: now } }, { status: { not: 'COMPLETED' } }],
+          AND: [baseWhere, { dueDate: { lt: actionItemOverdueBefore(now) } }, { status: { not: 'COMPLETED' } }],
         },
       }),
       prisma.actionItem.count({

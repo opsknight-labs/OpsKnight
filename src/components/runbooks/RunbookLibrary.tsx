@@ -36,7 +36,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/shadcn/select';
-import { SubmitButton, FormSelect } from './RunbookControls';
+import { ActionForm, SubmitButton, FormSelect } from './RunbookControls';
 import { RunbookCard, runbookLifecycle, type RunbookCardData } from './library/RunbookCard';
 import { formatDateTime } from '@/lib/timezone';
 import {
@@ -64,6 +64,8 @@ export function CreateRunbookDialog({ teams = [] }: { teams?: RunbookTeamOption[
   const [customSlug, setCustomSlug] = useState(false);
   const [ownerTeamId, setOwnerTeamId] = useState(NO_TEAM);
   const [tagsInput, setTagsInput] = useState('');
+  const [description, setDescription] = useState('');
+  const [template, setTemplate] = useState('empty');
   const tags = parseTagList(tagsInput);
   const tagsError = tagsValidationMessage(tags);
   return (
@@ -81,7 +83,11 @@ export function CreateRunbookDialog({ teams = [] }: { teams?: RunbookTeamOption[
             Start with a template, configure your targets, then publish an immutable version.
           </DialogDescription>
         </DialogHeader>
-        <form action={createRunbookAction} className="space-y-4">
+        <ActionForm
+          action={createRunbookAction}
+          successMessage="Runbook created"
+          className="space-y-4"
+        >
           <div className="space-y-2">
             <Label htmlFor="new-runbook-name">Name</Label>
             <Input
@@ -109,6 +115,8 @@ export function CreateRunbookDialog({ teams = [] }: { teams?: RunbookTeamOption[
             <Textarea
               id="new-runbook-description"
               name="description"
+              value={description}
+              onChange={event => setDescription(event.target.value)}
               maxLength={5000}
               placeholder="When should responders use this workflow?"
             />
@@ -197,7 +205,8 @@ export function CreateRunbookDialog({ teams = [] }: { teams?: RunbookTeamOption[
             <FormSelect
               name="template"
               label="Runbook template"
-              defaultValue="empty"
+              value={template}
+              onValueChange={setTemplate}
               options={[
                 { value: 'empty', label: 'Empty workflow' },
                 { value: 'diagnostics', label: 'Linux diagnostics' },
@@ -216,7 +225,7 @@ export function CreateRunbookDialog({ teams = [] }: { teams?: RunbookTeamOption[
           <SubmitButton pendingLabel="Creating…" className="w-full">
             Create Runbook
           </SubmitButton>
-        </form>
+        </ActionForm>
       </DialogContent>
     </Dialog>
   );

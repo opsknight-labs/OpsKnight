@@ -58,7 +58,9 @@ import StepNavigator, { getStepSummary } from './builder/StepNavigator';
 import StepEditor from './builder/StepEditor';
 import ReadinessBar from './builder/ReadinessBar';
 import { validateRunbook } from './builder/validation';
+import { setRunbookBuilderDirty } from '@/lib/runbooks/builder-dirty';
 import { JsonCodeEditor } from './builder/JsonCodeEditor';
+import { localId } from '@/lib/local-id';
 
 function firstSchemaIssue(result: {
   success: boolean;
@@ -247,6 +249,13 @@ export default function RunbookBuilder({
     };
   }, [dirty, unappliedJson, pendingKeys.size]);
 
+  // Tell the Publish button whether publishing now would discard edits that are not saved.
+  const hasUnsavedEdits = dirty || unappliedJson || pendingKeys.size > 0;
+  useEffect(() => {
+    setRunbookBuilderDirty(hasUnsavedEdits);
+  }, [hasUnsavedEdits]);
+  useEffect(() => () => setRunbookBuilderDirty(false), []);
+
   function commitInputKey(identity: string, index: number) {
     const nextKey = pendingKeys.get(identity)?.trim();
     if (nextKey === undefined) return;
@@ -365,7 +374,7 @@ export default function RunbookBuilder({
 
     const nextSteps = [...definition.steps];
     nextSteps.splice(index + 1, 0, clone);
-    const newId = crypto.randomUUID();
+    const newId = localId();
     const nextIds = [...stepIdentities];
     nextIds.splice(index + 1, 0, newId);
 
@@ -411,7 +420,7 @@ export default function RunbookBuilder({
     }
     const key = `step_${sequence}`;
     const newStep = newBuilderStep(type, key);
-    const newId = crypto.randomUUID();
+    const newId = localId();
     const nextDef = { ...definition, steps: [...definition.steps, newStep] };
     setDefinition(nextDef);
     setStepIdentities([...stepIdentities, newId]);
@@ -882,7 +891,7 @@ export default function RunbookBuilder({
               })),
             ];
             const nextKey = getNextUnusedInputKey(reserved, definition);
-            const newId = crypto.randomUUID();
+            const newId = localId();
             setCommittedInputKeys(prev => new Map(prev).set(newId, nextKey));
             const nextInputs = [
               ...inputs,
@@ -930,7 +939,7 @@ export default function RunbookBuilder({
       const newIds = parsedDefinition.steps.map(
         step =>
           stepIdentities[definition.steps.findIndex(existing => existing.key === step.key)] ??
-          crypto.randomUUID()
+          localId()
       );
       setStepIdentities(newIds);
       setSelectedStepId(
@@ -938,8 +947,7 @@ export default function RunbookBuilder({
       );
       const newInputIds = parsedInputs.map(
         input =>
-          inputIdentities[inputs.findIndex(existing => existing.key === input.key)] ??
-          crypto.randomUUID()
+          inputIdentities[inputs.findIndex(existing => existing.key === input.key)] ?? localId()
       );
       setInputIdentities(newInputIds);
       const newCommitted = new Map<string, string>();

@@ -232,9 +232,17 @@ describeIfRealDB('service availability', { timeout: 60_000 }, () => {
     const user = await testPrisma.user.create({
       data: { email: 'av@example.com', name: 'Av', role: 'USER', status: 'ACTIVE' },
     });
-    const healthy = await testPrisma.service.create({ data: { name: 'healthy', teamId: mine.id } });
-    const flaky = await testPrisma.service.create({ data: { name: 'flaky', teamId: mine.id } });
-    const hidden = await testPrisma.service.create({ data: { name: 'hidden', teamId: other.id } });
+    // Uptime is measured from the service's creation, so the services must predate the 7d window.
+    const createdAt = new Date(now.getTime() - 30 * DAY);
+    const healthy = await testPrisma.service.create({
+      data: { name: 'healthy', teamId: mine.id, createdAt },
+    });
+    const flaky = await testPrisma.service.create({
+      data: { name: 'flaky', teamId: mine.id, createdAt },
+    });
+    const hidden = await testPrisma.service.create({
+      data: { name: 'hidden', teamId: other.id, createdAt },
+    });
     // 7d window; 2h of downtime ≈ 1.19% of it.
     await testPrisma.incident.create({
       data: {

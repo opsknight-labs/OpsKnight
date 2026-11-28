@@ -5,6 +5,8 @@ import { getAuthOptions } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod/v3';
+import { logAudit } from '@/lib/audit';
+import { guardLegacyDashboardApi } from '@/lib/dashboard/legacy-api-guard';
 
 const CreateDashboardSchema = z.object({
   name: z.string().min(1, 'Name is required').max(200).trim(),
@@ -51,6 +53,8 @@ export async function GET() {
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const guard = await guardLegacyDashboardApi('read');
+    if ('response' in guard) return guard.response;
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
@@ -130,6 +134,8 @@ export async function POST(request: NextRequest) {
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const guard = await guardLegacyDashboardApi('write');
+    if ('response' in guard) return guard.response;
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
@@ -212,6 +218,15 @@ export async function POST(request: NextRequest) {
         },
       },
       include: { widgets: true },
+    });
+
+    await logAudit({
+      action: 'dashboard.created',
+      entityType: 'DASHBOARD',
+      entityId: dashboard.id,
+      actorId: user.id,
+      source: 'API',
+      details: { visibility: dashboard.visibility, teamId: dashboard.teamId },
     });
 
     return NextResponse.json({ success: true, dashboard }, { status: 201 });

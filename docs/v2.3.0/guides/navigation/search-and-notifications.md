@@ -36,18 +36,31 @@ notification drawer.
 ## Configure and use search
 
 1. Enter at least two meaningful characters. Queries are bounded and normalized.
+   A query of several terms matches records that contain all of the terms, in
+   any order (up to five terms are used); `payment timeout` does not return a
+   record that has only `payment`.
 2. Review the result type before opening a match. Search can return authorized
    incidents, services, teams, users, escalation policies, and postmortems.
 3. Add a more specific title, identifier, service, or person fragment if results
-   are broad.
+   are broad. Search lists at most eight incidents: any incident whose title is
+   exactly what you typed is always included, and the rest are the newest
+   matches.
 4. Open the result and verify its record identity before taking an action.
 
 Record results are permission-aware. Incident and service queries apply
 authorization filters, and privileged-only result types are not a bypass around
-normal access. Generic navigation suggestions are a static convenience list and
+normal access. User and escalation-policy results are returned only to people who
+can open those pages (`user.read.all` and `policy.read.all`: Admin, Responder,
+Auditor, or a custom role or temporary access with them), so a User does not get
+results that lead to an Access denied page. Draft and archived postmortems are
+returned only to people with `postmortem.draft.read`; text inside a draft cannot
+be matched by anyone else. Generic navigation suggestions are a static convenience list and
 can include a destination the current role cannot use; the destination still
 enforces authorization. The endpoint is rate limited, so rapid automation or
-repeated queries can return a temporary rate-limit response.
+repeated queries can return a temporary rate-limit response (`429` with
+`Retry-After`). If the rate-limit store itself is unavailable, search answers
+`503` with `Retry-After: 5` instead, which means "try again shortly", not that
+you are limited.
 
 ## Process the notification inbox
 
@@ -93,8 +106,11 @@ preferences under **Settings → Profile → Notifications**.
 
 - **Search returns nothing:** use two or more characters, simplify punctuation,
   check spelling, and verify access to the record.
-- **Search is temporarily unavailable:** wait for the displayed/retry interval
-  if rate limited, then try a narrower query.
+- **Search is temporarily unavailable:** the palette shows an alert instead of
+  "No results", with a **Retry** button. "Too many searches" means you are rate
+  limited (30 searches a minute): wait a few seconds, then retry. "Search is
+  unavailable" means the server could not answer; retry shortly, then try a
+  narrower query.
 - **The unread count looks stale:** reopen the drawer; check whether it reports
   Live or Polling, then reload and verify the source event.
 - **A drawer item does not navigate:** service or shift items may not carry an

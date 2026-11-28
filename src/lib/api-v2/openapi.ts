@@ -3,6 +3,7 @@
  */
 
 import { finalizeOpenApiSpec } from './openapi-finalize';
+import { MAX_ESCALATION_DELAY_MINUTES } from '@/lib/escalation/policy-validation';
 
 function buildBaseSpec(): Record<string, unknown> {
   return {
@@ -1102,18 +1103,12 @@ function buildBaseSpec(): Record<string, unknown> {
                     serviceNotificationChannels: {
                       type: 'array',
                       uniqueItems: true,
-                      maxItems: 7,
+                      maxItems: 3,
+                      description:
+                        'Service-level channels support Slack, Teams and webhooks only; use escalation policies or user preferences for email, SMS, push and WhatsApp. A legacy EMAIL, SMS, PUSH or WHATSAPP value read from the service must be removed from the list before it is sent back.',
                       items: {
                         type: 'string',
-                        enum: [
-                          'SLACK',
-                          'WEBHOOK',
-                          'EMAIL',
-                          'SMS',
-                          'PUSH',
-                          'WHATSAPP',
-                          'MICROSOFT_TEAMS',
-                        ],
+                        enum: ['SLACK', 'WEBHOOK', 'MICROSOFT_TEAMS'],
                       },
                     },
                     serviceNotifyOnTriggered: { type: 'boolean' },
@@ -1838,7 +1833,7 @@ function buildBaseSpec(): Record<string, unknown> {
                         type: 'object',
                         required: ['delayMinutes', 'targetType', 'targetId'],
                         properties: {
-                          delayMinutes: { type: 'integer', minimum: 0, maximum: 1440 },
+                          delayMinutes: { type: 'integer', minimum: 0, maximum: MAX_ESCALATION_DELAY_MINUTES },
                           targetType: { type: 'string', enum: ['USER', 'SCHEDULE', 'TEAM'] },
                           targetId: { type: 'string' },
                           notificationChannels: { type: 'array', items: { type: 'string' } },
@@ -2139,6 +2134,24 @@ function buildBaseSpec(): Record<string, unknown> {
           responses: {
             '201': { description: 'Announcement created' },
             '400': { $ref: '#/components/responses/ProblemError' },
+            '401': { $ref: '#/components/responses/ProblemError' },
+            '403': { $ref: '#/components/responses/ProblemError' },
+            '404': { $ref: '#/components/responses/ProblemError' },
+          },
+        },
+      },
+      '/status-pages/{id}/announcements/{announcementId}/end': {
+        post: {
+          tags: ['Status Pages'],
+          summary: 'End a status page announcement now',
+          description:
+            'Sets the announcement inactive so the status page stops showing it, and cancels subscriber notices that have not been sent. Ending an announcement that is already ended answers the same success. Requires the same permission as creating an announcement.',
+          parameters: [
+            { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+            { name: 'announcementId', in: 'path', required: true, schema: { type: 'string' } },
+          ],
+          responses: {
+            '200': { description: 'Announcement ended' },
             '401': { $ref: '#/components/responses/ProblemError' },
             '403': { $ref: '#/components/responses/ProblemError' },
             '404': { $ref: '#/components/responses/ProblemError' },

@@ -74,6 +74,7 @@ export function DecideRequestControls({
   isOwnRequest,
   requestKind = 'TEAM_MEMBERSHIP',
   roleManagedExternally = false,
+  permanentWouldDemote = false,
 }: {
   requestId: string;
   requestedDuration: number | null;
@@ -81,8 +82,11 @@ export function DecideRequestControls({
   requestKind?: string;
   /** The requester's role comes from SSO/SCIM: only temporary role grants are possible. */
   roleManagedExternally?: boolean;
+  /** A permanent approval would replace the requester's role and remove access they have. */
+  permanentWouldDemote?: boolean;
 }) {
-  const temporaryOnly = requestKind === 'ORG_ROLE' && roleManagedExternally;
+  const temporaryOnly =
+    requestKind === 'ORG_ROLE' && (roleManagedExternally || permanentWouldDemote);
   const durationChoices = temporaryOnly
     ? DURATION_OPTIONS.filter(option => option.value !== 'permanent')
     : DURATION_OPTIONS;

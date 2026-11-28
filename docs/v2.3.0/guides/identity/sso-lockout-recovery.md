@@ -57,7 +57,7 @@ WebAuthn origin validation, session expiry, or PostgreSQL authorization checks.
    changing one database setting cannot fix divergent environment variables.
 4. Open `/login/emergency` on the pinned origin and authenticate with an
    independent password or hardware key. Only recovery endpoints/static assets receive the pinned
-   host-routing exception; incident and ordinary administration routes do not.
+   host-routing exception (this includes the recovery console's Diagnostics tab); incident and ordinary administration routes do not.
 5. In **Emergency Access**, review the origin conflict and confirm **Repair pinned
    application URL**. This fresh-authentication operation changes only the database App URL,
    increments policy version, and emits `auth.recovery.origin.repaired`.

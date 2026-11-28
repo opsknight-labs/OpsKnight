@@ -147,6 +147,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                                 criticalCount={activeShell.incidentCounts.high}
                                 mediumCount={activeShell.incidentCounts.medium}
                                 lowCount={activeShell.incidentCounts.low}
+                                countsUnavailable={
+                                  activeShell.incidentCountsUnavailable === true &&
+                                  activeShell.accessContextUnavailable !== true
+                                }
                               />
                             </div>
                             <div className="hidden xl:block">

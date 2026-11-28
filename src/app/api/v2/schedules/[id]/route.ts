@@ -15,6 +15,7 @@ import { etagHeaders, ifMatchWhere, parseIfMatch, withIfMatch } from '@/lib/api-
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { scheduleReadWhere } from '@/lib/authorization-filters';
 import { AppError } from '@/lib/errors';
+import { runSerializableTransaction } from '@/lib/db-utils';
 import { withV2Observability } from '@/lib/api-v2/observability';
 
 export const GET = withV2Observability(async function GET(
@@ -145,34 +146,34 @@ export const DELETE = withV2Observability(async function DELETE(
   try {
     const { apiKey, actor } = await authenticateV2Request(req);
     const rlHeaders = await enforceV2RateLimit(apiKey.id, 'WRITE');
-    enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.SCHEDULE_MANAGE);
+    enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.SCHEDULE_DELETE);
 
     const { id } = await params;
-    const schedule = await prisma.onCallSchedule.findUnique({ where: { id } });
-    if (!schedule) {
-      throw new AppError({
-        code: 'SCHEDULE_NOT_FOUND',
-        userMessage: `Schedule with id '${id}' was not found.`,
-      });
-    }
-
-    // Dependency check: verify no escalation rule targets this schedule
-    const rulesUsingSchedule = await prisma.escalationRule.findMany({
-      where: { targetType: 'SCHEDULE', targetScheduleId: id },
-      select: { id: true, policy: { select: { id: true, name: true } } },
-    });
-
-    if (rulesUsingSchedule.length > 0) {
-      const policyNames = [...new Set(rulesUsingSchedule.map(r => r.policy.name))].join(', ');
-      throw new AppError({
-        code: 'SCHEDULE_IN_USE',
-        userMessage: `Cannot delete schedule '${schedule.name}' because it is referenced in escalation policy (${policyNames}). Reassign or remove this schedule target first.`,
-      });
-    }
-
-    await prisma.$transaction(async tx => {
+    // The dependency check and the delete share one serializable transaction, so an escalation step
+    // added concurrently cannot be left pointing at a deleted schedule.
+    const schedule = await runSerializableTransaction(async tx => {
       // MCP approval recheck inside the deletion's own transaction; a no-op for REST callers.
       await internalV2MutationGuard()?.(tx);
+      const found = await tx.onCallSchedule.findUnique({ where: { id } });
+      if (!found) {
+        throw new AppError({
+          code: 'SCHEDULE_NOT_FOUND',
+          userMessage: `Schedule with id '${id}' was not found.`,
+        });
+      }
+
+      const rulesUsingSchedule = await tx.escalationRule.findMany({
+        where: { targetType: 'SCHEDULE', targetScheduleId: id },
+        select: { id: true, policy: { select: { id: true, name: true } } },
+      });
+      if (rulesUsingSchedule.length > 0) {
+        const policyNames = [...new Set(rulesUsingSchedule.map(r => r.policy.name))].join(', ');
+        throw new AppError({
+          code: 'SCHEDULE_IN_USE',
+          userMessage: `Cannot delete schedule '${found.name}' because it is referenced in escalation policy (${policyNames}). Reassign or remove this schedule target first.`,
+        });
+      }
+
       await tx.onCallOverride.deleteMany({ where: { scheduleId: id } });
       await tx.onCallLayerUser.deleteMany({ where: { layer: { scheduleId: id } } });
       await tx.onCallLayer.deleteMany({ where: { scheduleId: id } });
@@ -183,9 +184,10 @@ export const DELETE = withV2Observability(async function DELETE(
         entityId: id,
         actorId: actor.id,
         apiKeyId: apiKey.id,
-        details: { name: schedule.name },
+        details: { name: found.name },
         tx,
       });
+      return found;
     });
 
     return apiV2Success(

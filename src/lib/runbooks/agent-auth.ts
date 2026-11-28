@@ -146,7 +146,11 @@ export async function consumeEnrollmentToken(input: {
   });
 }
 
-export async function authenticateAgentRequest(request: Request, rawBody: string) {
+/**
+ * Everything that can be checked without the body: the signed headers, the clock window and the
+ * agent's state. Routes run this before buffering a (possibly 15 MB) body for the signature check.
+ */
+export async function preauthenticateAgentRequest(request: Request) {
   const agentId = request.headers.get('x-opsknight-agent-id') ?? '';
   const timestamp = request.headers.get('x-opsknight-timestamp') ?? '';
   const nonce = request.headers.get('x-opsknight-nonce') ?? '';
@@ -165,6 +169,15 @@ export async function authenticateAgentRequest(request: Request, rawBody: string
   if (!agent) throw new RunbookAgentNotFoundError(agentId);
   if (agent.status === 'REVOKED') throw new RunbookAgentRevokedError(agentId);
   if (!agent.publicKey) throw new Error('Agent has not completed enrollment.');
+  return { agent: { ...agent, publicKey: agent.publicKey }, timestamp, nonce, signature };
+}
+
+export async function verifyAgentRequestSignature(
+  request: Request,
+  rawBody: string,
+  pre: Awaited<ReturnType<typeof preauthenticateAgentRequest>>
+) {
+  const { agent, timestamp, nonce, signature } = pre;
   const payload = agentSignaturePayload({
     method: request.method,
     target: request.url,
@@ -180,7 +193,7 @@ export async function authenticateAgentRequest(request: Request, rawBody: string
   );
   if (!valid) throw new Error('Agent request signature is invalid.');
   await prisma.runbookAgentRequestNonce
-    .create({ data: { agentId, nonceHash: sha256(nonce) } })
+    .create({ data: { agentId: agent.id, nonceHash: sha256(nonce) } })
     .catch(error => {
       if ((error as { code?: string }).code === 'P2002') {
         throw new Error('Agent request replay detected.');
@@ -188,4 +201,8 @@ export async function authenticateAgentRequest(request: Request, rawBody: string
       throw error;
     });
   return agent;
+}
+
+export async function authenticateAgentRequest(request: Request, rawBody: string) {
+  return verifyAgentRequestSignature(request, rawBody, await preauthenticateAgentRequest(request));
 }

@@ -11,7 +11,7 @@ import { logAudit } from '@/lib/audit';
 import { createInAppNotifications, getScheduleUserIds } from '@/lib/in-app-notifications';
 import { parseDateTimeInTimeZone, isValidTimeZone } from '@/lib/timezone';
 import { assertScheduleNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
-import { AppError } from '@/lib/errors';
+import { AppError, isAppError } from '@/lib/errors';
 import {
   scheduleActionError,
   scheduleValidationError,
@@ -19,6 +19,7 @@ import {
 } from '@/lib/schedule-action-errors';
 import {
   addScheduleLayerUser,
+  cancelScheduleOverrideMutation,
   createScheduleOverrideMutation,
   deleteScheduleMutation,
   moveScheduleLayerUser,
@@ -26,9 +27,35 @@ import {
   type ScheduleDependency,
 } from '@/lib/schedules/mutations';
 import { runSerializableTransaction } from '@/lib/db-utils';
-import { createScheduleLayer, updateScheduleLayer, deleteScheduleLayer, reorderScheduleLayers } from '@/lib/schedules/layer-commands';
+import { previewRotationChange, type RotationImpact } from '@/lib/schedules/rotation-change-preview';
+import { z } from 'zod';
+import {
+  createScheduleLayer,
+  updateScheduleLayer,
+  deleteScheduleLayer,
+  reorderScheduleLayers,
+  scheduleLayerUpdateSchema,
+} from '@/lib/schedules/layer-commands';
 
 type ScheduleFormState = ScheduleActionState;
+
+const STALE_SCHEDULE_MESSAGE =
+  'Someone else changed this schedule after you opened it. Reload the page to see their changes, then make yours again.';
+
+/** The revision the form was rendered from, so a stale edit is refused instead of overwriting. */
+function expectedRevisionFrom(formData: FormData): number | undefined {
+  const raw = formData.get('revision');
+  if (raw === null || raw === '') return undefined;
+  const value = Number(raw);
+  return Number.isInteger(value) && value >= 1 ? value : undefined;
+}
+
+function staleScheduleState(): ScheduleFormState {
+  return scheduleActionError(
+    new AppError({ code: 'PRECONDITION_FAILED', userMessage: STALE_SCHEDULE_MESSAGE }),
+    STALE_SCHEDULE_MESSAGE
+  );
+}
 
 async function getScheduleName(scheduleId: string) {
   const schedule = await prisma.onCallSchedule.findUnique({
@@ -98,15 +125,20 @@ export async function createSchedule(
 
   try {
     const normalizedName = await assertScheduleNameAvailable(name);
-    const schedule = await prisma.onCallSchedule.create({
-      data: { name: normalizedName, timeZone },
-    });
-    await logAudit({
-      action: 'schedule.created',
-      entityType: 'SCHEDULE',
-      entityId: schedule.id,
-      actorId,
-      details: { name: normalizedName, timeZone },
+    await prisma.$transaction(async tx => {
+      const schedule = await tx.onCallSchedule.create({
+        data: { name: normalizedName, timeZone },
+      });
+      await logAudit(
+        {
+          action: 'schedule.created',
+          entityType: 'SCHEDULE',
+          entityId: schedule.id,
+          actorId,
+          details: { name: normalizedName, timeZone },
+        },
+        tx
+      );
     });
 
     revalidatePath('/schedules');
@@ -139,6 +171,7 @@ export async function updateSchedule(
 
   const name = (formData.get('name') as string)?.trim();
   const timeZone = (formData.get('timeZone') as string) || 'UTC';
+  const expectedRevision = expectedRevisionFrom(formData);
 
   if (!name) {
     return scheduleValidationError('Schedule name is required.', [
@@ -154,29 +187,55 @@ export async function updateSchedule(
 
   try {
     const normalizedName = await assertScheduleNameAvailable(name, { excludeId: scheduleId });
-    await prisma.onCallSchedule.update({
+    const before = await prisma.onCallSchedule.findUnique({
       where: { id: scheduleId },
-      data: { name: normalizedName, timeZone },
+      select: { name: true, timeZone: true },
     });
-    await logAudit({
-      action: 'schedule.updated',
-      entityType: 'SCHEDULE',
-      entityId: scheduleId,
-      actorId,
-      details: { name: normalizedName, timeZone },
+    await prisma.$transaction(async tx => {
+      await tx.onCallSchedule.update({
+        where: {
+          id: scheduleId,
+          ...(expectedRevision === undefined ? {} : { revision: expectedRevision }),
+        },
+        data: { name: normalizedName, timeZone },
+      });
+      await logAudit(
+        {
+          action: 'schedule.updated',
+          entityType: 'SCHEDULE',
+          entityId: scheduleId,
+          actorId,
+          details: { name: normalizedName, timeZone },
+        },
+        tx
+      );
     });
 
-    const scheduleName = await getScheduleName(scheduleId);
-    await notifyScheduleMembers(
-      scheduleId,
-      'Schedule updated',
-      `Schedule "${scheduleName}" timezone and name updated`
-    );
+    // Say what actually changed: a time zone change re-interprets every restriction and handoff.
+    const changes = [
+      before && before.name !== normalizedName
+        ? `renamed from "${before.name}" to "${normalizedName}"`
+        : null,
+      before && before.timeZone !== timeZone
+        ? `time zone changed from ${before.timeZone} to ${timeZone}, so restriction hours and handoffs now follow ${timeZone}`
+        : null,
+    ].filter((change): change is string => change !== null);
+    if (changes.length > 0) {
+      await notifyScheduleMembers(
+        scheduleId,
+        'Schedule updated',
+        `Schedule "${normalizedName}" ${changes.join('; ')}`
+      );
+    }
 
     revalidatePath(`/schedules/${scheduleId}`);
     revalidatePath('/schedules');
     return undefined;
   } catch (error) {
+    // P2025: no row matched the id and the revision the form was rendered from.
+    if (expectedRevision !== undefined && (error as { code?: string })?.code === 'P2025') {
+      return staleScheduleState();
+    }
     if (error instanceof UniqueNameConflictError) {
       return scheduleActionError(
         new AppError({
@@ -189,6 +248,34 @@ export async function updateSchedule(
     }
     return scheduleActionError(error, 'Failed to update schedule.');
   }
+}
+
+/**
+ * The bounds the API enforces on layer values (whole hours, at most a year, unique days), so a form
+ * value like 1.5 hours is refused here instead of failing at the integer column.
+ */
+function checkLayerValues(values: {
+  name: string;
+  start: Date;
+  end: Date | null;
+  rotationLengthHours: number;
+  shiftLengthHours: number | null;
+  restrictions: { daysOfWeek?: number[]; startHour?: number; endHour?: number } | undefined;
+}) {
+  const parsed = scheduleLayerUpdateSchema.safeParse({
+    ...values,
+    start: values.start.toISOString(),
+    end: values.end?.toISOString() ?? null,
+    restrictions: values.restrictions ?? null,
+  });
+  if (parsed.success) return { error: undefined, values: parsed.data };
+  const issue = parsed.error.issues[0];
+  return {
+    error: scheduleValidationError(issue.message, [
+      { field: issue.path.join('.'), code: issue.code, message: issue.message },
+    ]),
+    values: undefined,
+  };
 }
 
 export async function createLayer(
@@ -282,14 +369,24 @@ export async function createLayer(
   if (endDate && endDate <= startDate) {
     return scheduleValidationError('End date must be after start date.');
   }
+  const checked = checkLayerValues({
+    name,
+    start: startDate,
+    end: endDate,
+    rotationLengthHours: rotationLength,
+    shiftLengthHours: shiftLength,
+    restrictions,
+  });
+  if (checked.error) return checked.error;
 
   try {
     await runSerializableTransaction(async tx => {
       const created = await createScheduleLayer(
         tx, scheduleId,
         {
-          name, start: startDate, end: endDate,
-          rotationLengthHours: rotationLength, shiftLengthHours: shiftLength,
+          name: checked.values.name, start: startDate, end: endDate,
+          rotationLengthHours: checked.values.rotationLengthHours,
+          shiftLengthHours: checked.values.shiftLengthHours,
           restrictions: restrictions ?? null,
         },
         responderIds
@@ -373,13 +470,19 @@ export async function addLayerUser(
   }
 
   try {
-    const assignment = await addScheduleLayerUser(layerId, userId);
-    await logAudit({
-      action: 'schedule.member.added',
-      entityType: 'SCHEDULE',
-      entityId: assignment.scheduleId,
-      actorId,
-      details: { layerId, userId, position: assignment.position },
+    const assignment = await runSerializableTransaction(async tx => {
+      const added = await addScheduleLayerUser(layerId, userId, tx);
+      await logAudit(
+        {
+          action: 'schedule.member.added',
+          entityType: 'SCHEDULE',
+          entityId: added.scheduleId,
+          actorId,
+          details: { layerId, userId, position: added.position },
+        },
+        tx
+      );
+      return added;
     });
 
     const scheduleName = await getScheduleName(assignment.scheduleId);
@@ -407,6 +510,7 @@ export async function updateLayer(
   } catch (error) {
     return scheduleActionError(error, 'Unauthorized. Admin or Responder access required.');
   }
+  const expectedRevision = expectedRevisionFrom(formData);
   const name = formData.get('name') as string;
   const start = formData.get('start') as string;
   const end = formData.get('end') as string;
@@ -481,16 +585,27 @@ export async function updateLayer(
   if (endDate && endDate <= startDate) {
     return scheduleValidationError('End date must be after start date.');
   }
+  const checked = checkLayerValues({
+    name,
+    start: startDate,
+    end: endDate,
+    rotationLengthHours: rotationLength,
+    shiftLengthHours: shiftLength,
+    restrictions,
+  });
+  if (checked.error) return checked.error;
 
   try {
     await runSerializableTransaction(async tx => {
       await updateScheduleLayer(
         tx, layerMeta.scheduleId, layerId,
         {
-          name, start: startDate, end: endDate,
-          rotationLengthHours: rotationLength, shiftLengthHours: shiftLength,
+          name: checked.values.name, start: startDate, end: endDate,
+          rotationLengthHours: checked.values.rotationLengthHours,
+          shiftLengthHours: checked.values.shiftLengthHours,
           restrictions: restrictions ?? null,
-        }
+        },
+        expectedRevision
       );
       await logAudit({
         action: 'schedule.layer.updated',
@@ -511,6 +626,7 @@ export async function updateLayer(
     revalidatePath(`/schedules/${layerMeta.scheduleId}`);
     revalidatePath('/schedules');
   } catch (error) {
+    if (isAppError(error) && error.code === 'PRECONDITION_FAILED') return staleScheduleState();
     return scheduleActionError(error, 'Failed to update layer.');
   }
 }
@@ -589,19 +705,51 @@ export async function moveLayerUser(
   }
 
   try {
-    const result = await moveScheduleLayerUser(layerId, userId, direction);
-    await logAudit({
-      action: 'schedule.member.reordered',
-      entityType: 'SCHEDULE',
-      entityId: result.scheduleId,
-      actorId,
-      details: { layerId, userId, direction },
+    const result = await runSerializableTransaction(async tx => {
+      const moved = await moveScheduleLayerUser(layerId, userId, direction, tx);
+      await logAudit(
+        {
+          action: 'schedule.member.reordered',
+          entityType: 'SCHEDULE',
+          entityId: moved.scheduleId,
+          actorId,
+          details: { layerId, userId, direction },
+        },
+        tx
+      );
+      return moved;
     });
 
     revalidatePath(`/schedules/${result.scheduleId}`);
     revalidatePath('/schedules');
   } catch (error) {
     return scheduleActionError(error, 'Failed to reorder responder.');
+  }
+}
+
+/** Who is on call over the next 4 weeks if this responder leaves the layer; read-only, run before `removeLayerUser`. */
+export async function previewLayerUserRemoval(
+  layerId: string,
+  userId: string
+): Promise<RotationImpact> {
+  try {
+    await assertAdminOrResponder();
+  } catch {
+    // The removal itself rejects an unauthorised caller; reveal nothing about the schedule here.
+    return { changed: false, message: '' };
+  }
+  const input = z.object({ layerId: z.string().min(1), userId: z.string().min(1) }).safeParse({
+    layerId,
+    userId,
+  });
+  if (!input.success) return { changed: false, message: '' };
+  try {
+    return await previewRotationChange({ layerId: input.data.layerId, userIds: [input.data.userId] });
+  } catch {
+    return {
+      changed: true,
+      message: 'The change to the on-call schedule could not be previewed. Remove anyway?',
+    };
   }
 }
 
@@ -617,16 +765,23 @@ export async function removeLayerUser(
   }
 
   try {
-    const result = await removeScheduleLayerUser(layerId, userId);
+    const result = await runSerializableTransaction(async tx => {
+      const removed = await removeScheduleLayerUser(layerId, userId, tx);
+      if (removed.removed) {
+        await logAudit(
+          {
+            action: 'schedule.member.removed',
+            entityType: 'SCHEDULE',
+            entityId: removed.scheduleId,
+            actorId,
+            details: { layerId, userId },
+          },
+          tx
+        );
+      }
+      return removed;
+    });
     if (result.removed) {
-      await logAudit({
-        action: 'schedule.member.removed',
-        entityType: 'SCHEDULE',
-        entityId: result.scheduleId,
-        actorId,
-        details: { layerId, userId },
-      });
-
       const scheduleName = await getScheduleName(result.scheduleId);
       await notifyScheduleMembers(
         result.scheduleId,
@@ -690,27 +845,26 @@ export async function createOverride(
   }
 
   try {
-    const override = await createScheduleOverrideMutation({
-      scheduleId,
-      userId,
-      replacesUserId,
-      start: startDate,
-      end: endDate,
-    });
-
-    await logAudit({
-      action: 'schedule.override.created',
-      entityType: 'SCHEDULE',
-      entityId: scheduleId,
-      actorId,
-      details: {
-        overrideId: override.id,
-        userId,
-        replacesUserId,
-        start: startDate.toISOString(),
-        end: endDate.toISOString(),
-      },
-    });
+    await createScheduleOverrideMutation(
+      { scheduleId, userId, replacesUserId, start: startDate, end: endDate },
+      (tx, created) =>
+        logAudit(
+          {
+            action: 'schedule.override.created',
+            entityType: 'SCHEDULE',
+            entityId: scheduleId,
+            actorId,
+            details: {
+              overrideId: created.id,
+              userId,
+              replacesUserId,
+              start: startDate.toISOString(),
+              end: endDate.toISOString(),
+            },
+          },
+          tx
+        )
+    );
 
     const scheduleName = await getScheduleName(scheduleId);
     const recipientIds =
@@ -739,31 +893,28 @@ export async function deleteOverride(
     return scheduleActionError(error, 'Unauthorized. Admin or Responder access required.');
   }
   try {
-    const override = await prisma.onCallOverride.findFirst({
-      where: { id: overrideId, scheduleId },
-      select: { userId: true, replacesUserId: true },
-    });
-
-    if (!override) {
-      return scheduleActionError(
-        new AppError({
-          code: 'SCHEDULE_OVERRIDE_NOT_FOUND',
-          userMessage: 'Override not found for this schedule.',
-          details: { scheduleId, overrideId },
-        }),
-        'Override not found for this schedule.'
+    const override = await prisma.$transaction(async tx => {
+      const cancelled = await cancelScheduleOverrideMutation(scheduleId, overrideId, tx);
+      await logAudit(
+        {
+          action:
+            cancelled.outcome === 'ENDED'
+              ? 'schedule.override.ended'
+              : 'schedule.override.deleted',
+          entityType: 'SCHEDULE',
+          entityId: scheduleId,
+          actorId,
+          details: {
+            overrideId,
+            userId: cancelled.userId,
+            replacesUserId: cancelled.replacesUserId,
+            start: cancelled.start.toISOString(),
+            end: cancelled.end.toISOString(),
+          },
+        },
+        tx
       );
-    }
-
-    await prisma.onCallOverride.delete({
-      where: { id: overrideId },
-    });
-    await logAudit({
-      action: 'schedule.override.deleted',
-      entityType: 'SCHEDULE',
-      entityId: scheduleId,
-      actorId,
-      details: { overrideId, userId: override.userId, replacesUserId: override.replacesUserId },
+      return cancelled;
     });
 
     const scheduleName = await getScheduleName(scheduleId);
@@ -774,7 +925,9 @@ export async function deleteOverride(
     await notifyScheduleMembers(
       scheduleId,
       'Schedule override',
-      `Override removed from ${scheduleName}`,
+      override.outcome === 'ENDED'
+        ? `Override ended early on ${scheduleName}`
+        : `Override removed from ${scheduleName}`,
       recipientIds
     );
 

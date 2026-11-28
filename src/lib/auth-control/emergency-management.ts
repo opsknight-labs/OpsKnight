@@ -368,6 +368,12 @@ export async function changeEmergencyMethod(
   compromised: boolean,
   expectedVersion: number
 ) {
+  // The switch revokes every key and the signed-in session. An identity switching itself to keys
+  // would have no key to sign back in with until someone else enrolls one.
+  if (method === 'WEBAUTHN' && actor.kind === 'emergency' && actor.id === accountId)
+    throw new Error(
+      'You are signed in as this recovery identity, and switching it to a hardware key would leave you with no way back in. Ask an administrator or another recovery identity to switch it, then enroll the key.'
+    );
   const generated = method === 'PASSWORD' ? await generateEmergencyPassword() : null;
   return prisma.$transaction(async tx => {
     await lockControlActor(tx, actor);

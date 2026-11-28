@@ -14,6 +14,7 @@ import {
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { scheduleReadWhere } from '@/lib/authorization-filters';
 import { createScheduleOverrideMutation } from '@/lib/schedules/mutations';
+import { assertCanManageScheduleOverrides } from '@/lib/schedules/capabilities';
 import { AppError } from '@/lib/errors';
 import { withV2Observability } from '@/lib/api-v2/observability';
 import { internalV2MutationGuard } from '@/lib/api-v2/internal-context';
@@ -128,6 +129,9 @@ export const POST = withV2Observability(async function POST(
         userMessage: `Schedule with id '${id}' was not found.`,
       });
     }
+
+    // Same rule as the schedule UI: operators need to be on the schedule or lead its owning team.
+    await assertCanManageScheduleOverrides(prisma, id, actor);
 
     const body = await req.json().catch(() => {
       throw new AppError({

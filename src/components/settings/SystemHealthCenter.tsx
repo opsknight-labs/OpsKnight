@@ -187,7 +187,10 @@ export default function SystemHealthCenter({ initialReport }: Props) {
   );
   const refreshInFlight = useRef(false);
 
-  const handleRefresh = useCallback(() => {
+  const lastOverall = useRef(initialReport.overall);
+  const countdownRef = useRef(30);
+
+  const handleRefresh = useCallback((live = false) => {
     if (refreshInFlight.current) return;
     refreshInFlight.current = true;
     startTransition(async () => {
@@ -196,8 +199,14 @@ export default function SystemHealthCenter({ initialReport }: Props) {
         setReport(freshReport);
         setLastRefreshedAt(new Date(freshReport.generatedAt));
         setRefreshError(null);
+        countdownRef.current = 30;
         setCountdown(30);
-        toast.success('System diagnostics refreshed');
+        // A live refresh only speaks up when the overall status actually changed.
+        if (!live) toast.success('System diagnostics refreshed');
+        else if (freshReport.overall !== lastOverall.current) {
+          toast.info(`System status is now ${freshReport.overall}`);
+        }
+        lastOverall.current = freshReport.overall;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to refresh diagnostics';
         setRefreshError(message);
@@ -219,6 +228,7 @@ export default function SystemHealthCenter({ initialReport }: Props) {
         setReport(freshReport);
         setLastRefreshedAt(new Date(freshReport.generatedAt));
         setRefreshError(null);
+        lastOverall.current = freshReport.overall;
         setInspectingCheck(previous => (previous?.id === checkId ? updatedCheck : previous));
         toast.success(`"${updatedCheck.label}" re-tested`);
       }
@@ -232,6 +242,7 @@ export default function SystemHealthCenter({ initialReport }: Props) {
 
   const handleAutoRefreshChange = useCallback((enabled: boolean) => {
     setAutoRefresh(enabled);
+    countdownRef.current = 30;
     if (!enabled) {
       setCountdown(30);
     }
@@ -242,13 +253,13 @@ export default function SystemHealthCenter({ initialReport }: Props) {
     if (!autoRefresh) return;
     const interval = setInterval(() => {
       if (document.visibilityState !== 'visible' || !navigator.onLine) return;
-      setCountdown(prev => {
-        if (prev <= 1) {
-          handleRefresh();
-          return 30;
-        }
-        return prev - 1;
-      });
+      // Refresh from the tick itself: a state updater runs in the render phase, which may not start one.
+      countdownRef.current -= 1;
+      if (countdownRef.current <= 0) {
+        countdownRef.current = 30;
+        handleRefresh(true);
+      }
+      setCountdown(countdownRef.current);
     }, 1000);
     return () => clearInterval(interval);
   }, [autoRefresh, handleRefresh]);
@@ -445,7 +456,7 @@ export default function SystemHealthCenter({ initialReport }: Props) {
             <Button
               variant="secondary"
               size="sm"
-              onClick={handleRefresh}
+              onClick={() => handleRefresh()}
               disabled={isPending}
               className="text-xs font-semibold h-8 gap-1.5 shadow-xs"
             >
@@ -659,6 +670,17 @@ function OperationalBrief({ checks }: { checks: AdminHealthCheck[] }) {
   );
 }
 
+/** Hour-bucket start in the viewer's time zone, with the zone shown. */
+export function formatHistoryHour(timestamp: string, timeZone?: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZoneName: 'short',
+    timeZone,
+  }).format(new Date(timestamp));
+}
+
 /**
  * 24-Hour Diagnostic History Ribbon (Service Health Trend)
  */
@@ -669,18 +691,30 @@ function HealthHistoryRibbon({
   history?: HealthHistorySample[];
   overall: HealthLevel;
 }) {
+  const isClient = useIsClient();
   if (!history || history.length === 0) return null;
 
-  const totalScore = history.reduce((sum, s) => sum + s.scorePercent, 0);
-  const avgScore = totalScore / history.length;
-  const uptimePercent = Number.isInteger(avgScore) ? avgScore.toString() : avgScore.toFixed(1);
+  // A bar whose evidence could not be read says "unknown"; it carries no score to average.
+  const scored = history.filter(sample => sample.status !== 'unknown');
+  const avgScore =
+    scored.length > 0
+      ? scored.reduce((sum, sample) => sum + sample.scorePercent, 0) / scored.length
+      : null;
+  const uptimePercent =
+    avgScore === null
+      ? null
+      : Number.isInteger(avgScore)
+        ? avgScore.toString()
+        : avgScore.toFixed(1);
 
   const percentColorClass =
-    avgScore >= 98
-      ? toneClasses('ok').text
-      : avgScore >= 80
-        ? toneClasses('elevated').text
-        : toneClasses('critical').text;
+    avgScore === null
+      ? 'text-muted-foreground'
+      : avgScore >= 98
+        ? toneClasses('ok').text
+        : avgScore >= 80
+          ? toneClasses('elevated').text
+          : toneClasses('critical').text;
 
   const statusMap: Record<HealthLevel, string> = {
     healthy: 'Operational',
@@ -699,7 +733,7 @@ function HealthHistoryRibbon({
             24-Hour Recorded Signal Trend
           </span>
           <span className={cn('text-2xs font-mono font-semibold', percentColorClass)}>
-            • {uptimePercent}% Signal Score
+            • {uptimePercent === null ? 'No signal score' : `${uptimePercent}% Signal Score`}
           </span>
         </div>
         <div className="hidden sm:flex items-center gap-2.5 text-2xs text-muted-foreground font-mono">
@@ -766,7 +800,7 @@ function HealthHistoryRibbon({
               >
                 <div className="rounded-md border border-border bg-popover px-2.5 py-1 text-2xs font-mono font-medium text-popover-foreground shadow-md whitespace-nowrap">
                   <div className="flex items-center gap-1.5">
-                    <span>{sample.hourLabel}</span>
+                    <span>{isClient ? formatHistoryHour(sample.timestamp) : sample.hourLabel}</span>
                     <span className="text-muted-foreground">•</span>
                     <span
                       className={
@@ -781,7 +815,9 @@ function HealthHistoryRibbon({
                     >
                       {statusLabel}
                     </span>
-                    <span className="text-muted-foreground">({sample.scorePercent}%)</span>
+                    {sample.status !== 'unknown' && (
+                      <span className="text-muted-foreground">({sample.scorePercent}%)</span>
+                    )}
                   </div>
                   {sample.reason && (
                     <div className="text-2xs text-muted-foreground max-w-56 truncate pt-0.5 font-sans">

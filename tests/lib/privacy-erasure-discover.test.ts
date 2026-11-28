@@ -85,6 +85,29 @@ describe('discoverSubjectErasureData', () => {
     mocks.assertNotLastAdmin.mockResolvedValue(undefined);
   });
 
+  it('previews the audit rows erasure will pseudonymise: the subject\'s own, those keyed by their email, and those about their account', async () => {
+    mockPrisma.current.auditLog.count.mockResolvedValue(7);
+
+    const discovery = await discoverSubjectErasureData(SUBJECT_ID);
+
+    expect(discovery.domainCounts.auditLogSnapshots).toBe(7);
+    expect(mockPrisma.current.auditLog.count).toHaveBeenCalledWith({
+      where: {
+        OR: [
+          {
+            OR: [
+              { actorId: SUBJECT_ID },
+              { actorEmail: 'alice@example.com' },
+              { targetEmail: 'alice@example.com' },
+              { entityId: { equals: 'alice@example.com', mode: 'insensitive' } },
+            ],
+          },
+          { entityType: 'USER', entityId: SUBJECT_ID },
+        ],
+      },
+    });
+  });
+
   it('has no blocking conditions when there are no admin invariant issues or active dependencies', async () => {
     const discovery = await discoverSubjectErasureData(SUBJECT_ID);
     expect(discovery.blockingConditions).toEqual([]);

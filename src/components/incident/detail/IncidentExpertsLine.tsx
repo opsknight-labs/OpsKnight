@@ -3,6 +3,7 @@
 import { useId, useState, useTransition } from 'react';
 import { Loader2, Sparkles, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
+import { notify } from '@/lib/toast';
 import type { IncidentExpert } from '@/lib/intelligence/triage/experts';
 
 const why = (expert: IncidentExpert) =>
@@ -40,6 +41,9 @@ export default function IncidentExpertsLine({
       try {
         await onAddWatcher(formData);
         setAdded(previous => new Set(previous).add(userId));
+      } catch (error) {
+        // A rejected add must not reach the incident page's error boundary.
+        notify.error(error);
       } finally {
         setPendingId(null);
       }

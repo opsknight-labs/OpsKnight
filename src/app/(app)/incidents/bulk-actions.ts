@@ -2,19 +2,26 @@
 
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { assertResponderOrAbove, getCurrentUser } from '@/lib/rbac';
+import { assertResponderOrAbove, getCurrentAuthorizationActor, getCurrentUser } from '@/lib/rbac';
+import { incidentReadWhere } from '@/lib/authorization-filters';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
+import { isAppError } from '@/lib/errors';
 import { reconcileIncidentEngagementAfterUrgencyChange } from '@/lib/incidents/engagement-reconciliation';
-import { requireOperationalUser } from '@/lib/users/operational-eligibility';
-import { isPageableRole } from '@/lib/authorization';
+import { runSerializableTransaction } from '@/lib/db-utils';
+import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
+import { AuthorizationError, CAPABILITIES, isPageableRole } from '@/lib/authorization';
 import {
   executeIncidentLifecycleBatch,
   executeIncidentLifecycleTargetBatch,
   type IncidentLifecycleCommand,
   type IncidentLifecycleResult,
 } from '@/lib/incidents/lifecycle';
-import { enqueueIncidentUpdateSideEffects } from '@/lib/event-outbox';
+import { isIncidentPriority } from '@/lib/incidents/priority';
+import { applyIncidentPriorityChange } from '@/lib/incidents/priority-command';
+import { requireResolutionNote } from '@/lib/incidents/resolution-note';
+
+const MAX_BULK_SELECTION = 100;
 
 type BulkLifecycleStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
 
@@ -24,6 +31,33 @@ function changedIncidentIds(results: readonly IncidentLifecycleResult[]): string
 
 type BulkLifecycleActor = { id: string; name?: string };
 
+// The batch is one transaction, so a refused incident rolls back the whole selection.
+// Say why (and that nothing changed) instead of a fixed string.
+function bulkFailureMessage(error: unknown, fallback: string): string {
+  if (isAppError(error) && error.exposure === 'public') {
+    return `${error.userMessage} No incidents were changed.`;
+  }
+  return fallback;
+}
+
+/**
+ * Operations.manage alone does not say which incidents a person may read (custom roles separate
+ * the two), so a bulk selection is held to the same scope as the list it was made from.
+ */
+async function assertCanActOnIncidents(incidentIds: string[]): Promise<void> {
+  await assertResponderOrAbove();
+  const readable = incidentReadWhere(await getCurrentAuthorizationActor());
+  if (Object.keys(readable).length === 0) return;
+  const unique = [...new Set(incidentIds)];
+  const visible = await prisma.incident.count({ where: { AND: [{ id: { in: unique } }, readable] } });
+  if (visible !== unique.length) {
+    throw new AuthorizationError(
+      'Unauthorized. You cannot act on one or more of the selected incidents.',
+      CAPABILITIES.INCIDENT_READ_SCOPED
+    );
+  }
+}
+
 async function runBulkLifecycleCommand(
   incidentIds: string[],
   command: IncidentLifecycleCommand,
@@ -32,6 +66,7 @@ async function runBulkLifecycleCommand(
   extra: Partial<{
     snoozedUntil: Date;
     snoozeReason: string | null;
+    resolutionNote: string;
   }> = {}
 ): Promise<string[]> {
   const results = await executeIncidentLifecycleBatch(
@@ -71,7 +106,7 @@ export async function bulkAcknowledge(incidentIds: string[]) {
   }
 
   try {
-    await assertResponderOrAbove();
+    await assertCanActOnIncidents(incidentIds);
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' };
   }
@@ -92,19 +127,27 @@ export async function bulkAcknowledge(incidentIds: string[]) {
     return { success: true, count: changedIds.length };
   } catch (error) {
     logger.error('Bulk acknowledge failed', { component: 'bulk-actions', error, incidentIds });
-    return { success: false, error: 'Failed to acknowledge incidents' };
+    return { success: false, error: bulkFailureMessage(error, 'Failed to acknowledge incidents') };
   }
 }
 
-export async function bulkResolve(incidentIds: string[]) {
+export async function bulkResolve(incidentIds: string[], resolution: string) {
   if (!incidentIds || incidentIds.length === 0) {
     return { success: false, error: 'No incidents selected' };
   }
 
   try {
-    await assertResponderOrAbove();
+    await assertCanActOnIncidents(incidentIds);
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' };
+  }
+
+  // The same mandatory note the single-incident resolve requires.
+  let resolutionNote: string;
+  try {
+    resolutionNote = requireResolutionNote(resolution);
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Invalid note' };
   }
 
   try {
@@ -113,7 +156,8 @@ export async function bulkResolve(incidentIds: string[]) {
       incidentIds,
       'RESOLVE',
       { id: user.id, name: user.name ?? undefined },
-      `Bulk resolved${user ? ` by ${user.name}` : ''}`
+      `Bulk resolved${user ? ` by ${user.name}` : ''}`,
+      { resolutionNote }
     );
 
     revalidatePath('/incidents');
@@ -121,7 +165,7 @@ export async function bulkResolve(incidentIds: string[]) {
     return { success: true, count: changedIds.length };
   } catch (error) {
     logger.error('Bulk resolve failed', { component: 'bulk-actions', error, incidentIds });
-    return { success: false, error: 'Failed to resolve incidents' };
+    return { success: false, error: bulkFailureMessage(error, 'Failed to resolve incidents') };
   }
 }
 
@@ -135,7 +179,7 @@ export async function bulkReassign(incidentIds: string[], assigneeId: string) {
   }
 
   try {
-    await assertResponderOrAbove();
+    await assertCanActOnIncidents(incidentIds);
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' };
   }
@@ -149,34 +193,33 @@ export async function bulkReassign(incidentIds: string[], assigneeId: string) {
       return { success: false, error: 'Stakeholders cannot be assigned to incidents.' };
     }
 
+    const uniqueIds = [...new Set(incidentIds)];
+    if (uniqueIds.length > MAX_BULK_SELECTION) {
+      return {
+        success: false,
+        error: `Select at most ${MAX_BULK_SELECTION} incidents to reassign at once.`,
+      };
+    }
+
     const user = await getCurrentUser();
-    await prisma.$transaction(
-      async tx => {
-        await requireOperationalUser(tx, assigneeId);
-        await tx.incident.updateMany({
-          where: { id: { in: incidentIds } },
-          data: { assigneeId, teamId: null },
-        });
-        await tx.incidentEvent.createMany({
-          data: incidentIds.map(incidentId => ({
-            incidentId,
-            message: `Bulk reassigned to ${assignee.name}${user ? ` by ${user.name}` : ''}`,
-          })),
-        });
-        await Promise.all(
-          incidentIds.map(incidentId =>
-            enqueueIncidentUpdateSideEffects(tx, incidentId, [
-              'INCIDENT_ASSIGNED_TO_USER_NOTIFICATION',
-              'INCIDENT_UPDATE_WEBHOOK',
-            ])
-          )
+    // The same command as a single reassign: assignment event, notification, war room and
+    // retries on write conflicts. Resolved incidents are closed work, so they are left alone.
+    const reassigned = await runSerializableTransaction(async tx => {
+      const open = await tx.incident.findMany({
+        where: { id: { in: uniqueIds }, status: { not: 'RESOLVED' } },
+        select: { id: true },
+      });
+      for (const { id } of open) {
+        await assignIncidentDomainCommand(
+          { incidentId: id, assigneeId, actor: { id: user.id, name: user.name ?? undefined } },
+          tx
         );
-      },
-      { isolationLevel: 'Serializable' }
-    );
+      }
+      return open.length;
+    });
 
     revalidatePath('/incidents');
-    return { success: true, count: incidentIds.length };
+    return { success: true, count: reassigned };
   } catch (error) {
     logger.error('Bulk reassign failed', {
       component: 'bulk-actions',
@@ -184,7 +227,7 @@ export async function bulkReassign(incidentIds: string[], assigneeId: string) {
       incidentIds,
       assigneeId,
     });
-    return { success: false, error: 'Failed to reassign incidents' };
+    return { success: false, error: bulkFailureMessage(error, 'Failed to reassign incidents') };
   }
 }
 
@@ -194,28 +237,45 @@ export async function bulkUpdatePriority(incidentIds: string[], priority: string
   }
 
   try {
-    await assertResponderOrAbove();
+    await assertCanActOnIncidents(incidentIds);
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' };
   }
 
+  // Escalation conditions match the exact P1-P5 strings; empty clears the priority ("Auto").
+  if (priority && !isIncidentPriority(priority)) {
+    return { success: false, error: 'Priority must be one of P1, P2, P3, P4 or P5' };
+  }
+  const nextPriority = isIncidentPriority(priority) ? priority : null;
+
   try {
+    const uniqueIds = [...new Set(incidentIds)];
+    if (uniqueIds.length > MAX_BULK_SELECTION) {
+      return {
+        success: false,
+        error: `Select at most ${MAX_BULK_SELECTION} incidents to update at once.`,
+      };
+    }
+
     const user = await getCurrentUser();
-    await prisma.$transaction(async tx => {
-      await tx.incident.updateMany({
-        where: { id: { in: incidentIds } },
-        data: { priority: priority || null },
+    // Same command as the incident page control: P1-P5 or cleared, timeline event and war-room message.
+    const updated = await prisma.$transaction(async tx => {
+      const existing = await tx.incident.findMany({
+        where: { id: { in: uniqueIds } },
+        select: { id: true },
       });
-      await tx.incidentEvent.createMany({
-        data: incidentIds.map(incidentId => ({
-          incidentId,
-          message: `Bulk priority updated to ${priority || 'Auto'}${user ? ` by ${user.name}` : ''}`,
-        })),
-      });
+      for (const { id } of existing) {
+        await applyIncidentPriorityChange(tx, {
+          incidentId: id,
+          priority: nextPriority,
+          eventMessage: `Bulk priority updated to ${nextPriority ?? 'Auto'}${user ? ` by ${user.name}` : ''}`,
+        });
+      }
+      return existing.length;
     });
 
     revalidatePath('/incidents');
-    return { success: true, count: incidentIds.length };
+    return { success: true, count: updated };
   } catch (error) {
     logger.error('Bulk priority update failed', {
       component: 'bulk-actions',
@@ -237,7 +297,7 @@ export async function bulkSnooze(
   }
 
   try {
-    await assertResponderOrAbove();
+    await assertCanActOnIncidents(incidentIds);
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' };
   }
@@ -263,7 +323,7 @@ export async function bulkSnooze(
       incidentIds,
       durationMinutes,
     });
-    return { success: false, error: 'Failed to snooze incidents' };
+    return { success: false, error: bulkFailureMessage(error, 'Failed to snooze incidents') };
   }
 }
 
@@ -273,7 +333,7 @@ export async function bulkUnsnooze(incidentIds: string[]) {
   }
 
   try {
-    await assertResponderOrAbove();
+    await assertCanActOnIncidents(incidentIds);
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' };
   }
@@ -291,7 +351,7 @@ export async function bulkUnsnooze(incidentIds: string[]) {
     return { success: true, count: changedIds.length };
   } catch (error) {
     logger.error('Bulk unsnooze failed', { component: 'bulk-actions', error, incidentIds });
-    return { success: false, error: 'Failed to unsnooze incidents' };
+    return { success: false, error: bulkFailureMessage(error, 'Failed to unsnooze incidents') };
   }
 }
 
@@ -301,7 +361,7 @@ export async function bulkSuppress(incidentIds: string[]) {
   }
 
   try {
-    await assertResponderOrAbove();
+    await assertCanActOnIncidents(incidentIds);
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' };
   }
@@ -319,7 +379,7 @@ export async function bulkSuppress(incidentIds: string[]) {
     return { success: true, count: changedIds.length };
   } catch (error) {
     logger.error('Bulk suppress failed', { component: 'bulk-actions', error, incidentIds });
-    return { success: false, error: 'Failed to suppress incidents' };
+    return { success: false, error: bulkFailureMessage(error, 'Failed to suppress incidents') };
   }
 }
 
@@ -329,7 +389,7 @@ export async function bulkUnsuppress(incidentIds: string[]) {
   }
 
   try {
-    await assertResponderOrAbove();
+    await assertCanActOnIncidents(incidentIds);
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' };
   }
@@ -347,7 +407,7 @@ export async function bulkUnsuppress(incidentIds: string[]) {
     return { success: true, count: changedIds.length };
   } catch (error) {
     logger.error('Bulk unsuppress failed', { component: 'bulk-actions', error, incidentIds });
-    return { success: false, error: 'Failed to unsuppress incidents' };
+    return { success: false, error: bulkFailureMessage(error, 'Failed to unsuppress incidents') };
   }
 }
 
@@ -357,7 +417,7 @@ export async function bulkUpdateUrgency(incidentIds: string[], urgency: 'HIGH' |
   }
 
   try {
-    await assertResponderOrAbove();
+    await assertCanActOnIncidents(incidentIds);
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' };
   }
@@ -405,9 +465,12 @@ export async function bulkUpdateStatus(incidentIds: string[], status: BulkLifecy
   if (!incidentIds || incidentIds.length === 0) {
     return { success: false, error: 'No incidents selected' };
   }
+  if (status === 'RESOLVED') {
+    return { success: false, error: 'Use Resolve to close incidents: it asks for a resolution note.' };
+  }
 
   try {
-    await assertResponderOrAbove();
+    await assertCanActOnIncidents(incidentIds);
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' };
   }
@@ -430,6 +493,6 @@ export async function bulkUpdateStatus(incidentIds: string[], status: BulkLifecy
       incidentIds,
       status,
     });
-    return { success: false, error: 'Failed to update status' };
+    return { success: false, error: bulkFailureMessage(error, 'Failed to update status') };
   }
 }

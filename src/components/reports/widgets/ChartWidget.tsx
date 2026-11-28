@@ -101,6 +101,15 @@ const ChartWidget = memo(function ChartWidget({
   // Map metricKey to chart data
   const chartData = getChartData(metricKey, metrics, config);
 
+  // A failed heatmap query leaves no data; say so rather than "No chart data" or a zero calendar.
+  if (chartType === 'heatmap' && metrics.heatmapAvailable === false) {
+    return (
+      <p className="p-3 text-sm text-muted-foreground" role="status">
+        Incident history is temporarily unavailable.
+      </p>
+    );
+  }
+
   if (!chartData || chartData.length === 0) {
     return (
       <div className="h-full flex items-center justify-center text-muted-foreground">

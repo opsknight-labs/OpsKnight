@@ -92,7 +92,11 @@ The page tells you:
 - a **Request access** form.
 
 For a specific incident, service or team outside your teams, OpsKnight shows only which team owns
-it, never its contents.
+it, never its contents. It does this only when you really cannot open the item: for an item you
+can open, or one that does not exist, the page reveals no owning team. The names and email
+addresses of the people who can give you access are shown only to people who can read the user
+directory (Responders, Auditors, Admins and custom roles with that permission); a User sees the
+owning team and "Ask an administrator or the owning team, or send a request below."
 
 ## Request access
 
@@ -106,9 +110,14 @@ Choose how long you need it (1 hour to 7 days, or permanently) and say why.
 - Granting the Admin role requires the approver to have signed in within the last 15 minutes.
 - If your role comes from your identity provider, you can still ask for temporary access; permanent
   changes are made in the identity provider.
+- A permanent role replaces your current one, so it is only offered when it keeps everything you can
+  do today (for example Responder or Admin from User). A lateral move, such as User or Responder to
+  Auditor, can only be granted for a limited time, on top of your current role; for a permanent
+  change an administrator edits your role directly.
 - You can ask to join any team by name, even if you are not in a team yet.
 - Approvers get a notification that opens the request directly. If you already received the access
   some other way, approving closes the request without changing anything (it never demotes you).
+  In the history it reads "Closed by" the approver, not "Cancelled by the requester".
 
 Temporary access ends automatically. A banner shows while you have it, and you can end it early.
 
@@ -133,19 +142,27 @@ everything done with it is in the audit log. Administrators can turn it off.
   certifies their own access unless they are the only reviewer (this is recorded). Reviews can be
   cancelled without changes, and only Admins complete a review and apply removals. Roles that come
   from your identity provider must be removed there; the evidence says so instead of marking them
-  removed. Completing a review removes what you marked, and the
+  removed. Each decision on an item is recorded in the audit log as
+  `access_review.item_decided` with the reviewer, the decision and the decision it replaced, and a
+  decision cannot land after the review is completed ("This review is closed."). Completing a
+  review removes what you marked, and the
   evidence can be downloaded for SOC 2 (CC6.2/CC6.3) or ISO 27001 (A.5.18) audits. Reviews can
-  start automatically every month, quarter, half-year or year.
+  start automatically every month, quarter, half-year or year. Only one review can be open at a
+  time, so starting another is refused until the open one is completed or cancelled. When a
+  scheduled review is due and an older one is still open, the old one is closed without changes
+  and recorded as `access_review.superseded`.
 - **Custom roles** — add specific permissions to specific people without promoting them, for
   example letting an Auditor run runbooks, or making someone an access reviewer. Organization
   administration can only be given with the Admin role. Changes take effect immediately and do
-  not sign anyone out.
+  not sign anyone out. Removing a custom role unassigns it from everyone and frees its name, so
+  you can create a role with the same name again. The removed role stays in the audit trail
+  renamed to its old name plus "(archived" and its id.
 - **Most denied** — the pages and actions people were blocked from most in the last 7 days, a
   quick way to spot someone who needs a team or role.
 - **Access policy** — turn incident work for Users, access requests, and emergency access on or
   off, set the emergency access limit, and decide whether people may approve their own access
-  requests (only useful with a single administrator). Access reviews never let anyone certify
-  their own access.
+  requests (only useful with a single administrator). This setting does not affect access
+  reviews: even with it on, nobody certifies their own access while another reviewer exists.
 
 Changes to roles, custom roles and the access policy require a recent sign-in. Every grant,
 request, decision, denial and review is recorded in the audit log.

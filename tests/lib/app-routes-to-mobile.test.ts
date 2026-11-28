@@ -15,6 +15,9 @@ describe('toMobilePath', () => {
     expect(toMobilePath('/incidents/templates')).toBeNull();
     expect(toMobilePath('/incidents/templates/create')).toBeNull();
     expect(toMobilePath('/policies/create')).toBeNull();
+    expect(toMobilePath('/postmortems/create')).toBeNull();
+    expect(toMobilePath('/services/business')).toBeNull();
+    expect(toMobilePath('/services/business/bs-1')).toBeNull();
     expect(toMobilePath('/settings/intelligence')).toBeNull();
   });
 });

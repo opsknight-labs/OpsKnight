@@ -121,6 +121,9 @@ ENROLLING → ONLINE → DEGRADED → OFFLINE → REVOKED
 | `REVOKED`   | Permanently decommissioned                    | Manual — requires new enrollment |
 
 Revoked Agents cannot be upgraded in place — create a new enrollment.
+Revoking an Agent also removes it from every pool, including pools you added it
+to by hand, so a revoked host no longer counts toward a `LOCAL_HOSTS` pool's
+size and the remaining hosts can claim its writes.
 
 ## Agent capabilities
 

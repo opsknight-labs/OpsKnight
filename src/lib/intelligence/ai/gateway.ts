@@ -620,6 +620,18 @@ class GatewayPort implements LanguageModelPort {
     return this.lean.has(request) ? answer : answer + REASONING_ROOM_TOKENS;
   }
 
+  /**
+   * The same for a structured document (a summary, a postmortem draft). Thinking is spent from the same cap, so
+   * a 1,024-token summary on a small model that thinks first was cut off mid-JSON and rejected as invalid. A
+   * structured document may also ask for more than the answer-length setting, up to the hard ceiling.
+   */
+  private structuredCap(request: AiGenerateRequest): number {
+    const answer = this.outputLimit(
+      request,
+      Math.max(this.data.settings.maxOutputTokens, AI_SETTINGS_BOUNDS.maxOutputTokens.max)
+    );
+    return this.lean.has(request) ? answer : answer + REASONING_ROOM_TOKENS;
+  }
   /** Requests whose budget covered only the answer: they are sent without thinking room (see hold). */
   private readonly lean = new WeakSet<AiGenerateRequest>();
 
@@ -650,21 +662,14 @@ class GatewayPort implements LanguageModelPort {
     // The hold covers everything the call may send back (answer plus thinking room), so a hard budget is never
     // overshot. When only the answer fits, the first hold is retried without the room and the call is sent
     // without it (`lean`), so a small budget still answers; a top-up is never retried smaller.
-    const roomy = !structured && !this.lean.has(request);
-    if (roomy && !extend) {
-      const full = await this.holdTokens(request, provider, input, this.answerCap(request));
+    const cap = () => (structured ? this.structuredCap(request) : this.answerCap(request));
+    if (!this.lean.has(request) && !extend) {
+      // A probe: if only the lean hold below fits, the call still runs, so this refusal is not a rejection.
+      const full = await this.holdTokens(request, provider, input, cap(), undefined, true);
       if (full) return full;
       this.lean.add(request);
     }
-    return this.holdTokens(
-      request,
-      provider,
-      input,
-      structured
-        ? this.outputLimit(request, AI_SETTINGS_BOUNDS.maxOutputTokens.max)
-        : this.answerCap(request),
-      extend
-    );
+    return this.holdTokens(request, provider, input, cap(), extend);
   }
 
   private async holdTokens(
@@ -672,7 +677,8 @@ class GatewayPort implements LanguageModelPort {
     provider: GatewayProvider,
     input: number,
     output: number,
-    extend?: AiReservation
+    extend?: AiReservation,
+    probe = false
   ): Promise<AiReservation | null> {
     const inputEstimate =
       input +
@@ -697,6 +703,7 @@ class GatewayPort implements LanguageModelPort {
         capability: request.context.capability,
         callSite: request.context.callSite,
         costMicros: costMicrosFor({ inputTokens: inputEstimate, outputTokens: output }, price),
+        ...(probe ? { probe } : {}),
       },
       extend
     );
@@ -940,6 +947,8 @@ class GatewayPort implements LanguageModelPort {
   }
 
   async generateStructured<T>(request: AiStructuredRequest<T>): Promise<AiStructuredResult<T>> {
+    // Lean means "sent without thinking room": the caller counts its own tokens from the cap it asked for.
+    if (request.thinkingRoom === false) this.lean.add(request);
     await this.admit(request);
     let attempts = 0;
     let invalidOutputs = 0;
@@ -965,12 +974,8 @@ class GatewayPort implements LanguageModelPort {
                 schema: zodSchema(request.schema as Parameters<typeof zodSchema>[0]),
                 name: request.schemaName,
               }),
-              // A structured document (a postmortem draft) is not a chat answer: it may ask for more than the
-              // answer-length setting, up to the hard ceiling, so it is never cut off and rejected as invalid.
-              maxOutputTokens: this.outputLimit(
-                request,
-                Math.max(this.data.settings.maxOutputTokens, AI_SETTINGS_BOUNDS.maxOutputTokens.max)
-              ),
+              // Never cut off and rejected as invalid: room for thinking plus the document (see structuredCap).
+              maxOutputTokens: this.structuredCap(request),
               abortSignal: this.signalFor(request),
               // One step, no tools: the request timeout is the whole call.
               timeout: this.data.settings.requestTimeoutMs,

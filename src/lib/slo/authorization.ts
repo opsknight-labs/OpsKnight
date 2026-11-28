@@ -18,8 +18,12 @@ export function serviceObjectiveReadWhere(
 /** Shared daily snapshots include the whole service, including private incident contributions.
  * Scoped readers must use actor-filtered evaluations instead of this global aggregate history.
  */
+export function canReadSharedObjectiveHistory(actor: AuthorizationActor) {
+  return hasCapability(actor.role, CAPABILITIES.METRICS_READ_ALL);
+}
+
 export function requireSharedObjectiveHistory(actor: AuthorizationActor) {
-  if (!hasCapability(actor.role, CAPABILITIES.METRICS_READ_ALL))
+  if (!canReadSharedObjectiveHistory(actor))
     throw new AppError({
       code: 'AUTHORIZATION_DENIED',
       userMessage:

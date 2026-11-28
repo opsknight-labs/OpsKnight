@@ -145,6 +145,39 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
 function NoteImage({ src, alt }: { src: string; alt: string }) {
   const [isOpen, setIsOpen] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [allowRemote, setAllowRemote] = useState(false);
+
+  // An image on another host would report every viewer's IP, browser and time to whoever wrote
+  // the note, so it loads only when the viewer asks for it.
+  if (/^https?:/i.test(src) && !allowRemote) {
+    let host = src;
+    try {
+      host = new URL(src).host;
+    } catch {
+      // keep the raw URL as the label
+    }
+    return (
+      <div className="inline-flex flex-wrap items-center gap-1.5 px-2.5 py-1.5 my-1 rounded-lg border border-border/70 bg-muted/20 text-xs text-muted-foreground">
+        <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+        <span>External image from {host} is not loaded automatically.</span>
+        <button
+          type="button"
+          onClick={() => setAllowRemote(true)}
+          className="font-medium text-primary hover:underline cursor-pointer"
+        >
+          Load image
+        </button>
+        <a
+          href={src}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 hover:text-foreground"
+        >
+          Open <ExternalLink className="h-3 w-3" />
+        </a>
+      </div>
+    );
+  }
 
   if (loadError) {
     return (

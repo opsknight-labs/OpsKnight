@@ -38,6 +38,12 @@ does not contain responder preferences.
 
 Eligibility combines service/policy intent, user preferences, endpoint health, quiet hours/opt-out, incident context, provider availability, and control-plane admission. An enabled channel without a usable endpoint cannot deliver.
 
+An endpoint that is `INVALID`, `BOUNCED` or `OPTED_OUT` stays that way when a late or out-of-order provider callback arrives, for example a delivered receipt for an older message after the recipient complained. The callback does not mark it healthy or degraded, so paging does not resume on its own. Changing the address, or an explicit action by the user or an administrator, clears the state.
+
+When one of your own contacts is `INVALID` or `BOUNCED`, **Settings → Profile → Notifications** shows "Some contacts are being skipped" with the channel and a **Reset** button. Reset returns the contact to unverified so the next notification is tried again, and records `notification.endpoint.reset` in the audit log. It does not lift `OPTED_OUT`, and a contact that bounces again is blocked again. A late provider report about a message sent before the reset is ignored, so it cannot undo the reset.
+
+Rotating `NEXTAUTH_SECRET` does not clear these states. Address hashes are keyed by that secret, so every hash changes after a rotation. OpsKnight records a fingerprint of the key in system configuration; when it detects that the key changed, an `INVALID`, `BOUNCED` or `OPTED_OUT` endpoint stays blocked and only has its hash re-stamped. A changed address under an unchanged key still returns the endpoint to `UNVERIFIED` and needs verification again.
+
 ## Verify it worked
 
 Test inside and, where safe, across a quiet-hours boundary. Confirm the expected channel/endpoint is selected and delivery history records the recipient/provider outcome.

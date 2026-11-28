@@ -28,8 +28,19 @@ import {
 } from '@/components/patterns';
 import { Button } from '@/components/ui/shadcn/button';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/shadcn/alert-dialog';
 import type { UserFormState } from '@/app/(app)/users/actions';
 import type { UserDependencyReport } from '@/lib/users/dependencies';
+import type { RotationImpact } from '@/lib/schedules/rotation-change-preview';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -82,6 +93,7 @@ type UserListProps = {
   updateUserRole: (userId: string, formData: FormData) => Promise<{ error?: string } | undefined>;
   addUserToTeam: (userId: string, formData: FormData) => Promise<{ error?: string } | undefined>;
   deactivateUser: (userId: string, formData?: FormData) => Promise<{ error?: string } | undefined>;
+  previewUserDeactivation?: (userIds: string[]) => Promise<RotationImpact>;
   reactivateUser: (userId: string, formData?: FormData) => Promise<{ error?: string } | undefined>;
   deleteUser: (userId: string, formData?: FormData) => Promise<{ error?: string } | undefined>;
   generateInvite: (
@@ -141,6 +153,7 @@ export default function UserList({
   updateUserRole,
   addUserToTeam,
   deactivateUser,
+  previewUserDeactivation,
   reactivateUser,
   deleteUser,
   generateInvite,
@@ -149,8 +162,15 @@ export default function UserList({
   summary,
   actions,
 }: UserListProps) {
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [pickedIds, setPickedIds] = useState<Set<string>>(new Set());
+  const [confirmBulk, setConfirmBulk] = useState<'DEACTIVATE' | 'DELETE' | null>(null);
   const [isBulkActionPending, setIsBulkActionPending] = useState(false);
+  const [bulkRotationImpact, setBulkRotationImpact] = useState<RotationImpact | null>(null);
+  // Only users on screen count as selected, so a page or filter change cannot carry a hidden selection.
+  const selectedIds = useMemo(
+    () => new Set(users.filter(user => pickedIds.has(user.id)).map(user => user.id)),
+    [users, pickedIds]
+  );
   const [view, setView] = useDirectoryView('users');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -168,7 +188,7 @@ export default function UserList({
   };
 
   const toggleUser = useCallback((id: string) => {
-    setSelectedIds(prev => {
+    setPickedIds(prev => {
       const newSelected = new Set(prev);
       if (newSelected.has(id)) {
         newSelected.delete(id);
@@ -180,20 +200,29 @@ export default function UserList({
   }, []);
 
   const toggleAll = useCallback(() => {
-    setSelectedIds(prev => {
-      if (prev.size === users.length) {
-        return new Set();
-      } else {
-        return new Set(users.map(u => u.id));
-      }
-    });
-  }, [users]);
+    setPickedIds(
+      selectedIds.size === users.length ? new Set() : new Set(users.map(user => user.id))
+    );
+  }, [users, selectedIds.size]);
 
   const allSelected = useMemo(
     () => users.length > 0 && selectedIds.size === users.length,
     [users.length, selectedIds.size]
   );
   const someSelected = selectedIds.size > 0 && !allSelected;
+
+  const openBulkDeactivate = () => {
+    setBulkRotationImpact(null);
+    setConfirmBulk('DEACTIVATE');
+    void previewUserDeactivation?.(Array.from(selectedIds))
+      .then(setBulkRotationImpact)
+      .catch(() =>
+        setBulkRotationImpact({
+          changed: true,
+          message: 'The change to the on-call schedules could not be previewed.',
+        })
+      );
+  };
 
   const handleBulkAction = async (action: 'DEACTIVATE' | 'ACTIVATE' | 'DELETE') => {
     if (selectedIds.size === 0) return;
@@ -212,7 +241,7 @@ export default function UserList({
             res?.message ||
               `${action === 'DELETE' ? 'Deleted' : action === 'ACTIVATE' ? 'Activated' : 'Deactivated'} ${selectedIds.size} user(s)`
           );
-          setSelectedIds(new Set());
+          setPickedIds(new Set());
         }
       } else {
         const results = await Promise.all(
@@ -237,7 +266,7 @@ export default function UserList({
               : `${failures.length} users could not be updated. ${failures[0].result?.error || ''}`
           );
         }
-        setSelectedIds(new Set(failures.map(entry => entry.id)));
+        setPickedIds(new Set(failures.map(entry => entry.id)));
       }
     } catch {
       toast.error('Failed to perform bulk action');
@@ -298,6 +327,9 @@ export default function UserList({
       teams,
       onActivate: user.status === 'DISABLED' ? handleReactivate : undefined,
       onDeactivate: user.status === 'ACTIVE' ? handleDeactivate : undefined,
+      onPreviewRotationImpact: previewUserDeactivation
+        ? () => previewUserDeactivation([user.id])
+        : undefined,
       onDelete: handleDelete,
       onGetDependencies: () => getUserDependencyReport(user.id),
       onGenerateInvite: user.status === 'INVITED' ? handleGenerateInvite : undefined,
@@ -434,15 +466,12 @@ export default function UserList({
                 <UserCheck />
                 <span>Activate</span>
               </DropdownMenuItem>
-              <DropdownMenuItem
-                variant="destructive"
-                onClick={() => handleBulkAction('DEACTIVATE')}
-              >
+              <DropdownMenuItem variant="destructive" onClick={() => openBulkDeactivate()}>
                 <UserX />
                 <span>Deactivate</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onClick={() => handleBulkAction('DELETE')}>
+              <DropdownMenuItem variant="destructive" onClick={() => setConfirmBulk('DELETE')}>
                 <Trash2 />
                 <span>Delete</span>
               </DropdownMenuItem>
@@ -450,6 +479,43 @@ export default function UserList({
           </DropdownMenu>
         </div>
       )}
+
+      <AlertDialog open={confirmBulk !== null} onOpenChange={open => !open && setConfirmBulk(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmBulk === 'DELETE' ? 'Delete' : 'Deactivate'} {selectedIds.size} user
+              {selectedIds.size === 1 ? '' : 's'}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmBulk === 'DELETE'
+                ? 'This permanently removes their accounts and cannot be undone.'
+                : 'They will lose access to the system but their data will be preserved.'}{' '}
+              {users
+                .filter(user => selectedIds.has(user.id))
+                .slice(0, 5)
+                .map(user => user.name)
+                .join(', ')}
+              {selectedIds.size > 5 ? ` and ${selectedIds.size - 5} more` : ''}.
+              {confirmBulk === 'DEACTIVATE' && bulkRotationImpact?.changed && (
+                <span className="mt-3 block whitespace-pre-line">{bulkRotationImpact.message}</span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const action = confirmBulk;
+                setConfirmBulk(null);
+                if (action) void handleBulkAction(action);
+              }}
+            >
+              {confirmBulk === 'DELETE' ? 'Delete' : 'Deactivate'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {view === 'table' ? (
         <DirectoryTable

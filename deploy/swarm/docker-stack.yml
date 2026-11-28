@@ -62,7 +62,7 @@ services:
       test:
         [
           'CMD-SHELL',
-          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status===''healthy''?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
+          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status!==''unhealthy''&&r.statusCode<400?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
         ]
       interval: 30s
       timeout: 10s
@@ -138,7 +138,7 @@ services:
       test:
         [
           'CMD-SHELL',
-          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status===''healthy''?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
+          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status!==''unhealthy''&&r.statusCode<400?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
         ]
       interval: 30s
       timeout: 10s
@@ -215,7 +215,7 @@ services:
       test:
         [
           'CMD-SHELL',
-          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status===''healthy''?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
+          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status!==''unhealthy''&&r.statusCode<400?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
         ]
       interval: 30s
       timeout: 10s
@@ -294,7 +294,7 @@ services:
       test:
         [
           'CMD-SHELL',
-          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status===''healthy''?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
+          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status!==''unhealthy''&&r.statusCode<400?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
         ]
       interval: 30s
       timeout: 10s
@@ -369,7 +369,7 @@ services:
       test:
         [
           'CMD-SHELL',
-          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status===''healthy''?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
+          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status!==''unhealthy''&&r.statusCode<400?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
         ]
       interval: 30s
       timeout: 10s
@@ -444,7 +444,7 @@ services:
       test:
         [
           'CMD-SHELL',
-          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status===''healthy''?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
+          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status!==''unhealthy''&&r.statusCode<400?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
         ]
       interval: 30s
       timeout: 10s
@@ -524,7 +524,7 @@ services:
       test:
         [
           'CMD-SHELL',
-          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status===''healthy''?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
+          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status!==''unhealthy''&&r.statusCode<400?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
         ]
       interval: 30s
       timeout: 10s
@@ -599,7 +599,7 @@ services:
       test:
         [
           'CMD-SHELL',
-          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status===''healthy''?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
+          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status!==''unhealthy''&&r.statusCode<400?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
         ]
       interval: 30s
       timeout: 10s

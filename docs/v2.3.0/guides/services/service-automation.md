@@ -181,6 +181,12 @@ These checks also apply when re-enabling a previously Live service after
 Disabled or Shadow. The candidate readiness thresholds below are a separate
 promotion contract.
 
+Moving a service from **Live** back to **Shadow** also asks for confirmation
+("Switch this service to shadow mode?"), like turning automation off: new
+incidents revert to default routing while automation keeps comparing its routing
+against it. Choosing **Cancel** keeps the service Live. Moving from Disabled to
+Shadow does not ask.
+
 Send one controlled production case and one non-production case. Verify:
 
 - The production incident has the expected priority, tags, and pinned route.

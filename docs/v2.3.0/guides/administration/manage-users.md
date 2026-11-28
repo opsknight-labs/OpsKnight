@@ -118,6 +118,21 @@ Disabled users must be reactivated first.
 Invitation links are bearer capabilities. Do not put them in issue trackers,
 shared chat channels, screenshots, or documentation.
 
+### Reset an active user's password
+
+For an `ACTIVE` user, open the card action menu and select **Reset Password**
+(hidden when the authentication mode is SSO Required). OpsKnight generates a
+password reset link and shows it in a dialog; the request is rate-limited. Treat the
+link as a bearer capability, like an invitation link.
+
+A link for another administrator lets whoever opens it take over that account,
+so OpsKnight requires you to have signed in within the last 15 minutes ("For
+your security, sign in again before generating a sign-in link for another
+administrator.") and sends the target administrator an in-app **Security**
+notification, "Password reset link generated for your account", naming who
+generated it. Links for users who are not administrators, and for yourself, need
+neither.
+
 ## Add a user to a team
 
 From the user card, select **Assign team**, choose a team, and add the member.
@@ -176,8 +191,20 @@ and refuses to demote or disable the last active administrator. An
 administrator cannot change their own role; another active administrator must
 perform that change.
 
+Granting the Admin role needs a sign-in within the last 15 minutes. Anyone using
+temporary admin access needs the same recent sign-in for every role change.
+Otherwise the Users page asks you to sign in again and nothing changes.
+
+Adding a user with the Admin role, and **Get Invite Link** for an invited administrator, follow the same
+rule and need an assigned administrator: temporary admin access cannot do either. Anyone using temporary
+admin access also needs the recent sign-in to add any user. API keys can never grant the Admin role or
+invite an administrator; do it here.
+
 For multiple users, select rows and use the bulk role action. Bulk demotion also
 checks that at least one active administrator remains and refuses self-demotion.
+The bulk action has the same recent sign-in rule.
+
+A selection only covers the users on screen: moving to another page, or a filter that hides them, takes them out of it. Bulk **Deactivate** and **Delete** ask for confirmation first, showing how many users and who they are.
 
 ## Allow an existing account to link OIDC
 
@@ -209,7 +236,7 @@ cover the person's live operational responsibilities:
 
 Then:
 
-1. Open **Users**, locate the active account, and select **Deactivate**.
+1. Open **Users**, locate the active account, and select **Deactivate**. If the person is in an on-call rotation, the confirmation lists the shifts in the next 4 weeks that would pass to someone else.
 2. Confirm the account shows **Disabled**.
 3. Verify current sessions fail on the next authenticated operation.
 4. Confirm outstanding invitation/reset tokens, API keys, OIDC linking
@@ -228,8 +255,9 @@ offboarded user must not disappear from the operational record.
 
 ### Bulk deactivation
 
-Select the intended rows and choose the bulk deactivate action. Before
-confirming, recheck the filters and selection count. OpsKnight prevents the
+Select the intended rows and choose the bulk deactivate action. The confirmation
+lists the rotation shifts in the next 4 weeks that would pass to someone else.
+Before confirming, recheck the filters and selection count. OpsKnight prevents the
 acting administrator from including themselves and atomically checks the
 last-active-admin invariant. After completion, inspect every failed item rather
 than assuming a partial result applied uniformly.
@@ -336,7 +364,11 @@ uniqueness rule.
 
 Check whether the target is the acting administrator or the last active admin.
 Create and verify another administrator before repeating the operation. For
-role-source conflicts, update the intended authority—manual, OIDC, or SCIM.
+role-source conflicts, update the intended authority—manual, OIDC, or SCIM. The
+Users page shows the rule's own message in a toast for a refused role change,
+deactivation, team add or team removal (including a last-administrator conflict
+lost to a concurrent change). An unexpected failure shows a generic message and
+no internal detail.
 
 ### Permanent deletion is blocked
 

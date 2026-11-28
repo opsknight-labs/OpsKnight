@@ -35,6 +35,24 @@ or durable delivery fencing merely because another provider does.
   authenticated webhooks.
 - [Voice paging](./communication/voice) — Twilio voice delivery and callbacks.
 
+## Where to send the routing key
+
+Prefer a header. Send the integration key as `X-Integration-Key: <key>`,
+`Authorization: Bearer <key>` or `Authorization: Token token=<key>`. A key in the
+URL (`?integrationKey=...`) is accepted because some senders can only be given a
+URL, but it ends up in proxy and load-balancer access logs and in the sender's own
+configuration history, where anyone who can read them can send alerts as the
+integration. The service Integrations tab therefore shows the URL without the key
+and the header first, and offers the URL with the key under "Sender can only be
+given a URL?". CloudWatch, Azure and Google Cloud Monitoring cannot add a header,
+so they show the URL with the key.
+
+OpsKnight itself never writes the key from a query string to its logs, audit
+rows or error messages: the values of `key`, `integrationKey`, `routingKey`,
+`token` and `secret` (and their underscore forms) are replaced with `[REDACTED]`
+in any logged or audited text, absolute or relative. Rotate the key if a URL
+carrying it was shared.
+
 ## Change events
 
 Change endpoints record deploys, configuration, feature-flag and
@@ -59,3 +77,47 @@ service mapping. A `serviceId` in the body is ignored.
 
 A repeated delivery is answered as `change_duplicate` instead of recording a
 second change.
+
+## Alert identity and correlation keys
+
+Every alert correlates by the `dedup_key` its adapter derives, and a resolve
+closes the incident that holds the same key. Grafana and Alertmanager-style
+payloads use the alert's `fingerprint` (a hash of its whole label set). When a
+sender omits it, the key is now `alertname`, `instance` and a hash of all labels,
+so two series that share a name and instance but differ in another label (job,
+rule UID, folder) open separate incidents, and the first one resolving no longer
+closes the other. The generic webhook adds a hash of its host-style fields to the
+summary-based fallback key under the same rule. Datadog is unchanged: it still
+uses `aggregation_key`, then alert ID, then monitor ID, so send
+`$AGGREG_KEY` or a per-group identity from multi-alert monitors.
+
+The same alert keeps the same key across re-triggers and resolves. After an
+upgrade an incident that is already open for a key built the old way is no longer
+matched by the new key: its next trigger opens one new incident and the old one
+needs a manual resolve. Check open incidents from Grafana-without-fingerprint
+and generic-webhook integrations after the upgrade.
+
+## Late and repeated deliveries
+
+Senders retry, and some deliver out of order. For CloudWatch (alarm state change
+time), Azure Monitor (fired and resolved time), Google Cloud Monitoring (incident
+start and end), Grafana and Prometheus (`startsAt` for a firing alert, `endsAt`
+for a resolved one) OpsKnight compares the time the provider reports with the
+newest provider time it already accepted for the same alert key. A trigger or
+resolve that is older is ignored: the sender still gets a success response, so it
+does not retry, the incident is left alone, and the delivery's receipt shows
+`ignored` with the reason "Stale delivery". An event with the same or a newer time
+is applied as before, so a late ALARM retry after the OK no longer opens a new
+incident, while a genuinely new ALARM still does. Providers that send no usable
+time (Datadog, the generic webhook, Sentry and others) are not reordered. CloudWatch
+retries that repeat an SNS message ID are already dropped by the delivery ledger.
+
+## Delivery history retention
+
+Each inbound delivery leaves one row that de-duplicates retries and feeds the
+integration's diagnostics and usage views. The scheduler deletes finished
+deliveries after 30 days, in batches of 1,000 and at most 10,000 per hourly run,
+and never touches one that is still being processed. An identical payload that
+arrives again after its row is gone is treated as new. Set
+`OPSKNIGHT_INBOUND_DELIVERY_RETENTION_DAYS` (1 to 3650) to change the window; see
+the [configuration reference](../reference/configuration/).

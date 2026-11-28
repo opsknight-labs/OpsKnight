@@ -7,6 +7,7 @@ import { logAudit } from '@/lib/audit';
 import { AppError } from '@/lib/errors/app-error';
 import { logger } from '@/lib/logger';
 import {
+  assertCanPublishMaintenance,
   createMaintenanceWindow,
   deleteMaintenanceWindow,
   MAINTENANCE_LIMITS,
@@ -340,6 +341,7 @@ export async function createMaintenanceSchedule(
   const now = options.now ?? new Date();
   const data = MaintenanceScheduleCreateSchema.parse(input);
   const rule = toRecurrence(data);
+  if (data.publishToStatusPage) await assertCanPublishMaintenance(actor);
 
   return inTransaction(options.tx, async tx => {
     const count = await tx.service.count({ where: { id: { in: data.serviceIds } } });
@@ -464,6 +466,15 @@ export async function updateMaintenanceSchedule(
       patch.description === undefined ? existing.description : patch.description || null;
     const endBehavior = patch.endBehavior ?? existing.endBehavior;
     const publishToStatusPage = patch.publishToStatusPage ?? existing.publishToStatusPage;
+    // Same rule as windows: enabling publishing or rewording a published notice is admin-only.
+    if (
+      publishToStatusPage &&
+      (!existing.publishToStatusPage ||
+        title !== existing.title ||
+        description !== existing.description)
+    ) {
+      await assertCanPublishMaintenance(actor);
+    }
 
     await tx.maintenanceSchedule.update({
       where: { id },

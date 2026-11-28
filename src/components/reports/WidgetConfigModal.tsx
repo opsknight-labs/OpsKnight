@@ -30,6 +30,16 @@ export type ConfigurableWidget = {
   config: Record<string, unknown>;
 };
 
+const BASIC_CHART_TYPES = ['line', 'bar', 'pie'];
+// Chart types a widget definition sets that the switcher cannot build; kept so the select shows them.
+const SPECIAL_CHART_LABELS = new Map([
+  ['mttaVsMttr', 'MTTA vs MTTR (two series)'],
+  ['slaCompliance', 'SLA compliance'],
+  ['heatmap', 'Heatmap calendar'],
+  ['count', 'Incident count'],
+  ['area', 'Area chart'],
+]);
+
 interface WidgetConfigModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -57,6 +67,11 @@ function WidgetConfigForm({ widget, onClose, onSave }: WidgetConfigFormProps) {
         ? 'line'
         : ''
   );
+  const specialChartType =
+    typeof widget.config?.chartType === 'string' &&
+    !BASIC_CHART_TYPES.includes(widget.config.chartType)
+      ? widget.config.chartType
+      : null;
   const [targetSla, setTargetSla] = useState<string>(
     typeof widget.config?.targetSla === 'number'
       ? String(widget.config.targetSla)
@@ -178,6 +193,14 @@ function WidgetConfigForm({ widget, onClose, onSave }: WidgetConfigFormProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                {specialChartType && (
+                  <SelectItem value={specialChartType}>
+                    <div className="flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4 text-primary" />
+                      <span>{SPECIAL_CHART_LABELS.get(specialChartType) ?? specialChartType}</span>
+                    </div>
+                  </SelectItem>
+                )}
                 <SelectItem value="line">
                   <div className="flex items-center gap-2">
                     <LineChart className="h-4 w-4 text-primary" />

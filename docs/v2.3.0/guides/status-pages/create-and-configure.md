@@ -27,16 +27,20 @@ Open **Settings → Status Pages**. If no page exists, select **Create Status Pa
 
 ## Configure the page
 
-1. Create the page in draft/disabled state with a clear public name and unique slug.
+1. Create the page in draft/disabled state with a clear public name and unique slug. A slug is 2 to 80 lowercase letters, numbers and single hyphens, with no leading, trailing or doubled hyphen; the console and the API apply the same rule, and renaming a page to a name another page uses is refused in both.
 2. Map services, set their order, and enable **Show on page** only for customer-relevant services.
 3. Configure branding, organization/contact details, allowed incident fields, and privacy mode.
 4. Choose public access or **Require authentication**. Test restricted access in a signed-out browser.
-5. Configure the default route and optional subdomain/custom domain only after DNS/TLS planning.
+5. Configure the default route and optional subdomain/custom domain only after DNS/TLS planning. A subdomain is a name under your own installation's host (the host of the configured app URL), so `acme` on an installation at `ops.example.com` is served at `acme.ops.example.com`; the page list, the page header and the preview show that address.
 6. Preview the live snapshot, then enable/publish the page.
+
+Each settings section (General, Appearance, Content, Services, Privacy, Advanced) has its own **Save** button, and a save publishes only the settings that section edits. An unsaved change in another section, such as a colour you tweaked in Appearance, stays unsaved and does not go live when you save Content.
 
 ## What OpsKnight does
 
 The page workspace builds a public/preview snapshot from mapped services, incidents, announcements, privacy policy, and routing configuration. Disabled pages remain administrative drafts. Default routing, slug, subdomain, and custom domain are distinct resolution paths.
+
+Creating a page (`status_page.created`) and making a page the default (`status_page.updated`) are recorded in the [audit log](../administration/audit-logs) with the acting administrator.
 
 ## Verify the page
 

@@ -57,10 +57,13 @@ const PRIVATE = 'private';
 export default function AnalyticsViews({
   views,
   teams,
+  canManage,
 }: {
   views: AnalyticsViewSummary[];
   /** Teams the user belongs to; a view can be shared with one of them. */
   teams: Team[];
+  /** report.manage: without it saved views can only be opened. */
+  canManage: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -104,7 +107,7 @@ export default function AnalyticsViews({
             </p>
           )}
           {views.map(view =>
-            view.isOwner ? (
+            view.isOwner && canManage ? (
               <DropdownMenuSub key={view.id}>
                 <DropdownMenuSubTrigger className="gap-2">
                   <ViewLabel view={view} />
@@ -153,11 +156,15 @@ export default function AnalyticsViews({
               </DropdownMenuItem>
             )
           )}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem className="gap-2" onSelect={() => setEditing({ mode: 'save' })}>
-            <Plus className="h-4 w-4" aria-hidden />
-            Save current view…
-          </DropdownMenuItem>
+          {canManage && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="gap-2" onSelect={() => setEditing({ mode: 'save' })}>
+                <Plus className="h-4 w-4" aria-hidden />
+                Save current view…
+              </DropdownMenuItem>
+            </>
+          )}
           {views.some(view => view.isDefault) && (
             // An explicit range keeps the default-view redirect from firing.
             <DropdownMenuItem onSelect={() => open(`range=${DEFAULT_ANALYTICS_RANGE}`)}>

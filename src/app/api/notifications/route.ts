@@ -130,13 +130,14 @@ export async function PATCH(req: NextRequest) {
         { issues: parsed.error.issues }
       );
     }
-    const { notificationIds, markAllAsRead } = parsed.data;
+    const { notificationIds, markAllAsRead, readUpTo } = parsed.data;
 
     if (markAllAsRead) {
       await prisma.inAppNotification.updateMany({
         where: {
           userId: user.id,
           readAt: null,
+          ...(readUpTo ? { createdAt: { lte: new Date(readUpTo) } } : {}),
         },
         data: {
           readAt: new Date(),

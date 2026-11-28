@@ -44,6 +44,7 @@ import ContributingFactorsSelector, {
   type FactorType,
 } from './postmortem/ContributingFactorsSelector';
 import IncidentJiraContext from '@/components/jira/IncidentJiraContext';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 import { AlertCircle, AlertTriangle, Loader2, Wand2, Sparkles } from 'lucide-react';
@@ -74,9 +75,9 @@ import {
 } from './postmortem/root-cause-format';
 
 const postmortemSchema = z.object({
-  title: z.string().min(1, 'Title is required').max(100, 'Title must be less than 100 characters'),
+  title: z.string().min(1, 'Title is required').max(200, 'Title must be 200 characters or fewer'),
   summary: z.string().optional(),
-  status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']),
+  status: z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'ARCHIVED']),
   isPublic: z.boolean(),
   rootCause: z.string().optional(),
   resolution: z.string().optional(),
@@ -182,7 +183,7 @@ export default function PostmortemForm({
     defaultValues: {
       title: initialData?.title || '',
       summary: initialData?.summary || '',
-      status: (initialData?.status as 'DRAFT' | 'PUBLISHED' | 'ARCHIVED') || 'DRAFT',
+      status: (initialData?.status as PostmortemFormValues['status']) || 'DRAFT',
       isPublic: initialData?.isPublic ?? true,
       rootCause: extractNarrative(initialData?.rootCause),
       resolution: initialData?.resolution || '',
@@ -267,6 +268,24 @@ export default function PostmortemForm({
   };
 
   const [isDrafting, setIsDrafting] = useState(false);
+  const [confirmAutoDraft, setConfirmAutoDraft] = useState(false);
+
+  // Auto-Draft replaces these fields wholesale, with no undo.
+  const hasContentToReplace = () => {
+    const values = form.getValues();
+    return (
+      [values.summary, values.rootCause, values.resolution, values.lessons].some(v => v?.trim()) ||
+      timelineEvents.length > 0 ||
+      Object.values(impactMetrics).some(v => (Array.isArray(v) ? v.length > 0 : Boolean(v))) ||
+      fiveWhysSteps.some(step => step.question.trim() || step.answer.trim()) ||
+      selectedFactors.length > 0
+    );
+  };
+
+  const requestAutoDraft = () => {
+    if (hasContentToReplace()) setConfirmAutoDraft(true);
+    else void handleAutoDraft();
+  };
 
   const handleAutoDraft = async () => {
     const targetId = incidentId || selectedIncidentId;
@@ -479,7 +498,7 @@ export default function PostmortemForm({
               type="button"
               variant="outline"
               size="sm"
-              onClick={handleAutoDraft}
+              onClick={requestAutoDraft}
               disabled={isDrafting || (!incidentId && !selectedIncidentId)}
               className="bg-card hover:bg-purple-50 hover:text-purple-700 transition-colors border-purple-200 dark:hover:bg-purple-500/10 dark:hover:text-purple-300 dark:border-purple-500/30"
             >
@@ -490,6 +509,19 @@ export default function PostmortemForm({
               )}
               Auto-Draft
             </Button>
+            <ConfirmDialog
+              isOpen={confirmAutoDraft}
+              title="Replace what you have written?"
+              message="Auto-Draft overwrites the summary, root cause, resolution, lessons, timeline, impact, 5 Whys and contributing factors with a fresh draft built from the incident. This cannot be undone."
+              confirmText="Replace with draft"
+              cancelText="Keep my content"
+              variant="warning"
+              onConfirm={() => {
+                setConfirmAutoDraft(false);
+                void handleAutoDraft();
+              }}
+              onCancel={() => setConfirmAutoDraft(false)}
+            />
             {aiDraftAvailable && (
               <Button
                 type="button"

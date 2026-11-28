@@ -96,8 +96,8 @@ const scenarios: Scenario[] = [
           scheduleId: schedule.id,
           userId: covering.id,
           replacesUserId: replaced.id,
-          start: new Date('2026-11-01T00:00:00.000Z'),
-          end: new Date('2026-11-01T08:00:00.000Z'),
+          start: new Date('2099-11-01T00:00:00.000Z'),
+          end: new Date('2099-11-01T08:00:00.000Z'),
         },
       });
       return { scheduleId: schedule.id, target: override.id };
@@ -110,7 +110,7 @@ const scenarios: Scenario[] = [
     invalidate: async (_f, s) => {
       await db.onCallOverride.update({
         where: { id: s.target },
-        data: { end: new Date('2026-11-01T12:00:00.000Z') },
+        data: { end: new Date('2099-11-01T12:00:00.000Z') },
       });
     },
   },

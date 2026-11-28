@@ -339,6 +339,100 @@ export async function initiatePasswordReset(
   }
 }
 
+/**
+ * Best-effort security notice that a password changed (email, or SMS when email is off). Shared by
+ * the reset flow and the signed-in password change; it never throws.
+ */
+export async function sendPasswordChangedNotice(
+  user: {
+    id: string;
+    name: string | null;
+    email: string;
+    phoneNumber: string | null;
+    smsNotificationsEnabled: boolean;
+  },
+  eventKeySuffix: string,
+  now: Date
+) {
+  try {
+    const { getEmailConfig, getSMSConfig } = await import('./notification-providers');
+    const { enqueueCentralNotification } = await import('@/lib/notification-control-plane');
+    const emailConfig = await getEmailConfig();
+
+    if (emailConfig?.enabled) {
+      const changedAtText = `${now.toISOString()} (UTC)`;
+      const passwordChangedText = `Your OpsKnight password was changed at ${now.toISOString()}. If this was not you, contact your administrator immediately.`;
+      const { renderEmail } = await import('@/emails/render');
+      const { PasswordChangedEmail } = await import('@/emails/templates/password-changed');
+      const { getBaseUrl } = await import('@/lib/env-validation');
+      const { html: passwordChangedHtml } = await renderEmail(
+        PasswordChangedEmail({
+          userName: user.name || 'there',
+          changedAt: changedAtText,
+          loginUrl: `${getBaseUrl().replace(/\/+$/, '')}/login`,
+        }),
+        { text: passwordChangedText }
+      );
+      await enqueueCentralNotification(
+        {
+          category: 'SECURITY',
+          channel: 'EMAIL',
+          recipientType: 'USER',
+          recipientId: user.id,
+          recipientAddress: user.email,
+          userId: user.id,
+          templateKey: 'password-changed',
+          sourceType: 'USER',
+          sourceId: user.id,
+          eventKey: `password-changed:${eventKeySuffix}`,
+          displayMessage: 'Password changed',
+          priority: 0,
+          payload: {
+            kind: 'EMAIL',
+            to: user.email,
+            subject: '[OpsKnight] Your password was changed',
+            html: passwordChangedHtml,
+            text: passwordChangedText,
+          },
+        },
+        { dispatchImmediately: false }
+      );
+    } else if (user.phoneNumber && user.smsNotificationsEnabled) {
+      const smsConfig = await getSMSConfig();
+      if (smsConfig?.enabled) {
+        await enqueueCentralNotification(
+          {
+            category: 'SECURITY',
+            channel: 'SMS',
+            recipientType: 'USER',
+            recipientId: user.id,
+            recipientAddress: user.phoneNumber,
+            userId: user.id,
+            templateKey: 'password-changed-sms',
+            sourceType: 'USER',
+            sourceId: user.id,
+            eventKey: `password-changed:${eventKeySuffix}`,
+            displayMessage: 'Password changed',
+            priority: 0,
+            payload: {
+              kind: 'SMS',
+              to: user.phoneNumber,
+              message: `Your OpsKnight password was changed at ${now.toISOString()}. If this was not you, contact your administrator immediately.`,
+            },
+          },
+          { dispatchImmediately: false }
+        );
+      }
+    }
+  } catch (error) {
+    logger.warn('auth.password_reset.notification_failed', {
+      component: 'password-reset',
+      userId: user.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 export async function completePasswordReset(
   token: string,
   password: string,
@@ -522,83 +616,7 @@ export async function completePasswordReset(
       outcome: 'completed',
     });
 
-    try {
-      const { getEmailConfig, getSMSConfig } = await import('./notification-providers');
-      const { enqueueCentralNotification } = await import('@/lib/notification-control-plane');
-      const emailConfig = await getEmailConfig();
-
-      if (emailConfig?.enabled) {
-        const changedAtText = `${now.toISOString()} (UTC)`;
-        const passwordChangedText = `Your OpsKnight password was changed at ${now.toISOString()}. If this was not you, contact your administrator immediately.`;
-        const { renderEmail } = await import('@/emails/render');
-        const { PasswordChangedEmail } = await import('@/emails/templates/password-changed');
-        const { getBaseUrl } = await import('@/lib/env-validation');
-        const { html: passwordChangedHtml } = await renderEmail(
-          PasswordChangedEmail({
-            userName: user.name || 'there',
-            changedAt: changedAtText,
-            loginUrl: `${getBaseUrl().replace(/\/+$/, '')}/login`,
-          }),
-          { text: passwordChangedText }
-        );
-        await enqueueCentralNotification(
-          {
-            category: 'SECURITY',
-            channel: 'EMAIL',
-            recipientType: 'USER',
-            recipientId: user.id,
-            recipientAddress: user.email,
-            userId: user.id,
-            templateKey: 'password-changed',
-            sourceType: 'USER',
-            sourceId: user.id,
-            eventKey: `password-changed:${tokenHash}`,
-            displayMessage: 'Password changed',
-            priority: 0,
-            payload: {
-              kind: 'EMAIL',
-              to: user.email,
-              subject: '[OpsKnight] Your password was changed',
-              html: passwordChangedHtml,
-              text: passwordChangedText,
-            },
-          },
-          { dispatchImmediately: false }
-        );
-      } else if (user.phoneNumber && user.smsNotificationsEnabled) {
-        const smsConfig = await getSMSConfig();
-        if (smsConfig?.enabled) {
-          await enqueueCentralNotification(
-            {
-              category: 'SECURITY',
-              channel: 'SMS',
-              recipientType: 'USER',
-              recipientId: user.id,
-              recipientAddress: user.phoneNumber,
-              userId: user.id,
-              templateKey: 'password-changed-sms',
-              sourceType: 'USER',
-              sourceId: user.id,
-              eventKey: `password-changed:${tokenHash}`,
-              displayMessage: 'Password changed',
-              priority: 0,
-              payload: {
-                kind: 'SMS',
-                to: user.phoneNumber,
-                message: `Your OpsKnight password was changed at ${now.toISOString()}. If this was not you, contact your administrator immediately.`,
-              },
-            },
-            { dispatchImmediately: false }
-          );
-        }
-      }
-    } catch (error) {
-      logger.warn('auth.password_reset.notification_failed', {
-        component: 'password-reset',
-        userId: user.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+    await sendPasswordChangedNotice(user, tokenHash, now);
 
     logger.info('auth.password_reset.session_revoked', {
       component: 'password-reset',

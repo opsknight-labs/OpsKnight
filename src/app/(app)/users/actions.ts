@@ -11,6 +11,8 @@ import { administerUser } from '@/lib/users/administration';
 import { setTeamMembership, teamMemberInput } from '@/lib/teams/administration';
 
 import prisma from '@/lib/prisma';
+import { z } from 'zod';
+import { previewRotationChange, type RotationImpact } from '@/lib/schedules/rotation-change-preview';
 import { revalidatePath } from 'next/cache';
 import { logAudit } from '@/lib/audit';
 import {
@@ -20,7 +22,8 @@ import {
   assertPermanentAdminForAdminTargets,
   getCurrentUser,
 } from '@/lib/rbac';
-import { isAssignableRole } from '@/lib/authorization';
+import { isAdministratorRole, isAssignableRole } from '@/lib/authorization';
+import { assertRecentAuthentication } from '@/lib/access/step-up';
 import type { Prisma, Role } from '@prisma/client';
 import { removeTeamMembership } from '@/lib/teams/membership-commands';
 import { assertCanBecomeStakeholder } from '@/lib/users/stakeholder-role-guard';
@@ -30,6 +33,13 @@ import {
   type UserDependencyReport,
 } from '@/lib/users/dependencies';
 import { bulkUpdateUserSecurityState, updateUserSecurityState } from '@/lib/users/admin-invariants';
+import {
+  assertNotificationProvidersAvailable,
+  assertPhoneForNotificationChannels,
+  notificationPreferencesInput,
+  prepareNotificationProviderAvailability,
+} from '@/lib/notifications/preferences';
+import { AppError, isAppError } from '@/lib/errors';
 
 export async function assertUserIsNotSoleOwner(userId: string) {
   const ownedMemberships = await prisma.teamMember.findMany({
@@ -175,6 +185,9 @@ export async function addUser(
       .toLowerCase();
     const role = formData.get('role');
     if (!isAssignableRole(role)) return { error: 'Select a valid user role.' };
+    // Inviting an administrator grants ADMIN: same assigned-admin and recent sign-in rule as a role change.
+    await assertPermanentAdminForAdminTargets(admin, [], role);
+    await assertRoleChangeStepUp(admin, role);
     const { headers } = await import('next/headers');
     const headerList = await headers();
     const { checkRateLimit } = await import('@/lib/password-reset');
@@ -222,6 +235,21 @@ export async function addUser(
   }
 }
 
+/**
+ * Rule violations (a last-admin race, a JIT admin denial) carry a message written for the person;
+ * anything else gets the fallback, so the form shows feedback and no internals leak.
+ */
+function actionFailure(error: unknown, fallback: string) {
+  return { error: isAppError(error) && error.exposure === 'public' ? error.userMessage : fallback };
+}
+
+/** A role change made with temporary admin access, or one that grants ADMIN, needs a fresh sign-in. */
+async function assertRoleChangeStepUp(actor: { baseRole: string }, role: unknown) {
+  if (isAdministratorRole(role) || !isAdministratorRole(actor.baseRole)) {
+    await assertRecentAuthentication(undefined, 'changing a role');
+  }
+}
+
 export async function updateUserRole(userId: string, formData: FormData) {
   let currentUser: { id: string; baseRole: string } | null = null;
   try {
@@ -238,6 +266,7 @@ export async function updateUserRole(userId: string, formData: FormData) {
   }
   try {
     await assertPermanentAdminForAdminTargets(currentUser, [userId], role);
+    await assertRoleChangeStepUp(currentUser, role);
     await assertCanBecomeStakeholder([userId], role);
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Unauthorized.' };
@@ -252,7 +281,11 @@ export async function updateUserRole(userId: string, formData: FormData) {
     }
   }
 
-  await administerUser(userId, { operation: 'set-role', role }, { id: currentUser.id });
+  try {
+    await administerUser(userId, { operation: 'set-role', role }, { id: currentUser.id });
+  } catch (error) {
+    return actionFailure(error, 'Failed to change the role.');
+  }
 
   revalidatePath('/users');
   revalidatePath('/audit');
@@ -273,12 +306,16 @@ export async function addUserToTeam(userId: string, formData: FormData) {
           : 'Unauthorized. Admin or team owner access required.',
     };
   }
-  await setTeamMembership(
-    teamId,
-    userId,
-    teamMemberInput.parse({ role: formData.get('role') || 'MEMBER' }),
-    { id: currentUser.id }
-  );
+  try {
+    await setTeamMembership(
+      teamId,
+      userId,
+      teamMemberInput.parse({ role: formData.get('role') || 'MEMBER' }),
+      { id: currentUser.id }
+    );
+  } catch (error) {
+    return actionFailure(error, 'Failed to add the user to the team.');
+  }
 
   revalidatePath('/users');
   revalidatePath('/teams');
@@ -286,12 +323,35 @@ export async function addUserToTeam(userId: string, formData: FormData) {
 }
 
 export async function removeUserFromTeam(memberId: string) {
-  const currentUser = await assertAdmin();
-  await removeTeamMembership(memberId, currentUser);
+  try {
+    const currentUser = await assertAdmin();
+    await removeTeamMembership(memberId, currentUser);
+  } catch (error) {
+    return actionFailure(error, 'Failed to remove the user from the team.');
+  }
 
   revalidatePath('/users');
   revalidatePath('/teams');
   revalidatePath('/audit');
+}
+
+/** Who is on call over the next 4 weeks if these users are deactivated; read-only, run before deactivating. */
+export async function previewUserDeactivation(userIds: string[]): Promise<RotationImpact> {
+  try {
+    await assertAdmin();
+  } catch {
+    return { changed: false, message: '' };
+  }
+  const input = z.array(z.string().min(1)).max(500).safeParse(userIds);
+  if (!input.success || input.data.length === 0) return { changed: false, message: '' };
+  try {
+    return await previewRotationChange({ userIds: input.data });
+  } catch {
+    return {
+      changed: true,
+      message: 'The change to the on-call schedules could not be previewed. Deactivate anyway?',
+    };
+  }
 }
 
 export async function deactivateUser(userId: string, _formData?: FormData) {
@@ -306,7 +366,11 @@ export async function deactivateUser(userId: string, _formData?: FormData) {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
     };
   }
-  await administerUser(userId, { operation: 'deactivate' }, { id: currentUser.id });
+  try {
+    await administerUser(userId, { operation: 'deactivate' }, { id: currentUser.id });
+  } catch (error) {
+    return actionFailure(error, 'Failed to deactivate the user.');
+  }
 
   revalidatePath('/users');
   revalidatePath('/audit');
@@ -346,12 +410,23 @@ export async function generateInvite(
         async tx => ({
           policy: await readInvitationPolicy(tx, actor),
           invitation: await readUserInvitation(tx, userId, actor),
-          user: await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true } }),
+          user: await tx.user.findUniqueOrThrow({
+            where: { id: userId },
+            select: { email: true, role: true },
+          }),
         }),
         { isolationLevel: 'Serializable' }
       ),
       prepareUserInvitation(),
     ]);
+    // The link for an invited administrator takes over that account, like an admin password reset link.
+    if (isAdministratorRole(snapshot.user.role)) {
+      await assertPermanentAdminForAdminTargets(admin, [userId]);
+      await assertRecentAuthentication(
+        undefined,
+        'generating an invitation link for an administrator'
+      );
+    }
     const { headers } = await import('next/headers');
     const headerList = await headers();
     const { checkRateLimit } = await import('@/lib/password-reset');
@@ -630,6 +705,12 @@ export async function bulkUpdateUsers(
     if (admin && userIds.includes(admin.id)) {
       return { error: 'You cannot change your own role.' };
     }
+    // After the cheap input checks, before the database-backed ones and the write.
+    try {
+      await assertRoleChangeStepUp(admin, role);
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : 'Unauthorized.' };
+    }
     try {
       await assertCanBecomeStakeholder(userIds, role);
     } catch (error) {
@@ -710,7 +791,15 @@ export async function updateUserProfile(
   // Check email uniqueness if email is changed
   const existingUser = await prisma.user.findUnique({
     where: { id: userId },
-    select: { email: true, role: true, phoneNumber: true },
+    select: {
+      email: true,
+      role: true,
+      emailNotificationsEnabled: true,
+      smsNotificationsEnabled: true,
+      pushNotificationsEnabled: true,
+      voiceNotificationsEnabled: true,
+      whatsappNotificationsEnabled: true,
+    },
   });
 
   if (!existingUser) {
@@ -731,28 +820,45 @@ export async function updateUserProfile(
     }
   }
 
-  // Validate voice notifications if requested
-  const voiceRequested = formData.has('voiceNotificationsEnabled')
-    ? formData.get('voiceNotificationsEnabled') === 'true'
-    : false;
-  if (voiceRequested) {
-    const effectivePhone = phoneNumber ? phoneNumber.trim() : existingUser.phoneNumber;
-    if (!effectivePhone) {
-      return {
-        error: 'A valid phone number is required when Voice notifications are enabled.',
-      };
-    }
-    const phoneRegex = /^\+[1-9]\d{1,14}$/;
-    if (!phoneRegex.test(effectivePhone)) {
-      return { error: 'Phone number must be in E.164 format (e.g., +1234567890)' };
-    }
-    const { getVoiceConfig } = await import('@/lib/notification-providers');
-    const voiceConfig = await getVoiceConfig();
-    if (!voiceConfig.enabled) {
-      return {
-        error: 'Voice notifications cannot be enabled because Twilio Voice is not configured.',
-      };
-    }
+  // Same channel rules as the self-service notification preferences: E.164 number, a number for
+  // phone channels, and a configured provider for any channel being switched on.
+  const channel = (field: string, current: boolean) =>
+    formData.has(field) ? formData.get(field) === 'true' : current;
+  const requested = {
+    emailEnabled: channel('emailNotificationsEnabled', existingUser.emailNotificationsEnabled),
+    smsEnabled: channel('smsNotificationsEnabled', existingUser.smsNotificationsEnabled),
+    pushEnabled: channel('pushNotificationsEnabled', existingUser.pushNotificationsEnabled),
+    voiceEnabled: channel('voiceNotificationsEnabled', existingUser.voiceNotificationsEnabled),
+    whatsappEnabled: channel(
+      'whatsappNotificationsEnabled',
+      existingUser.whatsappNotificationsEnabled
+    ),
+  };
+  const savedPhone = phoneNumber?.trim() || null;
+  const preferences = notificationPreferencesInput.safeParse({
+    ...requested,
+    phoneNumber: savedPhone,
+  });
+  if (!preferences.success) {
+    return { error: preferences.error.issues[0]?.message ?? 'Invalid notification preferences.' };
+  }
+  try {
+    assertPhoneForNotificationChannels(requested, savedPhone);
+    // Only a channel being switched on needs a live provider; an already-enabled one never blocks an edit.
+    const switchedOn = {
+      emailEnabled: requested.emailEnabled && !existingUser.emailNotificationsEnabled,
+      smsEnabled: requested.smsEnabled && !existingUser.smsNotificationsEnabled,
+      pushEnabled: requested.pushEnabled && !existingUser.pushNotificationsEnabled,
+      voiceEnabled: requested.voiceEnabled && !existingUser.voiceNotificationsEnabled,
+      whatsappEnabled: requested.whatsappEnabled && !existingUser.whatsappNotificationsEnabled,
+    };
+    assertNotificationProvidersAvailable(
+      switchedOn,
+      await prepareNotificationProviderAvailability(switchedOn)
+    );
+  } catch (error) {
+    if (error instanceof AppError) return { error: error.userMessage };
+    throw error;
   }
 
   // Role validation

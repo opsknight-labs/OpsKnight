@@ -92,7 +92,9 @@ An administrator can change these global policy fields:
 - `maximumErrorRate`: 0–1; default 0, expressed as a fraction rather than percent.
 
 The quantity floor and latest-bucket age jointly determine sufficient recent
-evidence. Pending/processing jobs are checked against the configured allowance;
+evidence. Pending/processing jobs are checked against the configured allowance
+(edit it under **Settings → System → Automation → Shadow readiness**; with the
+default of 0, any queued observation blocks activation);
 a truncated result is a lower bound, not an exact full backlog count. The separate
 freshness summary samples pending jobs only; the promotion readiness check also
 includes processing jobs. Use readiness as the activation authority.

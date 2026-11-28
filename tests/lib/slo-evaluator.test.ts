@@ -51,6 +51,34 @@ describe('service objective evaluator semantics', () => {
       }).success
     ).toBe(true);
   });
+
+  it('ties the comparison direction to the measurement', () => {
+    const percent = {
+      serviceId: 'service-1',
+      name: 'Uptime',
+      metricType: 'UPTIME' as const,
+      target: 99.9,
+      comparator: 'GREATER_THAN_OR_EQUAL' as const,
+      windowType: 'THIRTY_DAYS' as const,
+    };
+    const duration = {
+      ...percent,
+      metricType: 'MTTA' as const,
+      target: 15,
+      comparator: 'LESS_THAN_OR_EQUAL' as const,
+    };
+    expect(serviceObjectiveCreateSchema.safeParse(percent).success).toBe(true);
+    expect(serviceObjectiveCreateSchema.safeParse(duration).success).toBe(true);
+    // 'UPTIME at most 99' and 'MTTA at least 99.9 minutes' invert compliant and breached.
+    expect(
+      serviceObjectiveCreateSchema.safeParse({ ...percent, comparator: 'LESS_THAN_OR_EQUAL' })
+        .success
+    ).toBe(false);
+    expect(
+      serviceObjectiveCreateSchema.safeParse({ ...duration, comparator: 'GREATER_THAN_OR_EQUAL' })
+        .success
+    ).toBe(false);
+  });
 });
 
 it('compares exact elapsed-time ratios before UI rounding or unsafe integer conversion', async () => {

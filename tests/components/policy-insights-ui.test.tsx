@@ -33,6 +33,7 @@ const itemProps = {
   updateStep: noop,
   deleteStep: noop,
   moveStep: noop,
+  countInFlight: async () => 0,
 };
 
 describe('StepOutcomeStrip', () => {

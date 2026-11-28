@@ -11,7 +11,14 @@ export async function checkRateLimit(
   key: string,
   limit: number,
   windowMs: number
-): Promise<{ allowed: boolean; remaining: number; resetAt: number; count: number }> {
+): Promise<{
+  allowed: boolean;
+  remaining: number;
+  resetAt: number;
+  count: number;
+  /** The counter store failed, so `allowed: false` says nothing about the caller's quota. */
+  unavailable?: boolean;
+}> {
   try {
     const now = Date.now();
     const windowStart = Math.floor(now / windowMs);
@@ -53,6 +60,7 @@ export async function checkRateLimit(
       remaining: 0,
       resetAt: Date.now() + windowMs,
       count: limit + 1,
+      unavailable: true,
     };
   }
 }

@@ -159,7 +159,9 @@ export default function AccessDeniedView({
               </ul>
             ) : (
               <p className="text-sm text-muted-foreground">
-                No administrator is available. Contact your OpsKnight owner.
+                {grantors.restricted
+                  ? 'Ask an administrator or the owning team, or send a request below.'
+                  : 'No administrator is available. Contact your OpsKnight owner.'}
               </p>
             )}
           </div>

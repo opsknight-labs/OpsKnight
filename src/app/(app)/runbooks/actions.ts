@@ -59,6 +59,19 @@ import { parseRunbookMetadataForm } from '@/lib/runbooks/metadata-form';
 
 const idSchema = z.string().cuid();
 
+/**
+ * Runbook rule violations (a checksum mismatch, a stale details sheet, an archived runbook) carry a
+ * message written for the person. Return it so the form shows it; anything else is rethrown.
+ */
+async function reportRunbookErrors<T>(run: () => Promise<T>): Promise<T | { error: string }> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof RunbookError) return { error: error.userMessage };
+    throw error;
+  }
+}
+
 function revalidateAgentFleet() {
   revalidatePath('/runbooks/agents');
   revalidatePath('/runbooks/agents/pools');
@@ -89,20 +102,29 @@ function parseJson(value: string, label: string): unknown {
   }
 }
 
-export async function createRunbookAction(formData: FormData) {
+export async function createRunbookAction(formData: FormData): Promise<{ error: string } | void> {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
   const templateName = z.enum(RUNBOOK_TEMPLATES).parse(readString(formData, 'template') || 'empty');
-  const created = await createRunbook(
-    {
-      name: readString(formData, 'name'),
-      slug: readString(formData, 'slug'),
-      description: readString(formData, 'description'),
-      ...parseRunbookMetadataForm(formData),
-      definition: runbookTemplate(templateName),
-      inputs: runbookTemplateInputs(templateName),
-    },
-    actor.id
-  );
+  let created: { id: string };
+  try {
+    created = await createRunbook(
+      {
+        name: readString(formData, 'name'),
+        slug: readString(formData, 'slug'),
+        description: readString(formData, 'description'),
+        ...parseRunbookMetadataForm(formData),
+        definition: runbookTemplate(templateName),
+        inputs: runbookTemplateInputs(templateName),
+      },
+      actor.id
+    );
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      return { error: 'A runbook with this slug already exists. Choose a different slug.' };
+    }
+    if (error instanceof RunbookError) return { error: error.userMessage };
+    throw error;
+  }
   revalidatePath('/runbooks');
   redirect(`/runbooks/${created.id}`);
 }
@@ -164,20 +186,22 @@ export async function importRunbookAction(formData: FormData) {
 export async function updateRunbookMetadataAction(runbookId: string, formData: FormData) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
   const id = idSchema.parse(runbookId);
-  await updateRunbookMetadata(
-    id,
-    {
-      name: readString(formData, 'name'),
-      slug: readString(formData, 'slug'),
-      description: readString(formData, 'description'),
-      ...parseRunbookMetadataForm(formData),
-    },
-    actor.id,
-    undefined,
-    z.coerce.number().int().positive().parse(formData.get('expectedRevision'))
-  );
-  revalidatePath('/runbooks');
-  revalidatePath(`/runbooks/${id}`);
+  return reportRunbookErrors(async () => {
+    await updateRunbookMetadata(
+      id,
+      {
+        name: readString(formData, 'name'),
+        slug: readString(formData, 'slug'),
+        description: readString(formData, 'description'),
+        ...parseRunbookMetadataForm(formData),
+      },
+      actor.id,
+      undefined,
+      z.coerce.number().int().positive().parse(formData.get('expectedRevision'))
+    );
+    revalidatePath('/runbooks');
+    revalidatePath(`/runbooks/${id}`);
+  });
 }
 
 export async function saveDraftAction(versionId: string, runbookId: string, formData: FormData) {
@@ -219,33 +243,41 @@ export async function saveDraftAction(versionId: string, runbookId: string, form
 
 export async function publishDraftAction(versionId: string, runbookId: string) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_PUBLISH);
-  await publishDraftVersion(idSchema.parse(versionId), actor.id);
-  // Recompute the runbook's health soon; a queue failure must not fail the publish.
-  await enqueueOpsInsights({ type: 'RUNBOOK', id: idSchema.parse(runbookId) }).catch(() => 0);
-  revalidatePath('/runbooks');
-  revalidatePath(`/runbooks/${idSchema.parse(runbookId)}`);
+  return reportRunbookErrors(async () => {
+    await publishDraftVersion(idSchema.parse(versionId), actor.id);
+    // Recompute the runbook's health soon; a queue failure must not fail the publish.
+    await enqueueOpsInsights({ type: 'RUNBOOK', id: idSchema.parse(runbookId) }).catch(() => 0);
+    revalidatePath('/runbooks');
+    revalidatePath(`/runbooks/${idSchema.parse(runbookId)}`);
+  });
 }
 
 export async function cloneVersionAction(versionId: string, runbookId: string) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
-  await cloneVersionToDraft(idSchema.parse(versionId), actor.id);
-  revalidatePath(`/runbooks/${idSchema.parse(runbookId)}`);
+  return reportRunbookErrors(async () => {
+    await cloneVersionToDraft(idSchema.parse(versionId), actor.id);
+    revalidatePath(`/runbooks/${idSchema.parse(runbookId)}`);
+  });
 }
 
 export async function archiveRunbookAction(runbookId: string) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
-  await archiveRunbook(idSchema.parse(runbookId), actor.id);
-  revalidatePath('/runbooks');
-  redirect('/runbooks');
+  return reportRunbookErrors(async () => {
+    await archiveRunbook(idSchema.parse(runbookId), actor.id);
+    revalidatePath('/runbooks');
+    redirect('/runbooks');
+  });
 }
 
 export async function restoreRunbookAction(runbookId: string) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
   const id = idSchema.parse(runbookId);
-  const restored = await restoreRunbook(id, actor.id);
-  revalidatePath('/runbooks');
-  revalidatePath(`/runbooks/${id}`);
-  return { success: true, id: restored.id };
+  return reportRunbookErrors(async () => {
+    const restored = await restoreRunbook(id, actor.id);
+    revalidatePath('/runbooks');
+    revalidatePath(`/runbooks/${id}`);
+    return { success: true, id: restored.id };
+  });
 }
 
 export async function checkRunbookDeleteEligibilityAction(runbookId: string) {
@@ -270,9 +302,11 @@ export async function deleteRunbookAction(runbookId: string, confirmationText: s
 export async function duplicateRunbookAction(runbookId: string) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
   const id = idSchema.parse(runbookId);
-  const duplicated = await duplicateRunbook(id, actor.id);
-  revalidatePath('/runbooks');
-  redirect(`/runbooks/${duplicated.id}`);
+  return reportRunbookErrors(async () => {
+    const duplicated = await duplicateRunbook(id, actor.id);
+    revalidatePath('/runbooks');
+    redirect(`/runbooks/${duplicated.id}`);
+  });
 }
 
 export type AgentEnrollmentState = {
@@ -406,7 +440,8 @@ export async function updateRunbookArtifactRetentionAction(formData: FormData) {
 }
 
 export async function updateIncidentRemediationBudgetAction(formData: FormData) {
-  const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
+  // Same requirement as the runbook settings API (RUNBOOK_SETTINGS_MANAGE): these are global ceilings.
+  const actor = await assertCapability(CAPABILITIES.ADMIN_MANAGE);
   const number = z.coerce.number().int().min(0).max(100);
   const data = z
     .object({
@@ -421,6 +456,14 @@ export async function updateIncidentRemediationBudgetAction(formData: FormData) 
       runbookAutoNonIdempotentPerIncident: formData.get('nonIdempotent'),
     });
   await prisma.$transaction(async tx => {
+    const previous = await tx.systemSettings.findUnique({
+      where: { id: 'default' },
+      select: {
+        runbookAutoExecutionsPerIncident: true,
+        runbookAutoWritesPerIncident: true,
+        runbookAutoNonIdempotentPerIncident: true,
+      },
+    });
     await tx.systemSettings.upsert({
       where: { id: 'default' },
       create: { id: 'default', ...data },
@@ -432,6 +475,7 @@ export async function updateIncidentRemediationBudgetAction(formData: FormData) 
         entityType: 'SYSTEM_CONFIG',
         entityId: 'default',
         actorId: actor.id,
+        oldValue: previous,
         newValue: data,
       },
       tx

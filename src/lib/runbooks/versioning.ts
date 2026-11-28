@@ -308,6 +308,25 @@ export async function publishDraftVersion(
   });
 }
 
+async function draftClonedFrom(
+  tx: Prisma.TransactionClient,
+  draftId: string,
+  sourceVersionId: string
+): Promise<boolean> {
+  const cloned = await tx.auditLog.findMany({
+    where: { action: 'runbook.version.cloned', entityType: 'RUNBOOK_VERSION', entityId: draftId },
+    select: { details: true },
+  });
+  // The audit helper stores the legacy `details` under `metadata`; older rows kept it at the top level.
+  return cloned.some(entry => {
+    const details = entry.details as {
+      sourceVersionId?: string;
+      metadata?: { sourceVersionId?: string };
+    } | null;
+    return (details?.metadata?.sourceVersionId ?? details?.sourceVersionId) === sourceVersionId;
+  });
+}
+
 /** Clones any immutable version into the next numbered editable draft. */
 export async function cloneVersionToDraft(
   versionId: string,
@@ -326,7 +345,18 @@ export async function cloneVersionToDraft(
       const existing = await tx.runbookVersion.findUnique({
         where: { id: source.runbook.draftVersionId },
       });
-      if (existing) return existing;
+      if (existing) {
+        // A runbook holds one draft. Repeating the clone that made it returns it; asking for a
+        // different source must not hand back an unrelated draft as if it were that source.
+        if (existing.id === source.id || (await draftClonedFrom(tx, existing.id, source.id))) {
+          return existing;
+        }
+        throw new AppError({
+          code: 'RESOURCE_CONFLICT',
+          userMessage: `This runbook already has an editable draft (v${existing.version}, id ${existing.id}) that was not created from v${source.version}. Edit or publish that draft first.`,
+          details: { draftVersionId: existing.id, draftVersion: existing.version },
+        });
+      }
     }
     const latest = await tx.runbookVersion.aggregate({
       where: { runbookId: source.runbookId },
@@ -496,6 +526,48 @@ export async function retireRunbookVersion(versionId: string, actorId: string) {
       tx
     );
     return { id: version.id, runbookId: version.runbookId, version: version.version };
+  });
+}
+
+/**
+ * Unpublishes a runbook: its current published version is retired and the runbook has no published
+ * version until one is published again. Rules pinned to that version, and rules following the latest
+ * published version, stop with a clear reason; nothing is detached or deleted.
+ */
+export async function unpublishRunbook(runbookId: string, actorId: string) {
+  return prisma.$transaction(async tx => {
+    await lockRunbookForUpdate(tx, runbookId, { action: 'unpublish' });
+    const runbook = await tx.runbook.findUniqueOrThrow({
+      where: { id: runbookId },
+      select: {
+        id: true,
+        publishedVersion: { select: { id: true, version: true, checksum: true } },
+      },
+    });
+    const published = runbook.publishedVersion;
+    if (!published) {
+      throw new RunbookDefinitionError('This runbook has no published version to unpublish.', {
+        runbookId,
+      });
+    }
+    const retired = await tx.runbookVersion.updateMany({
+      where: { id: published.id, state: 'PUBLISHED' },
+      data: { state: 'RETIRED' },
+    });
+    if (retired.count !== 1) throw new RunbookVersionImmutableError(published.id, 'RETIRED');
+    await tx.runbook.update({ where: { id: runbookId }, data: { publishedVersionId: null } });
+    await logAudit(
+      {
+        action: 'runbook.unpublished',
+        entityType: 'RUNBOOK',
+        entityId: runbookId,
+        actorId,
+        oldValue: { publishedVersionId: published.id, version: published.version },
+        newValue: { publishedVersionId: null, retiredChecksum: published.checksum },
+      },
+      tx
+    );
+    return { id: runbookId, version: published.version };
   });
 }
 

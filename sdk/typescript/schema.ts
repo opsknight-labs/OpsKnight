@@ -707,7 +707,7 @@ export type ServiceObjectiveSnapshot = {
   sampleCount: string | null;
   target: number;
   breached: boolean | null;
-  dataState: 'AVAILABLE' | 'NO_DATA' | 'UNAVAILABLE';
+  dataState: 'AVAILABLE' | 'NO_DATA' | 'UNAVAILABLE' | 'PARTIAL';
   definitionVersion: number;
   createdAt: string;
 };
@@ -1968,6 +1968,17 @@ export type RunbookVersionDiff = {
     after: RunbookDiffStep | null;
   }>;
   inputKeys: { added: Array<string>; removed: Array<string> };
+  defaults: {
+    before: { timeoutSeconds: number | null; maxRetries: number | null };
+    after: { timeoutSeconds: number | null; maxRetries: number | null };
+    changed: boolean;
+  };
+  inputChanges: Array<{
+    key: string;
+    changes: Array<'type' | 'required' | 'default' | 'options'>;
+    type: { before: string; after: string };
+    required: { before: boolean; after: boolean };
+  }>;
   inputDetails: {
     added: Array<{ key: string; label: string; type: string; required: boolean }>;
     removed: Array<{ key: string; label: string; type: string; required: boolean }>;
@@ -3124,6 +3135,7 @@ export interface OperationRequests {
   };
   deleteCustomFieldDefinition: {
     params: { id: string };
+    query?: { cascade?: 'true' | 'false' };
     headers: { 'Idempotency-Key': string; 'If-Match': string };
   };
   createAuditExport: {
@@ -4932,9 +4944,7 @@ export interface OperationRequests {
     params: { id: string };
     headers: { 'Idempotency-Key': string; 'If-Match': string };
     body: {
-      serviceNotificationChannels?: Array<
-        'SLACK' | 'WEBHOOK' | 'EMAIL' | 'SMS' | 'PUSH' | 'WHATSAPP' | 'MICROSOFT_TEAMS'
-      >;
+      serviceNotificationChannels?: Array<'SLACK' | 'WEBHOOK' | 'MICROSOFT_TEAMS'>;
       serviceNotifyOnTriggered?: boolean;
       serviceNotifyOnAck?: boolean;
       serviceNotifyOnResolved?: boolean;
@@ -5049,6 +5059,10 @@ export interface OperationRequests {
       isActive?: boolean;
       services?: Array<string>;
     } & Record<string, unknown>;
+  };
+  endStatusPageAnnouncement: {
+    params: { id: string; announcementId: string };
+    headers?: { 'Idempotency-Key'?: string };
   };
   getStatusPage: { params: { id: string } };
   updateStatusPage: {
@@ -6811,6 +6825,11 @@ export interface OperationResponses {
     timestamp: string;
   } & Record<string, unknown>;
   createStatusPageAnnouncement: {
+    data: StatusPageAnnouncement;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  endStatusPageAnnouncement: {
     data: StatusPageAnnouncement;
     requestId: string;
     timestamp: string;
@@ -9888,6 +9907,14 @@ export const OPERATIONS = {
     idempotency: 'supported',
     requiredHeaders: [],
     bodyRequired: true,
+  },
+  endStatusPageAnnouncement: {
+    method: 'POST',
+    path: '/status-pages/{id}/announcements/{announcementId}/end',
+    kind: 'item',
+    idempotency: 'supported',
+    requiredHeaders: [],
+    bodyRequired: false,
   },
   getStatusPage: {
     method: 'GET',

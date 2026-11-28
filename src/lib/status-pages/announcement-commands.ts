@@ -1,6 +1,10 @@
 import 'server-only';
 
 import type { Prisma } from '@prisma/client';
+import prisma from '@/lib/prisma';
+import { emitAuditEvent, type AuditEventSource } from '@/lib/audit';
+import { AppError } from '@/lib/errors';
+import { incrementAnnouncementNotificationGeneration } from '@/lib/status-pages/announcement-notification-generation';
 import {
   STATUS_PAGE_ANNOUNCEMENT_FANOUT_V1,
   STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2,
@@ -85,4 +89,71 @@ export async function createAnnouncementFanoutJob(
       },
     },
   });
+}
+
+const endedAnnouncementSelect = {
+  id: true,
+  title: true,
+  message: true,
+  type: true,
+  isActive: true,
+  startDate: true,
+  endDate: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.StatusPageAnnouncementSelect;
+
+/**
+ * Ends an announcement now: it stops showing on the page and subscriber notices that have not gone out
+ * are cancelled. Ending one that is already inactive answers the same success without a second audit row.
+ */
+export async function endAnnouncement(
+  input: {
+    statusPageId: string;
+    announcementId: string;
+    actorId: string;
+    source: AuditEventSource;
+  },
+  client?: Prisma.TransactionClient
+) {
+  const { statusPageId, announcementId } = input;
+  const run = async (tx: Prisma.TransactionClient) => {
+    await lockAnnouncementMutation(tx, statusPageId, announcementId);
+    const existing = await tx.statusPageAnnouncement.findFirst({
+      where: { id: announcementId, statusPageId },
+      select: endedAnnouncementSelect,
+    });
+    if (!existing) {
+      throw new AppError({
+        code: 'RESOURCE_NOT_FOUND',
+        userMessage: 'The announcement was not found on this status page.',
+      });
+    }
+    if (!existing.isActive) return existing;
+
+    const ended = await tx.statusPageAnnouncement.update({
+      where: { id: announcementId },
+      data: { isActive: false },
+      select: endedAnnouncementSelect,
+    });
+    await incrementAnnouncementNotificationGeneration(announcementId, statusPageId, tx);
+    await cancelPendingAnnouncementJobs(tx, announcementId, statusPageId);
+    await suppressUndeliveredAnnouncementIntents(
+      tx,
+      announcementId,
+      'Announcement was ended before provider delivery.'
+    );
+    await emitAuditEvent(
+      {
+        action: 'status_page.announcement.ended',
+        source: input.source,
+        actor: { type: 'USER', id: input.actorId },
+        target: { type: 'STATUS_PAGE', id: statusPageId },
+        metadata: { announcementId, title: existing.title },
+      },
+      tx
+    );
+    return ended;
+  };
+  return client ? run(client) : prisma.$transaction(run);
 }

@@ -23,6 +23,7 @@ import {
   deletePolicyStep,
   movePolicyStep,
   reorderPolicySteps,
+  countPolicyIncidentsMidEscalation,
 } from '../actions';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import {
@@ -187,6 +188,7 @@ export default async function PolicyDetailPage({
       moveStep={movePolicyStep}
       reorderSteps={reorderPolicySteps}
       addStep={addPolicyStep}
+      countMidEscalation={countPolicyIncidentsMidEscalation}
       users={users}
       teams={teams}
       schedules={schedules}

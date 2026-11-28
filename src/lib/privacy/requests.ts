@@ -9,7 +9,13 @@ import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { emitAuditEvent } from '@/lib/audit';
 import { AppError } from '@/lib/errors/app-error';
-import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
+import { CAPABILITIES, isAppRole } from '@/lib/authorization';
+import {
+  effectiveAccessSelect,
+  resolveEffectiveAccess,
+  type ActiveGrantSource,
+  type CustomRoleSource,
+} from '@/lib/access/effective';
 import { PRIVACY_REQUEST_TRANSITIONS } from './state-machine';
 
 /**
@@ -272,6 +278,41 @@ export async function transitionPrivacyRequest(input: unknown, actor: PrivacyReq
   });
 }
 
+/** Whether the user can work privacy requests through their role, custom role or active grant. */
+function canManagePrivacyRequests(user: {
+  role: string;
+  customRole?: CustomRoleSource;
+  accessGrants?: readonly ActiveGrantSource[];
+}) {
+  return (
+    isAppRole(user.role) &&
+    resolveEffectiveAccess({
+      role: user.role,
+      customRole: user.customRole,
+      accessGrants: user.accessGrants,
+    }).capabilities.has(CAPABILITIES.PRIVACY_REQUESTS_MANAGE)
+  );
+}
+
+/** Active users a request can be assigned to; the privacy requests page offers exactly these. */
+export async function listAssignablePrivacyOperators() {
+  const candidates = await prisma.user.findMany({
+    where: {
+      status: 'ACTIVE',
+      OR: [
+        { role: 'ADMIN' },
+        { customRoleId: { not: null } },
+        { accessGrants: { some: { revokedAt: null, expiresAt: { gt: new Date() } } } },
+      ],
+    },
+    select: { id: true, name: true, email: true, role: true, ...effectiveAccessSelect() },
+    orderBy: { name: 'asc' },
+  });
+  return candidates
+    .filter(canManagePrivacyRequests)
+    .map(({ id, name, email, role }) => ({ id, name, email, role }));
+}
+
 /** Reassigns request ownership. Does not touch status/subject. */
 export async function assignPrivacyRequest(input: unknown, actor: PrivacyRequestActor) {
   const parsed = assignPrivacyRequestSchema.parse(input);
@@ -279,13 +320,9 @@ export async function assignPrivacyRequest(input: unknown, actor: PrivacyRequest
   if (parsed.assignedToId) {
     const assignee = await prisma.user.findUnique({
       where: { id: parsed.assignedToId },
-      select: { id: true, role: true, status: true },
+      select: { id: true, role: true, status: true, ...effectiveAccessSelect() },
     });
-    if (
-      !assignee ||
-      assignee.status !== 'ACTIVE' ||
-      !hasCapability(assignee.role as AppRole, CAPABILITIES.PRIVACY_REQUESTS_MANAGE)
-    ) {
+    if (!assignee || assignee.status !== 'ACTIVE' || !canManagePrivacyRequests(assignee)) {
       throw new AppError({
         code: 'VALIDATION_FAILED',
         userMessage:

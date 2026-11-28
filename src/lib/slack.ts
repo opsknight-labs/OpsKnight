@@ -6,6 +6,7 @@
 
 import prisma from './prisma';
 import { logger } from './logger';
+import { readSlackWebhookUrl } from './slack-webhook-secret';
 import { getBaseUrl } from './env-validation';
 import { retryFetch, isRetryableHttpError } from './retry';
 import { readSlackBotToken } from '@/app/api/slack/oauth/token-rotation';
@@ -322,8 +323,8 @@ export async function notifySlackForIncident(
       assigneeName: incident.assignee?.name,
     },
     additionalMessage,
-    incident.service.slackWebhookUrl
-  ); // Pass service-level webhook
+    await readSlackWebhookUrl(incident.service.slackWebhookUrl)
+  ); // Pass service-level webhook (stored encrypted)
 }
 
 /**

@@ -14,6 +14,8 @@ type IssuerRole = 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER';
 const ALL_ROLES: readonly IssuerRole[] = ['ADMIN', 'RESPONDER', 'AUDITOR', 'USER'];
 const OPERATORS: readonly IssuerRole[] = ['ADMIN', 'RESPONDER'];
 const ADMINS: readonly IssuerRole[] = ['ADMIN'];
+// Roles holding report.manage; the read-only AUDITOR cannot write reports, so it cannot be issued the scope.
+const REPORT_AUTHORS: readonly IssuerRole[] = ['ADMIN', 'RESPONDER', 'USER'];
 // Directory-wide reads need a capability the USER role does not have.
 const NON_USER: readonly IssuerRole[] = ['ADMIN', 'RESPONDER', 'AUDITOR'];
 
@@ -232,7 +234,7 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     S.SCHEDULES_WRITE,
     'Schedules manage',
     'Schedules',
-    'Create and update schedules, manage rotation participants, and create or cancel overrides. Layer configuration editing is not available over REST.',
+    'Create and update schedules, edit rotation layers and participants, and create or cancel overrides. Deleting a schedule also needs an administrator.',
     { write: true }
   ),
   [S.TEAMS_READ]: def(
@@ -379,7 +381,7 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     S.STATUS_PAGES_WRITE,
     'Status pages manage',
     'Status pages',
-    'Create status pages, configure supported sections and service components, post announcements and request durable publication retry. Subscriber contacts and revocation require separate explicit subscriber scopes; domain proof and asset upload remain unfinished.',
+    'Create status pages, configure supported sections and service components, post and end announcements and request durable publication retry. Subscriber contacts and revocation require separate explicit subscriber scopes; domain proof and asset upload remain unfinished.',
     { write: true, issuableBy: ADMINS }
   ),
   [S.SERVICE_OBJECTIVES_READ]: def(
@@ -498,7 +500,7 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     'Saved dashboards manage',
     'Governance',
     'Create and manage owned saved dashboards, with team sharing restricted to memberships.',
-    { write: true, issuableBy: ALL_ROLES }
+    { write: true, issuableBy: REPORT_AUTHORS }
   ),
   [S.POSTMORTEMS_READ]: def(
     S.POSTMORTEMS_READ,
@@ -570,4 +572,14 @@ export function issuableScopesForRole(role: string): ApiScopeDefinition[] {
 export function disallowedScopesForRole(role: string, requested: readonly ApiScope[]): ApiScope[] {
   const allowed = new Set(issuableScopesForRole(role).map(definition => definition.scope));
   return requested.filter(scope => !allowed.has(scope));
+}
+
+/** Scopes among `requested` that only an ADMIN may issue (the ones that need a fresh sign-in to mint). */
+export function adminOnlyScopes(requested: readonly ApiScope[]): ApiScope[] {
+  return ALL_API_SCOPE_DEFINITIONS.filter(
+    definition =>
+      requested.includes(definition.scope) &&
+      definition.issuableBy.length === 1 &&
+      definition.issuableBy[0] === 'ADMIN'
+  ).map(definition => definition.scope);
 }

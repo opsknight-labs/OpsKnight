@@ -100,6 +100,13 @@ incidents leave the feed.
    on unowned rows), or open the incident. Move between rows with `j` and `k`.
 6. Select **View all incidents** to open the same filters on the Incidents page.
 
+If part of the live data cannot be read (for example during a database
+brown-out), that part says **unavailable** instead of showing zeros or an empty
+list: **Resolved · 24h** and the other 24-hour figures, **On call now**,
+**Recent activity**, and **SLA at Risk** when there is no snapshot at all. A
+card never shows "No active on-call shifts" or "Everything is within SLA" for
+data it could not read.
+
 The footer shows connection health (**Live**, **Stale**, **Offline**, or
 **Session expired**) and when data was last synchronized. After a reconnect,
 a filter change, or a missed update, the panel re-reads the authoritative list
@@ -122,8 +129,11 @@ The period selector in this section changes only historical analytics. It
 never filters the live feed or the Command Center counts. The section shows
 created versus resolved incidents over the period, MTTA and MTTR compared with
 the previous period, acknowledgement and resolution SLA compliance, an activity
-timeline with type filters, team load, and the incident heatmap. Empty or
-unavailable data is different from a measured zero.
+timeline with type filters, team load, and the incident heatmap (the last 365
+days, each day in your time zone). Empty or
+unavailable data is different from a measured zero. **Full analytics** (also
+offered as **Open full analytics** when trends cannot load) opens Analytics with
+the same 7, 30 or 90 day period.
 
 ## Show the dashboard on a TV (Wallboard)
 
@@ -134,7 +144,11 @@ The wallboard is read-only and has no navigation chrome. It:
   where the browser allows it; TV browsers that refuse the request keep working
   in a maximized window);
 - cycles through views every 20 seconds (`Space` or **Auto-cycle** pauses;
-  `?cycle=off` disables it);
+  `?cycle=off` disables it, and so does a view named in the URL, such as
+  `?lview=unassigned`, which then stays on that view);
+- leads with one headline: critical incidents, SLA at risk, SLA breached,
+  unassigned incidents, then "all owned and within SLA". The last form appears
+  only when no active incident is critical, at risk, breached, or unassigned;
 - scales text with `+` and `-` or `?scale=` for distant screens;
 - keeps the screen awake where supported, hides an idle cursor, shifts content
   slightly every few minutes to limit burn-in, and reloads itself every

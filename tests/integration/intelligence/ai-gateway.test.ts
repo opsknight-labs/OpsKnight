@@ -18,6 +18,11 @@ import {
 import type { AiGenerateRequest, AiStreamEvent } from '@/lib/intelligence/ai/port';
 import { startFakeModel, type FakeServer } from '../../helpers/fake-model-server';
 import { trace } from '@opentelemetry/api';
+import { z } from 'zod/v4';
+import {
+  clearRuntimeOperationalMetrics,
+  runtimeOperationalMetrics,
+} from '@/lib/metrics/operational/registry';
 import { installFakeTracer } from '../../helpers/fake-tracer';
 import { createTestUser, resetDatabase, testPrisma as db } from '../../helpers/test-db';
 
@@ -320,6 +325,49 @@ describe('gateway', () => {
     expect(JSON.stringify(audit)).not.toContain('bad deploy');
   });
 
+  // A small model that thinks first spent a 1,024-token summary cap on thinking, was cut off mid-JSON and the
+  // page showed "The AI response was not in the expected format".
+  const structuredRequest = (userId: string, maxOutputTokens: number) => ({
+    ...request(userId, { maxOutputTokens }),
+    schemaName: 'document',
+    schema: z.object({ ok: z.boolean() }).strict(),
+  });
+  it('gives a structured document room to think on top of its own length', async () => {
+    const { admin, actor } = await configure();
+    await saveAiProvider(null, provider('Local', primary.url), actor);
+    invalidateGatewayCache();
+    primary.script.push({ content: '{"ok":true}', usage: [20, 9] });
+    const port = (await resolveGatewayPort('INTERNAL'))!;
+    const result = await port.generateStructured(structuredRequest(admin.id, 1_024));
+    expect(result.object).toEqual({ ok: true });
+    const sent = primary.requests.at(-1)!.body;
+    expect(sent.max_tokens ?? sent.max_completion_tokens).toBe(1_024 + REASONING_ROOM_TOKENS);
+  });
+  it('sends a structured document without the thinking room when the budget cannot hold it', async () => {
+    const { admin, actor } = await configure({ budget: 1_000 });
+    await saveAiProvider(null, provider('Local', primary.url), actor);
+    invalidateGatewayCache();
+    primary.script.push({ content: '{"ok":true}', usage: [20, 9] });
+    const port = (await resolveGatewayPort('INTERNAL'))!;
+    clearRuntimeOperationalMetrics();
+    await port.generateStructured(structuredRequest(admin.id, 256));
+    const sent = primary.requests.at(-1)!.body;
+    expect(sent.max_tokens ?? sent.max_completion_tokens).toBe(256);
+    // The refused full-room attempt was a probe: the call ran, so it is not a budget rejection.
+    expect(
+      runtimeOperationalMetrics().get('opsknight_intelligence_ai_budget_rejections_total')
+    ).toBeUndefined();
+  });
+  it('sends exactly the asked cap when the caller counts its own tokens (thinkingRoom: false)', async () => {
+    const { admin, actor } = await configure();
+    await saveAiProvider(null, provider('Local', primary.url), actor);
+    invalidateGatewayCache();
+    primary.script.push({ content: '{"ok":true}', usage: [20, 9] });
+    const port = (await resolveGatewayPort('INTERNAL'))!;
+    await port.generateStructured({ ...structuredRequest(admin.id, 600), thinkingRoom: false });
+    const sent = primary.requests.at(-1)!.body;
+    expect(sent.max_tokens ?? sent.max_completion_tokens).toBe(600);
+  });
   it('traces calls with bounded attributes and never puts prompts or answers in a span', async () => {
     const { admin, actor } = await configure();
     await saveAiProvider(null, provider('Local', primary.url), actor);

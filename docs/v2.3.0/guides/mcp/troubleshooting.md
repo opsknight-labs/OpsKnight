@@ -81,7 +81,7 @@ This page lists 110 MCP codes and 26 log events found in the source.
 | <a id="MCP_BODY_TIMEOUT"></a>`MCP_BODY_TIMEOUT` | The request body took longer than five seconds to arrive. | Retry; check proxy buffering and network health. |
 | <a id="MCP_CANCELLED"></a>`MCP_CANCELLED` | The client cancelled the request or closed the connection. | Nothing to fix. A change may still have committed; retry with the same idempotencyKey. |
 | <a id="MCP_BODY_TOO_LARGE"></a>`MCP_BODY_TOO_LARGE` | The request body is larger than 64 KiB. | Send smaller arguments. |
-| <a id="MCP_DEADLINE_EXCEEDED"></a>`MCP_DEADLINE_EXCEEDED` | The request ran past its ten-second deadline. | Retry with fewer steps or a smaller query.limit. |
+| <a id="MCP_DEADLINE_EXCEEDED"></a>`MCP_DEADLINE_EXCEEDED` | The request ran past its ten-second deadline before its work finished. A change that had already committed is reported as done, not as this error. | Retry with fewer steps or a smaller query.limit. |
 | <a id="MCP_INVALID_PAGE_SIZE"></a>`MCP_INVALID_PAGE_SIZE` | query.limit is outside 1 to 50. | Use a limit from 1 to 50 and follow nextCursor for more. |
 | <a id="MCP_SCOPE_NOT_GRANTED"></a>`MCP_SCOPE_NOT_GRANTED` | The role allows the operation, but this connection was not granted the permission it needs. The hint names the missing scopes. | Reconnect and tick the named permission on the consent page (the administrator ceiling must include it). |
 | <a id="MCP_OPERATION_DISABLED"></a>`MCP_OPERATION_DISABLED` | Changes or sensitive reads are turned off in Access policy. | An administrator turns on reviewed actions or sensitive reads under Access policy → Reviewed actions. |

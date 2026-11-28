@@ -14,7 +14,10 @@ import { getStatusHistoryResponse } from '@/app/api/status/history/handler';
 import { getStatusRssResponse } from '@/lib/status-pages/rss';
 import { getUptimeExportResponse } from '@/app/api/status/uptime-export/route';
 
-vi.mock('@/lib/sla-server', () => ({ calculateMultiServiceUptime: vi.fn().mockResolvedValue({}) }));
+vi.mock('@/lib/sla-server', () => ({
+  calculateMultiServiceUptime: vi.fn().mockResolvedValue({}),
+  calculateMultiServiceAvailability: vi.fn().mockResolvedValue({}),
+}));
 
 describe('showMembers=false does not leak member services (P2)', () => {
   beforeEach(async () => {

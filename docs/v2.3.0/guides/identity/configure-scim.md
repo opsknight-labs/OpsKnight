@@ -262,6 +262,15 @@ administrator binding. Map `displayName`, `name.formatted`, `name.givenName`,
 `department` as needed. Profile images accept HTTP(S) URLs. Unmapped attributes,
 privilege changes and unsupported PATCH paths fail with SCIM errors.
 
+SCIM cannot change the email of an administrator account, because that address is
+the sign-in name and where a password reset is sent. A PATCH or PUT that would
+move it is refused with HTTP 400 `mutability`, nothing in the request is applied,
+and a `user.update_refused` event is recorded in the SCIM activity log. If that
+event cannot be written the answer is still the same 400, so the directory does not
+retry the refused change. Sending
+the administrator's current email again (in any letter case) is not a change.
+Change an administrator's email in OpsKnight.
+
 For Entra, use Enterprise applications → Provisioning → Automatic. Enter the Tenant
 URL and one-time Secret Token. Map `objectId` to `externalId`. Change the default
 `userPrincipalName` → `userName` mapping to `mail` → `userName`, and keep `mail` →
@@ -335,7 +344,9 @@ equality filters and offset pagination are supported. Bulk, sorting, password
 changes and ETags are not advertised.
 
 Users support create, read, PUT, ordered atomic PATCH, disable/reactivate and safe
-DELETE. Equality filters support `externalId` and `userName`. Groups support
+DELETE. In a PATCH that sends both `displayName` and name parts (`name.givenName`,
+`name.familyName`), the `displayName` you sent is kept whichever comes first;
+without one, the stored display name follows the name parts. Equality filters support `externalId` and `userName`. Groups support
 create, read, rename, PUT, ordered atomic PATCH and grant-revocation-on-DELETE. Equality
 filters support `displayName`, `externalId` and `id`. Group queries honor
 `excludedAttributes=members` without loading member collections. Group members must be
@@ -351,6 +362,19 @@ Responses use `application/scim+json`, stable resource metadata and `Location` o
 creation. Errors use SCIM bodies; `401` includes a bearer challenge, `403` denotes
 missing scope, `409` denotes identity/security conflicts, and `429`/`503` include
 `Retry-After`. Internal database errors and bearer secrets are never returned.
+
+A `POST /Groups` without an `externalId` is refused with `409` (`scimType: uniqueness`,
+`A group with this displayName already exists.`) when the connector already has a
+group of that name that also has no `externalId`. The unique index covers only groups
+that have an `externalId`, so without this check an identity provider retrying the
+request (for example after a proxy timeout) would create a second group. On `409`,
+look the group up by `displayName` instead of creating it again. Groups that carry an
+`externalId` behave as before.
+
+An unexpected failure while handling a SCIM request answers a generic `503` and the
+cause is written to the server log at error level with the `X-Request-ID` of the
+response. An unexpected failure in a SCIM administration action in the console is logged the same way, without a request ID.
+Expected failures (validation, conflicts, `4xx` errors) are not logged this way.
 
 ## Diagnostics and reconciliation
 
@@ -416,7 +440,14 @@ to approximately one minute, while validity/revocation is checked each request.
 `SCIM_CONNECTOR_REQUESTS_PER_MINUTE` defaults to 600 and is bounded to 1–1200.
 Pre-authentication admission is process-local and bounded to 4096 pseudonymous
 keys; repeated unknown tokens are negatively cached for at most five seconds.
-It does not cache successful credential authorization. Network-wide abuse control
+Tokens OpsKnight has not verified recently are limited to 120 attempts per minute
+for each source address, so a flood of random tokens from one address cannot
+cause `429` for a directory connecting from another. Requests with no usable
+source address share a single limit of 1200 attempts per minute, and all unverified
+attempts together are capped at 6000 per minute, which only a flood spread over
+many addresses reaches. A directory whose token was verified in the last minute is
+not counted against either limit. It does not cache successful credential
+authorization. Network-wide abuse control
 remains an ingress deployment responsibility.
 
 ## Upgrading legacy membership ownership
@@ -433,8 +464,12 @@ removal can revoke only adopted or newly created directory grants.
 ## Large-group responses
 
 Group collections default to 10 resources and at most 100 requested resources.
-Full-member pages have a shared budget of 10,000 member entries; `itemsPerPage`
-may therefore be less than `count`. Continue with `startIndex + itemsPerPage`.
+Full-member pages have a shared budget of 10,000 member entries. When you do not send
+`count`, a page that goes over the budget is cut short, so `itemsPerPage` may be less
+than the default of 10: continue with `startIndex + itemsPerPage`. When you send
+`count`, a page is never cut short (a client that steps by `count` would skip the groups
+left out): a page whose groups exceed the budget together returns SCIM 413, and you
+request a smaller `count` or add `excludedAttributes=members`.
 Every returned group includes its entire membership; membership is never silently
 truncated. Request `excludedAttributes=members` to enumerate metadata for up to
 100 groups without loading member collections. Individual full representations

@@ -63,6 +63,47 @@ describe('notification operations query', () => {
     }
   );
 
+  describe('recipient detail', () => {
+    const row = () =>
+      ({
+        id: 'n1',
+        recipientDisplay: 'alice@example.com',
+        createdAt: new Date(),
+        scheduledAt: new Date(),
+        nextAttemptAt: new Date(),
+        errorMsg: null,
+        deliveryAttempts: [],
+      }) as never;
+    const orFields = () => {
+      const where = vi.mocked(prisma.notification.findMany).mock.calls[0]![0]!.where as {
+        OR: Array<Record<string, unknown>>;
+      };
+      return where.OR.flatMap(clause => Object.keys(clause));
+    };
+
+    it('hides recipients and does not search message bodies or recipients by default', async () => {
+      vi.mocked(prisma.notification.findMany).mockResolvedValue([row()]);
+
+      const result = await getNotificationOperations({ query: 'alice' });
+
+      const args = vi.mocked(prisma.notification.findMany).mock.calls[0]![0]!;
+      expect(args.select).toMatchObject({ recipientDisplay: false });
+      expect(orFields()).toEqual(['sourceType', 'sourceId', 'incident']);
+      expect(result.notifications[0]).toMatchObject({ recipientDisplay: null });
+    });
+
+    it('shows recipients and searches them and the message for administrators', async () => {
+      vi.mocked(prisma.notification.findMany).mockResolvedValue([row()]);
+
+      const result = await getNotificationOperations({ query: 'alice', includeRecipients: true });
+
+      const args = vi.mocked(prisma.notification.findMany).mock.calls[0]![0]!;
+      expect(args.select).toMatchObject({ recipientDisplay: true });
+      expect(orFields()).toEqual(['message', 'recipientDisplay', 'sourceType', 'sourceId', 'incident']);
+      expect(result.notifications[0]).toMatchObject({ recipientDisplay: 'alice@example.com' });
+    });
+  });
+
   it('filters by MICROSOFT_TEAMS channel correctly and includes it in OPERATIONS_CHANNELS', async () => {
     const { OPERATIONS_CHANNELS } = await import('@/lib/notification-operations');
     expect(OPERATIONS_CHANNELS).toContain('MICROSOFT_TEAMS');

@@ -32,7 +32,8 @@ export class CostBudget {
     requireMcp(++this.calls <= this.maxOperations, 'MCP_OPERATION_BUDGET_EXCEEDED', 429);
   }
   consumeResult(value: unknown) {
-    this.check();
+    // No deadline or cancel check here: the result exists, and for a write it is already committed.
+    // Failing it now would report a committed write as failed and invite a duplicating retry.
     this.bytes += Buffer.byteLength(JSON.stringify(value));
     requireMcp(this.bytes <= this.maxBytes, 'MCP_RESULT_BUDGET_EXCEEDED', 413);
   }

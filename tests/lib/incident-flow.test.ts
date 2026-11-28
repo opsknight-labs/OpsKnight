@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- loosely typed Prisma and job mocks */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import prisma from '@/lib/prisma';
 import { bulkAcknowledge, bulkUpdateStatus } from '@/app/(app)/incidents/bulk-actions';
@@ -8,6 +9,11 @@ vi.mock('@/lib/rbac', () => ({
   assertCanCreateIncidentForService: vi.fn().mockResolvedValue(undefined),
   assertCanModifyIncident: vi.fn().mockResolvedValue(undefined),
   getCurrentUser: vi.fn().mockResolvedValue({ id: 'user-1', name: 'Alex' }),
+  getCurrentAuthorizationActor: vi.fn().mockResolvedValue({ id: 'user-1' }),
+}));
+
+vi.mock('@/lib/authorization-filters', () => ({
+  incidentReadWhere: vi.fn().mockReturnValue({}),
 }));
 
 vi.mock('@/lib/user-notifications', () => ({

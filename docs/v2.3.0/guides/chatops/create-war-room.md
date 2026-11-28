@@ -31,7 +31,13 @@ Open **Incidents → select incident** and locate the **Create war room** button
 ## Configure manual or automatic creation
 
 - **Manual:** a responder opens an incident and explicitly creates the room.
-  Use this when only selected incidents require a dedicated channel.
+  Use this when only selected incidents require a dedicated channel. Creating
+  and closing a room need the `operations.manage` permission (Admin, Responder,
+  or a custom role, temporary access or emergency access for that incident that includes it). The page shows the
+  controls to exactly the people the server accepts, and applies the same check
+  when you submit. If a create or close fails, for example because a policy
+  denies it, an error message appears with the reason and the placeholder room
+  is removed.
 - **Automatic:** the effective global/service policy creates a room when a
   qualifying incident begins. Only one destination should own automatic room
   creation for a service.
@@ -58,6 +64,11 @@ Treat OpsKnight as authoritative for incident state. Provider messages and cards
 project that state; manual channel edits do not replace incident actions. Use
 the room for coordination, pin or update incident context through supported
 controls, and keep sensitive credentials out of chat history.
+
+Slack war-room messages include text people wrote, such as incident notes and
+display names. OpsKnight escapes the `<` character in those messages, so a note
+containing `<!channel>` or `<!subteam^…>` shows as plain text and does not notify
+the channel or a user group. A `>` quote marker still renders.
 
 Participant synchronization depends on provider permissions, bot/app access,
 and identity availability. A missing participant should be investigated rather

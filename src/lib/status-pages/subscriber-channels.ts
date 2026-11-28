@@ -78,7 +78,10 @@ export async function notifyChannelSubscribers(input: {
     });
     if (!subscriptions.length) break;
     cursor = subscriptions.at(-1)!.id;
-    const tokens = await issueUnsubscribeTokensBatch(subscriptions.map(sub => sub.id));
+    const tokens = await issueUnsubscribeTokensBatch(
+      subscriptions.map(sub => sub.id),
+      `${input.page.id}:${input.sourceType}:${input.sourceId}:${input.eventKey}`
+    );
     const intents: CentralNotificationInput[] = [];
     for (const sub of subscriptions) {
       const unsubscribeUrl = `${statusPageUrl}/unsubscribe/${tokens.get(sub.id)}`;

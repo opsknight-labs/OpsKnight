@@ -29,6 +29,7 @@ describe('Incident Collaboration Architectural Boundaries', () => {
     const violations: Array<{ file: string; match: string }> = [];
 
     for (const file of WAR_ROOM_UI_FILES) {
+      // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed repository file list
       const content = readFileSync(file, 'utf8');
       for (const pattern of forbiddenPatterns) {
         const match = content.match(pattern);
@@ -52,5 +53,13 @@ describe('Incident Collaboration Architectural Boundaries', () => {
     expect(fileContent).not.toMatch(/\baxios\b/);
     expect(fileContent).not.toMatch(/@microsoft\/microsoft-graph-client/);
     expect(fileContent).not.toMatch(/@slack\/web-api/);
+  });
+
+  it('keeps the incident page rendering when the collaboration view cannot be built', () => {
+    const screen = readFileSync('src/components/incident/IncidentDetailScreen.tsx', 'utf8');
+
+    expect(screen).toMatch(
+      /getIncidentCollaborationView\(\{ incidentId: id, userId: user\.id \}\)\.catch\(/
+    );
   });
 });

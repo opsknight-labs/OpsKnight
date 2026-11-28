@@ -18,6 +18,14 @@ import {
   firstEscalationStepIssue,
   type ValidatedEscalationStep,
 } from '@/lib/escalation/policy-validation';
+import {
+  matchReplacementSteps,
+  remapOpenIncidentEscalationCursors,
+} from '@/lib/escalation/step-cursor';
+import {
+  assertResponderPolicySnapshotSafeForApi,
+  lockResponderPolicy,
+} from '@/lib/escalation/automation-snapshot';
 import { AppError } from '@/lib/errors';
 import { withV2Observability } from '@/lib/api-v2/observability';
 
@@ -118,6 +126,8 @@ export const PATCH = withV2Observability(async function PATCH(
       prisma.$transaction(async tx => {
         // MCP approval recheck inside the change's own transaction; a no-op for REST callers.
         await internalV2MutationGuard()?.(tx);
+        // Serialize with other edits so the size check below sees the complete definition.
+        await lockResponderPolicy(tx, id);
         await tx.escalationPolicy.update({
           where: { id, ...ifMatchWhere(expected) },
           data: {
@@ -130,6 +140,11 @@ export const PATCH = withV2Observability(async function PATCH(
         });
 
         if (validated.steps) {
+          const storedSteps = await tx.escalationRule.findMany({
+            where: { policyId: id },
+            orderBy: { stepOrder: 'asc' },
+            include: { conditions: true },
+          });
           await tx.escalationRuleCondition.deleteMany({ where: { rule: { policyId: id } } });
           await tx.escalationRule.deleteMany({ where: { policyId: id } });
           for (const [index, stepPayload] of validatedStepPayloads.entries()) {
@@ -158,7 +173,19 @@ export const PATCH = withV2Observability(async function PATCH(
               },
             });
           }
+          // A pure delete or reorder keeps in-flight escalations on the same tier. An edited or
+          // inserted step has no identity to follow, so those escalations are left as they are.
+          const keptStepIds = matchReplacementSteps(storedSteps, validatedStepPayloads);
+          if (keptStepIds) {
+            await remapOpenIncidentEscalationCursors(tx, {
+              policyId: id,
+              before: storedSteps.map(step => step.id),
+              after: keptStepIds,
+            });
+          }
         }
+
+        await assertResponderPolicySnapshotSafeForApi(tx, id);
 
         const result = await tx.escalationPolicy.findUnique({
           where: { id },

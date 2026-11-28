@@ -26,6 +26,7 @@ import { describeRequirement } from '@/lib/access/catalog';
 import { resolveIncidentResourceForActor } from '@/lib/access/incident-relations';
 import {
   deriveScheduleUICapabilities,
+  loadScheduleRelation,
   type ScheduleUICapabilities,
 } from '@/lib/schedules/capabilities';
 
@@ -670,47 +671,16 @@ async function resolveScheduleUICapabilities(
   scheduleId: string,
   user: Awaited<ReturnType<typeof getCurrentUser>>
 ): Promise<ScheduleUICapabilities> {
-  const schedule = await prisma.onCallSchedule.findUnique({
-    where: { id: scheduleId },
-    select: {
-      layers: {
-        select: {
-          users: { where: { userId: user.id }, select: { id: true } },
-        },
-      },
-      overrides: {
-        where: { OR: [{ userId: user.id }, { replacesUserId: user.id }] },
-        select: { id: true },
-        take: 1,
-      },
-      escalationRules: {
-        where: {
-          policy: {
-            services: {
-              some: {
-                team: { members: { some: { userId: user.id, role: 'OWNER' } } },
-              },
-            },
-          },
-        },
-        select: { id: true },
-        take: 1,
-      },
-    },
-  });
-
-  if (!schedule) {
+  const relation = await loadScheduleRelation(prisma, scheduleId, user.id);
+  if (!relation) {
     throw appError('SCHEDULE_NOT_FOUND', 'Schedule not found', { scheduleId });
   }
 
-  const isAssignedMember = schedule.layers.some(layer => layer.users.length > 0);
-  const isOwningTeamLead = schedule.escalationRules.length > 0;
+  const capabilities = capabilitiesOf(user);
   return deriveScheduleUICapabilities({
-    capabilities: capabilitiesOf(user),
-    isAdmin: user.role === 'ADMIN',
-    isAssignedMember,
-    isOwningTeamLead,
-    hasScopedView: isAssignedMember || schedule.overrides.length > 0,
+    capabilities,
+    isAdmin: capabilities.includes(CAPABILITIES.ADMIN_MANAGE),
+    ...relation,
   });
 }
 

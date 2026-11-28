@@ -6,7 +6,10 @@ import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
 import { assertAdmin, getCurrentUser } from '@/lib/rbac';
 import { decryptProviderConfig, encryptProviderConfig } from '@/lib/encrypted-provider-config';
-import { notificationProviderKeySchema } from '@/lib/notifications/provider-schema';
+import {
+  notificationProviderKeySchema,
+  VAPID_KEY_HISTORY_LIMIT,
+} from '@/lib/notifications/provider-schema';
 import { saveNotificationProvider } from '@/lib/notifications/providers';
 import { AppError } from '@/lib/errors';
 import { SettingsChangedMutationError } from '@/lib/settings-result';
@@ -23,8 +26,7 @@ const SUPPORTED_PROVIDERS = new Set([
 ]);
 
 export type UpdateNotificationProviderResult =
-  | { success: true; error: null; updatedAt: string }
-  | SettingsActionFailure;
+  { success: true; error: null; updatedAt: string } | SettingsActionFailure;
 
 export type GenerateVapidKeysResult =
   | { success: true; error: null; publicKey: string; subject: string; updatedAt: string }
@@ -220,7 +222,7 @@ async function rotateVapidKeys(options?: {
       .filter(
         (entry, index, all) => all.findIndex(item => item.publicKey === entry.publicKey) === index
       )
-      .slice(0, 3),
+      .slice(0, VAPID_KEY_HISTORY_LIMIT),
   };
   const encryptedNextConfig = await encryptProviderConfig('web-push', nextConfig);
 

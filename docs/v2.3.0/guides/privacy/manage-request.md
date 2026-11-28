@@ -33,7 +33,7 @@ Open **Settings → Privacy Requests**. The board supports search, status/type f
 6. Create the request; it starts as `RECEIVED` with verification pending.
 7. Move it to `IDENTITY_VERIFICATION` and perform the organization's identity check.
 8. Record the verification method/reference and mark verification complete.
-9. Assign an eligible active administrator or auditor.
+9. Assign an eligible active user: an administrator, or anyone whose custom role or active temporary access includes `privacy.requests.manage`. The assignee list shows exactly these people, and anyone else is refused as "Not an eligible privacy operator." The built-in Auditor role can read privacy requests but cannot be assigned one.
 10. Use `IN_REVIEW` for legal/scope review or move a verified request to `PROCESSING` for fulfilment.
 
 ## What OpsKnight does

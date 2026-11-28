@@ -13,9 +13,12 @@ import {
   processCentralNotificationQueue,
   reconcileUnknownNotifications,
   resolveNotificationExpiry,
+  notificationRetryBlockedReason,
   requeueCentralNotification,
 } from '@/lib/notification-control-plane';
 import prisma from '@/lib/prisma';
+import { sendSlackNotification } from '@/lib/slack';
+import { slackWebhookHandle } from '@/lib/slack-webhook-secret';
 import { reconcileNotificationProviderFeedback } from '@/lib/notification-provider-feedback';
 import { CircuitBreakerError } from '@/lib/circuit-breaker';
 import { acquireProviderAdmission, acquireProviderConcurrency } from '@/lib/provider-admission';
@@ -188,6 +191,24 @@ describe('central notification control plane', () => {
     );
   });
 
+  it.each([
+    ['CRITICAL', 8],
+    ['TRANSACTIONAL', 3],
+  ] as const)(
+    'gives a %s intent %i delivery attempts by default',
+    async (trafficClass, expected) => {
+      vi.mocked(prisma.notification.create).mockResolvedValue({
+        id: 'notification_budget',
+      } as never);
+
+      await createCentralNotificationIntent({ ...input, trafficClass });
+
+      expect(prisma.notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ maxAttempts: expected }) })
+      );
+    }
+  );
+
   it.each(['BOUNCED', 'INVALID', 'OPTED_OUT'] as const)(
     'persists a durable SKIPPED intent for a %s user endpoint',
     async status => {
@@ -214,6 +235,20 @@ describe('central notification control plane', () => {
       );
     }
   );
+
+  it('stores a suppressed page as SKIPPED with its reason and reports it skipped', async () => {
+    vi.mocked(prisma.notification.create).mockResolvedValue({ id: 'notification-held' } as never);
+
+    await expect(
+      createCentralNotificationIntent({ ...input, suppressedReason: 'Held by quiet hours' })
+    ).resolves.toMatchObject({ created: true, skipped: true });
+
+    expect(prisma.notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'SKIPPED', errorMsg: 'Held by quiet hours' }),
+      })
+    );
+  });
 
   it('includes recently persisted intents when applying batch noise limits', async () => {
     vi.mocked(prisma.notification.findMany).mockResolvedValue(
@@ -380,6 +415,70 @@ describe('central notification control plane', () => {
       .mock.calls.map(([args]) => args?.data as { status?: string; attempts?: number })
       .find(data => data?.status === 'FAILED');
     expect(failed?.attempts).toBe(expectedAttempts);
+  });
+
+  it('lets a definite failure settle a row that a lapsed lease already parked as UNKNOWN', async () => {
+    const due = new Date(Date.now() - 60_000);
+    const payload = { kind: 'WEBHOOK', url: 'https://example.com/events', payload: {} };
+    vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+      id: 'webhook-late-failure',
+      status: 'PENDING',
+      category: 'SECURITY',
+      attempts: 0,
+      maxAttempts: 5,
+      nextAttemptAt: due,
+      scheduledAt: due,
+      lastAttemptAt: null,
+      expiresAt: null,
+      payloadEncrypted: `encrypted:${JSON.stringify(payload)}`,
+    } as never);
+    vi.mocked(prisma.notificationDeliveryAttempt.create).mockResolvedValue({} as never);
+    mocks.sendWebhook.mockResolvedValue({
+      success: false,
+      statusCode: 404,
+      error: 'Webhook returned 404: nope',
+    });
+
+    await deliverCentralNotification('webhook-late-failure');
+
+    // Recovery sets both the row and its attempt to UNKNOWN while the provider call runs.
+    expect(prisma.notificationDeliveryAttempt.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ outcome: { in: ['IN_FLIGHT', 'UNKNOWN'] } }),
+      })
+    );
+    const failedCall = vi
+      .mocked(prisma.notification.updateMany)
+      .mock.calls.find(([args]) => (args?.data as { status?: string })?.status === 'FAILED');
+    expect(failedCall?.[0]?.where).toMatchObject({ status: { in: ['PENDING', 'UNKNOWN'] } });
+  });
+
+  it('explains a refused retry only when the message content is gone', async () => {
+    const find = vi.mocked(prisma.notification.findUnique);
+    find.mockResolvedValueOnce({
+      channel: 'EMAIL',
+      payloadEncrypted: null,
+      expiresAt: null,
+    } as never);
+    expect(await notificationRetryBlockedReason('n1')).toMatch(/message content was removed/);
+    find.mockResolvedValueOnce({
+      channel: 'EMAIL',
+      payloadEncrypted: 'x',
+      expiresAt: new Date(Date.now() - 1000),
+    } as never);
+    expect(await notificationRetryBlockedReason('n2')).toMatch(/message content was removed/);
+    find.mockResolvedValueOnce({
+      channel: 'EMAIL',
+      payloadEncrypted: 'x',
+      expiresAt: null,
+    } as never);
+    expect(await notificationRetryBlockedReason('n3')).toBeNull();
+    find.mockResolvedValueOnce({
+      channel: 'MICROSOFT_TEAMS',
+      payloadEncrypted: null,
+      expiresAt: null,
+    } as never);
+    expect(await notificationRetryBlockedReason('n4')).toBeNull();
   });
 
   it('signs queued integration webhooks with the current secret and revokes on type change', async () => {
@@ -581,6 +680,121 @@ describe('central notification control plane', () => {
     );
   });
 
+  describe('service Slack webhook secret', () => {
+    const WEBHOOK = 'https://hooks.slack.com/services/T000/B000/topsecretvalue';
+    const handle = () => slackWebhookHandle(WEBHOOK);
+    const queue = (policy: { targetAddress: string }, withLegacyUrl = false) => {
+      const due = new Date(Date.now() - 60_000);
+      const payload = {
+        kind: 'SLACK_WEBHOOK' as const,
+        incident: {
+          id: 'incident-1',
+          title: 'Workflow failed',
+          status: 'OPEN',
+          urgency: 'HIGH',
+          serviceName: 'CI',
+        },
+        eventType: 'triggered' as const,
+        serviceId: 'service-1',
+        ...(withLegacyUrl ? { webhookUrl: WEBHOOK } : {}),
+        lifecyclePolicy: {
+          incidentId: 'incident-1',
+          eventType: 'triggered',
+          serviceId: 'service-1',
+          targetKind: 'SERVICE_SLACK_WEBHOOK' as const,
+          targetId: 'service-1',
+          targetAddress: policy.targetAddress,
+        },
+      };
+      vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+        id: 'notification-webhook',
+        status: 'PENDING',
+        category: 'INCIDENT',
+        attempts: 0,
+        maxAttempts: 3,
+        nextAttemptAt: due,
+        scheduledAt: due,
+        lastAttemptAt: null,
+        expiresAt: null,
+        payloadEncrypted: `encrypted:${JSON.stringify(payload)}`,
+        sourceType: 'SERVICE_INCIDENT',
+        sourceId: 'service-1:incident-1',
+        recipientId: 'service-1',
+        templateKey: 'service-slack-webhook-triggered',
+      } as never);
+      vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+        status: 'OPEN',
+        escalationGeneration: 0,
+      } as never);
+      vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
+    };
+
+    it('sends to the service webhook read at delivery time, so the queue holds no secret', async () => {
+      queue({ targetAddress: handle() });
+      vi.mocked(prisma.service.findUnique).mockResolvedValue({
+        serviceNotificationChannels: ['SLACK'],
+        slackChannel: null,
+        // Stored encrypted (the mock decrypt strips this prefix).
+        slackWebhookUrl: `encrypted:${WEBHOOK}`,
+        serviceNotifyOnTriggered: true,
+      } as never);
+      vi.mocked(sendSlackNotification).mockResolvedValue({ success: true } as never);
+
+      await deliverCentralNotification('notification-webhook');
+
+      expect(sendSlackNotification).toHaveBeenCalledWith(
+        'triggered',
+        expect.objectContaining({ id: 'incident-1' }),
+        undefined,
+        WEBHOOK,
+        { maxAttempts: 1 }
+      );
+    });
+
+    it('still delivers a row queued before encryption that carries the plaintext URL', async () => {
+      queue({ targetAddress: WEBHOOK }, true);
+      vi.mocked(prisma.service.findUnique).mockResolvedValue({
+        serviceNotificationChannels: ['SLACK'],
+        slackChannel: null,
+        slackWebhookUrl: `encrypted:${WEBHOOK}`,
+        serviceNotifyOnTriggered: true,
+      } as never);
+      vi.mocked(sendSlackNotification).mockResolvedValue({ success: true } as never);
+
+      await deliverCentralNotification('notification-webhook');
+
+      expect(sendSlackNotification).toHaveBeenCalledWith(
+        'triggered',
+        expect.anything(),
+        undefined,
+        WEBHOOK,
+        { maxAttempts: 1 }
+      );
+    });
+
+    it('skips a queued message when the service webhook was replaced after it was queued', async () => {
+      queue({ targetAddress: handle() });
+      vi.mocked(prisma.service.findUnique).mockResolvedValue({
+        serviceNotificationChannels: ['SLACK'],
+        slackChannel: null,
+        slackWebhookUrl: 'https://hooks.slack.com/services/T000/B000/another',
+        serviceNotifyOnTriggered: true,
+      } as never);
+
+      await deliverCentralNotification('notification-webhook');
+
+      expect(sendSlackNotification).not.toHaveBeenCalled();
+      expect(prisma.notification.updateMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'SKIPPED',
+            errorMsg: 'Service Slack webhook was disabled or retargeted',
+          }),
+        })
+      );
+    });
+  });
+
   it('uses lease expiry as the next scheduler deadline for active claims', async () => {
     const leaseExpiry = new Date(Date.now() + 9 * 60_000);
     vi.mocked(prisma.$queryRaw).mockResolvedValue([{ nextEligibleAt: leaseExpiry }] as never);
@@ -675,6 +889,97 @@ describe('central notification control plane', () => {
       expect.objectContaining({ data: expect.objectContaining({ outcome: 'NOT_DISPATCHED' }) })
     );
     expect(prisma.notificationDeliveryAttempt.create).not.toHaveBeenCalled();
+  });
+
+  it('closes the in-flight marker and releases the claim when the security policy cannot be read', async () => {
+    const due = new Date(Date.now() - 60_000);
+    vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+      id: 'notification_policy_unavailable',
+      status: 'PENDING',
+      category: 'SECURITY',
+      attempts: 0,
+      maxAttempts: 5,
+      nextAttemptAt: due,
+      scheduledAt: due,
+      lastAttemptAt: null,
+      expiresAt: null,
+      payloadEncrypted: `encrypted:${JSON.stringify(input.payload)}`,
+    } as never);
+    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
+    mocks.sendEmail.mockResolvedValue({
+      success: false,
+      errorCode: 'AUTH_SECURITY_POLICY_UNAVAILABLE',
+      error: 'Authentication recipient policy unavailable.',
+    });
+
+    await deliverCentralNotification('notification_policy_unavailable');
+
+    expect(prisma.notificationDeliveryAttempt.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ outcome: { in: ['IN_FLIGHT', 'UNKNOWN'] } }),
+        data: expect.objectContaining({ outcome: 'NOT_DISPATCHED' }),
+      })
+    );
+    expect(prisma.notification.updateMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ claimToken: expect.any(String) }),
+        data: expect.objectContaining({
+          status: 'PENDING',
+          claimToken: null,
+          claimedBy: null,
+          lastAttemptAt: null,
+        }),
+      })
+    );
+  });
+
+  describe('classifies a failed send by what it proves about delivery', () => {
+    async function deliverWithError(error: string) {
+      const due = new Date(Date.now() - 60_000);
+      vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+        id: 'notification_classified',
+        status: 'PENDING',
+        category: 'SECURITY',
+        attempts: 1,
+        maxAttempts: 5,
+        nextAttemptAt: due,
+        scheduledAt: due,
+        lastAttemptAt: null,
+        expiresAt: null,
+        payloadEncrypted: `encrypted:${JSON.stringify(input.payload)}`,
+      } as never);
+      vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
+      mocks.sendEmail.mockResolvedValue({ success: false, error });
+      await deliverCentralNotification('notification_classified');
+    }
+
+    it('fails an unknown email provider permanently instead of parking it as UNKNOWN', async () => {
+      await deliverWithError('Unknown email provider');
+
+      expect(prisma.notification.updateMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'FAILED', attempts: 5 }),
+        })
+      );
+    });
+
+    it('retries a network that was unreachable, because nothing was sent', async () => {
+      await deliverWithError('connect failed: Network is unreachable');
+
+      expect(prisma.notification.updateMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'FAILED', attempts: 2 }),
+        })
+      );
+    });
+
+    it('still treats a timeout as ambiguous and never retries it', async () => {
+      await deliverWithError('read ETIMEDOUT');
+
+      expect(prisma.notification.updateMany).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'FAILED' }) })
+      );
+    });
   });
 
   it.each([false, true])(

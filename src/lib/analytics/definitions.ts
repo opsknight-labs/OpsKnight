@@ -142,7 +142,7 @@ export const METRICS = {
     unit: 'percent',
     better: 'up',
     description:
-      'Share of the period with no open incident on the service. Suppressed and snoozed incidents do not count as downtime.',
+      "Share of the period with no open incident on the service. Time counts as downtime from an incident's creation until it is resolved, even if it was later snoozed or suppressed; overlapping incidents count once. A service is measured from the day it was created.",
   },
   errorBudgetRemaining: {
     label: 'Error budget left',

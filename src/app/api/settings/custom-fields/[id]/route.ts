@@ -156,9 +156,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
         throw new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'Custom field not found.' });
       }
 
-      const usageCount = await tx.customFieldValue.count({ where: { customFieldId: id } });
-      if (usageCount) throw new AppError({
-        code: 'RESOURCE_CONFLICT', userMessage: 'Remove incident values before deleting this field.',
+      // The settings page tells the admin that the stored incident values are removed with the
+      // field, and there is no other way to clear them, so delete them here with the definition.
+      const { count: valuesDeleted } = await tx.customFieldValue.deleteMany({
+        where: { customFieldId: id },
       });
       await tx.customField.delete({ where: { id } });
 
@@ -178,7 +179,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
             showInList: existing.showInList,
             order: existing.order,
           },
-          metadata: { cascade: 'customFieldValue' },
+          metadata: { cascade: 'customFieldValue', valuesDeleted },
         },
         tx
       );

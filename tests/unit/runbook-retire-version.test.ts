@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
 import { RunbookArchivedError, RunbookError } from '@/lib/runbooks/errors';
-import { retireRunbookVersion } from '@/lib/runbooks/versioning';
+import { retireRunbookVersion, unpublishRunbook } from '@/lib/runbooks/versioning';
 
 vi.mock('@/lib/audit', () => ({ logAudit: vi.fn().mockResolvedValue(undefined) }));
 
@@ -102,5 +102,52 @@ describe('retireRunbookVersion', () => {
     await expect(retireRunbookVersion('ver_old', 'user_1')).rejects.toBeInstanceOf(
       RunbookArchivedError
     );
+  });
+});
+
+describe('unpublishRunbook', () => {
+  function setupUnpublish(published: { id: string; version: number; checksum: string } | null) {
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: 'rb_1', archivedAt: null }]),
+      runbook: {
+        findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 'rb_1', publishedVersion: published }),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      runbookVersion: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    };
+    vi.mocked(prisma.$transaction).mockImplementation(((callback: (client: typeof tx) => unknown) =>
+      callback(tx)) as unknown as typeof prisma.$transaction);
+    return tx;
+  }
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it('retires the live version, clears the published pointer and audits it', async () => {
+    const tx = setupUnpublish({ id: 'ver_live', version: 3, checksum: 'c'.repeat(64) });
+    await expect(unpublishRunbook('rb_1', 'user_1')).resolves.toEqual({ id: 'rb_1', version: 3 });
+    expect(tx.runbookVersion.updateMany).toHaveBeenCalledWith({
+      where: { id: 'ver_live', state: 'PUBLISHED' },
+      data: { state: 'RETIRED' },
+    });
+    expect(tx.runbook.update).toHaveBeenCalledWith({
+      where: { id: 'rb_1' },
+      data: { publishedVersionId: null },
+    });
+    expect(logAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'runbook.unpublished',
+        entityType: 'RUNBOOK',
+        entityId: 'rb_1',
+        actorId: 'user_1',
+      }),
+      tx
+    );
+  });
+
+  it('refuses a runbook that has no published version', async () => {
+    const tx = setupUnpublish(null);
+    await expect(unpublishRunbook('rb_1', 'user_1')).rejects.toThrow(/no published version/);
+    expect(tx.runbookVersion.updateMany).not.toHaveBeenCalled();
+    expect(logAudit).not.toHaveBeenCalled();
   });
 });

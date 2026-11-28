@@ -23,9 +23,11 @@ export const actionItemInputSchema = z
     priority: z.enum(['HIGH', 'MEDIUM', 'LOW']).default('MEDIUM'),
   })
   .strict();
+/** The most items one postmortem may hold; the API refuses to read or write a larger collection. */
+export const MAX_POSTMORTEM_ACTION_ITEMS = 100;
 export const actionItemCollectionSchema = z
   .object({
-    items: z.array(actionItemInputSchema).max(100),
+    items: z.array(actionItemInputSchema).max(MAX_POSTMORTEM_ACTION_ITEMS),
   })
   .strict()
   .refine(value => {

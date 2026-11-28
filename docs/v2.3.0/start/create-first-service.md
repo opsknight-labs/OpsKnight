@@ -72,7 +72,7 @@ Do not send production alerts yet. First [configure on-call](./configure-on-call
 
 **The team or service name is rejected:** names are trimmed and must be unique. Choose a distinct operational name.
 
-**The owner team is not listed:** confirm the team was created and refresh the service form. A non-Admin can only move a service into a team of which they are a member.
+**The owner team is not listed:** confirm the team was created and refresh the service form. A non-Admin can only choose a team of which they are a member, and only an Administrator can move an existing service to a different team.
 
 **The responder cannot be added:** confirm the user is active. Deactivated or otherwise ineligible users cannot participate in operational routing.
 

@@ -41,6 +41,10 @@ export const MCP_SEARCH_KEYWORDS = new Map<string, readonly string[]>([
     'listStatusPageAnnouncements',
     ['announcement', 'maintenance', 'customer update', 'public update'],
   ],
+  [
+    'endStatusPageAnnouncement',
+    ['end announcement', 'close announcement', 'take down notice', 'remove public update'],
+  ],
   ['getScheduleOnCall', ['shift', 'oncall', 'page', 'rota', 'now']],
   ['listSchedules', ['rota', 'rotation', 'oncall']],
   ['getEscalationPolicy', ['paged', 'escalate', 'notified']],

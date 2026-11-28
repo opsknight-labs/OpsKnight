@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  defaultNotificationMaxAttempts,
   notificationDedupeKey,
   notificationRetryDelayMs,
   NOTIFICATION_RETRY_POLICY,
@@ -27,6 +28,20 @@ describe('notification delivery contract', () => {
     );
     expect(notificationRetryDelayMs(1, NOTIFICATION_RETRY_POLICY, () => 0)).toBe(8_000);
     expect(notificationRetryDelayMs(1, NOTIFICATION_RETRY_POLICY, () => 1)).toBe(12_000);
+  });
+
+  it('keeps retrying a CRITICAL page for about 15 minutes and leaves other classes at three attempts', () => {
+    const attempts = defaultNotificationMaxAttempts('CRITICAL');
+    let waitedMs = 0;
+    // A failure after attempt n waits notificationRetryDelayMs(n); the last attempt gives up.
+    for (let attempt = 1; attempt < attempts; attempt += 1) {
+      waitedMs += notificationRetryDelayMs(attempt, NOTIFICATION_RETRY_POLICY, () => 0.5);
+    }
+    expect(waitedMs).toBeGreaterThanOrEqual(14 * 60_000);
+    expect(waitedMs).toBeLessThanOrEqual(16 * 60_000);
+    expect(defaultNotificationMaxAttempts('TRANSACTIONAL')).toBe(3);
+    expect(defaultNotificationMaxAttempts('BULK')).toBe(3);
+    expect(defaultNotificationMaxAttempts()).toBe(NOTIFICATION_RETRY_POLICY.maxAttempts);
   });
 
   it('does not mutate the shared retry policy', () => {

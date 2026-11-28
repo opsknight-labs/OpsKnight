@@ -1,5 +1,20 @@
 import type { CustomField } from '@prisma/client';
 
+/** UTF-8 bytes of one custom field value; well under the btree entry limit of CustomFieldValue.value. */
+export const MAX_CUSTOM_FIELD_VALUE_BYTES = 2000;
+
+/**
+ * One '@' with text on both sides, a dot inside the domain, no whitespace, at most 254 characters.
+ * Plain string checks keep this linear for any input (a regular expression over user text is not).
+ */
+function isPlausibleEmail(value: string): boolean {
+  if (value.length > 254 || /\s/.test(value)) return false;
+  const at = value.indexOf('@');
+  if (at < 1 || at !== value.lastIndexOf('@')) return false;
+  const dot = value.lastIndexOf('.');
+  return dot > at + 1 && dot < value.length - 1;
+}
+
 export function validateCustomFieldValue(
   field: Pick<CustomField, 'name' | 'type' | 'required' | 'options'>,
   value: string | number | boolean | null | undefined
@@ -12,6 +27,16 @@ export function validateCustomFieldValue(
   }
 
   const val = String(value).trim();
+
+  // The value column is btree-indexed, which cannot hold an entry of about 2.7 KB: refuse a long
+  // value here with a clear message instead of failing the insert with a 500.
+  if (new TextEncoder().encode(val).length > MAX_CUSTOM_FIELD_VALUE_BYTES) {
+    return {
+      valid: false,
+      error: `${field.name} is too long: the limit is ${MAX_CUSTOM_FIELD_VALUE_BYTES.toLocaleString('en-US')} bytes of text.`,
+      normalizedValue: null,
+    };
+  }
 
   switch (field.type) {
     case 'NUMBER': {
@@ -59,7 +84,7 @@ export function validateCustomFieldValue(
       return { valid: true, normalizedValue: val };
     }
     case 'EMAIL': {
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+      if (!isPlausibleEmail(val)) {
         return {
           valid: false,
           error: `${field.name} must be a valid email address.`,

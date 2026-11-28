@@ -1,4 +1,5 @@
 import { readAutomationReadiness } from './readiness';
+import { describeObservationBacklog } from './readiness-policy';
 import { AppError } from '@/lib/errors';
 import { assertPolicyActive } from '@/lib/escalation/policy-lifecycle';
 import 'server-only';
@@ -403,7 +404,10 @@ export async function activateCandidate(
       );
     if (!readiness.backlogWithinPolicy)
       throw new AutomationValidationError(
-        'Candidate observation backlog exceeds the configured readiness policy. Wait for the worker to finish or review the global policy.'
+        describeObservationBacklog(
+          readiness.pendingObservations,
+          readiness.policy.maximumPendingObservations
+        )
       );
     if (!readiness.sufficientRecentEvidence && !input.acknowledgeNoShadow)
       throw new AutomationValidationError(

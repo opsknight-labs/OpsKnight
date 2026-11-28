@@ -3,6 +3,10 @@ import type { IncidentUrgency } from '@prisma/client';
 export const INCIDENT_PRIORITIES = ['P1', 'P2', 'P3', 'P4', 'P5'] as const;
 export type IncidentPriority = (typeof INCIDENT_PRIORITIES)[number];
 
+export function isIncidentPriority(value: unknown): value is IncidentPriority {
+  return typeof value === 'string' && (INCIDENT_PRIORITIES as readonly string[]).includes(value);
+}
+
 export const INCIDENT_PRIORITY_DEFINITIONS: Record<
   IncidentPriority,
   { label: string; description: string }

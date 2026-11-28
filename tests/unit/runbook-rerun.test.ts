@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/prisma', () => ({
-  default: { runbookExecution: { findUnique: vi.fn() } },
+  default: {
+    runbookExecution: { findUnique: vi.fn(), findFirst: vi.fn() },
+    incident: { findFirst: vi.fn() },
+  },
 }));
 vi.mock('@/lib/rbac', () => ({
   assertCapability: vi.fn(),
-  assertCanViewIncident: vi.fn(),
-  assertCanViewService: vi.fn(),
+  getCurrentAuthorizationActor: vi.fn(),
 }));
 vi.mock('@/lib/runbooks/orchestrator', () => ({
   approveExecutionStep: vi.fn(),
@@ -19,7 +21,8 @@ vi.mock('next/navigation', () => ({ redirect: vi.fn() }));
 
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
-import { assertCanViewIncident, assertCanViewService, assertCapability } from '@/lib/rbac';
+import { assertCapability, getCurrentAuthorizationActor } from '@/lib/rbac';
+import type { AuthorizationActor } from '@/lib/authorization-policy';
 import {
   approveExecutionStep,
   cancelExecution,
@@ -181,19 +184,41 @@ describe('buildRerunRequest', () => {
   });
 });
 
+const responder: AuthorizationActor = {
+  id: 'user_1',
+  role: 'RESPONDER',
+  status: 'ACTIVE',
+  teamIds: ['team_1'],
+};
+
+// What requireExecutionControl reads: the execution, its trigger and the owning service's team.
+function readable(overrides: Record<string, unknown> = {}) {
+  return {
+    id: EXECUTION_ID,
+    incidentId: 'incident_1',
+    serviceId: 'service_1',
+    triggeredByUserId: 'someone_else',
+    service: { teamId: 'team_1' },
+    ...overrides,
+  };
+}
+
 describe('re-run server actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(assertCapability).mockResolvedValue({ id: 'user_1' } as never);
+    vi.mocked(getCurrentAuthorizationActor).mockResolvedValue(responder);
     vi.mocked(prisma.runbookExecution.findUnique).mockResolvedValue(source() as never);
+    vi.mocked(prisma.runbookExecution.findFirst).mockResolvedValue(readable() as never);
+    vi.mocked(prisma.incident.findFirst).mockResolvedValue({ id: 'incident_1' } as never);
   });
 
-  it('previews through the existing orchestrator after execute, read and incident checks', async () => {
+  it('previews through the existing orchestrator after execute, read and control checks', async () => {
     vi.mocked(previewRunbookExecution).mockResolvedValue({ digest: DIGEST } as never);
     const result = await previewRerunAction(EXECUTION_ID);
     expect(assertCapability).toHaveBeenCalledWith(CAPABILITIES.RUNBOOK_EXECUTE);
     expect(assertCapability).toHaveBeenCalledWith(CAPABILITIES.RUNBOOK_READ_ALL);
-    expect(assertCanViewIncident).toHaveBeenCalledWith('incident_1');
+    expect(prisma.incident.findFirst).toHaveBeenCalled();
     expect(previewRunbookExecution).toHaveBeenCalledWith(
       expect.objectContaining({
         runbookId: 'runbook_1',
@@ -204,13 +229,14 @@ describe('re-run server actions', () => {
     expect(result).toEqual({ preview: { digest: DIGEST } });
   });
 
-  it('checks service visibility for service-only runs', async () => {
-    vi.mocked(prisma.runbookExecution.findUnique).mockResolvedValue(
-      source({ incidentId: null }) as never
+  it('does not preview or start a re-run of another team\'s automation', async () => {
+    vi.mocked(prisma.runbookExecution.findFirst).mockResolvedValue(
+      readable({ service: { teamId: 'team_b' } }) as never
     );
-    await previewRerunAction(EXECUTION_ID);
-    expect(assertCanViewService).toHaveBeenCalledWith('service_1');
-    expect(assertCanViewIncident).not.toHaveBeenCalled();
+    expect(await previewRerunAction(EXECUTION_ID)).toHaveProperty('error');
+    expect(await executeRerunAction(EXECUTION_ID, previewForm())).toHaveProperty('error');
+    expect(previewRunbookExecution).not.toHaveBeenCalled();
+    expect(startRunbookExecution).not.toHaveBeenCalled();
   });
 
   it('never previews or starts without capability', async () => {
@@ -252,27 +278,37 @@ describe('re-run server actions', () => {
     expect(redirect).not.toHaveBeenCalled();
   });
 
-  it('cancels with execute capability and incident scope', async () => {
-    vi.mocked(prisma.runbookExecution.findUnique).mockResolvedValue({
-      id: EXECUTION_ID,
-      incidentId: 'incident_1',
-      serviceId: 'service_1',
-    } as never);
+  it('cancels with execute capability for a member of the service team', async () => {
     await cancelExecutionAction(EXECUTION_ID);
     expect(assertCapability).toHaveBeenCalledWith(CAPABILITIES.RUNBOOK_EXECUTE);
-    expect(assertCanViewIncident).toHaveBeenCalledWith('incident_1');
+    expect(prisma.incident.findFirst).toHaveBeenCalled();
     expect(cancelExecution).toHaveBeenCalledWith(EXECUTION_ID, 'user_1', expect.any(String));
   });
 
+  it("does not cancel or approve another team's execution, as API v2 answers not found", async () => {
+    vi.mocked(prisma.runbookExecution.findFirst).mockResolvedValue(
+      readable({ service: { teamId: 'team_b' } }) as never
+    );
+    expect(await cancelExecutionAction(EXECUTION_ID)).toHaveProperty('error');
+    expect(await approveExecutionStepAction(EXECUTION_ID, STEP_ID, DIGEST)).toHaveProperty('error');
+    expect(cancelExecution).not.toHaveBeenCalled();
+    expect(approveExecutionStep).not.toHaveBeenCalled();
+  });
+
+  it('does not let a non-admin act on an execution with no service or trigger of theirs', async () => {
+    vi.mocked(prisma.runbookExecution.findFirst).mockResolvedValue(
+      readable({ incidentId: null, serviceId: null, service: null }) as never
+    );
+    expect(await cancelExecutionAction(EXECUTION_ID)).toHaveProperty('error');
+    expect(cancelExecution).not.toHaveBeenCalled();
+  });
+
   it('approves with approve capability and the exact plan digest', async () => {
-    vi.mocked(prisma.runbookExecution.findUnique).mockResolvedValue({
-      id: EXECUTION_ID,
-      incidentId: null,
-      serviceId: 'service_1',
-    } as never);
+    vi.mocked(prisma.runbookExecution.findFirst).mockResolvedValue(
+      readable({ incidentId: null }) as never
+    );
     await approveExecutionStepAction(EXECUTION_ID, STEP_ID, DIGEST);
     expect(assertCapability).toHaveBeenCalledWith(CAPABILITIES.RUNBOOK_APPROVE);
-    expect(assertCanViewService).toHaveBeenCalledWith('service_1');
     expect(approveExecutionStep).toHaveBeenCalledWith({
       executionId: EXECUTION_ID,
       stepId: STEP_ID,
@@ -282,11 +318,9 @@ describe('re-run server actions', () => {
   });
 
   it('does not approve with a malformed digest', async () => {
-    vi.mocked(prisma.runbookExecution.findUnique).mockResolvedValue({
-      id: EXECUTION_ID,
-      incidentId: null,
-      serviceId: null,
-    } as never);
+    vi.mocked(prisma.runbookExecution.findFirst).mockResolvedValue(
+      readable({ incidentId: null }) as never
+    );
     expect(await approveExecutionStepAction(EXECUTION_ID, STEP_ID, 'short')).toHaveProperty(
       'error'
     );

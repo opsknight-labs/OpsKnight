@@ -94,7 +94,7 @@ Use the timing and failure thresholds from the selected deployment manifests as 
 ## Interpretation cautions
 
 - HTTP `200` alone does not mean liveness JSON is healthy.
-- A readiness `200` may be `degraded`; alert on the JSON state as well as HTTP failures.
+- A readiness `200` may be `degraded`; alert on the JSON state as well as HTTP failures. The image `HEALTHCHECK`, the Compose and Swarm service healthchecks, and the Swarm `health-check.sh` post-deploy script all treat `degraded` (HTTP `200`) as healthy; only `unhealthy` or an HTTP error fails them, so a degraded dependency never makes Swarm replace a task or roll back an update.
 - `disabled` means the current role is not expected to own that responsibility.
 - Healthy readiness does not prove queue latency, provider delivery, or every end-to-end journey is healthy. Combine it with deep health, metrics, and synthetic checks.
 

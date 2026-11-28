@@ -38,6 +38,8 @@ export function inAppNotificationHref(notification: {
     return '/settings/access';
   if (entityType === 'ACCESS_GRANT') return '/settings/access/admin#temporary-access';
   if (entityType === 'ACCESS_REVIEW') return '/settings/access/admin#access-reviews';
+  // Overdue postmortem action items (one per item, or the "unowned" digest) open the board.
+  if (entityType === 'ACTION_ITEM') return '/action-items';
   // A Squire answer finished in the background: the assistant opens on that conversation.
   if (entityType === 'SQUIRE_CONVERSATION')
     return entityId

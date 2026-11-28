@@ -12,10 +12,12 @@ import {
   ServiceUpdateV2Schema,
 } from '@/lib/api-v2';
 import { etagHeaders, ifMatchWhere, parseIfMatch, withIfMatch } from '@/lib/api-v2/concurrency';
-import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
+import { actorHasCapability, AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
+import { CAPABILITIES } from '@/lib/authorization';
 import { AppError } from '@/lib/errors';
 import { assertServicePolicyAssignableForApi } from '@/lib/automation/service-policy';
 import { withV2Observability } from '@/lib/api-v2/observability';
+import { revokeSubscriptionsLosingLastSelection } from '@/lib/status-pages/subscriber-administration';
 
 export const GET = withV2Observability(async function GET(
   req: NextRequest,
@@ -108,6 +110,19 @@ export const PATCH = withV2Observability(async function PATCH(
     });
 
     const validated = ServiceUpdateV2Schema.parse(body);
+
+    // Same rule as service settings: only administrators move a service between teams.
+    if (
+      existing.teamId &&
+      validated.teamId &&
+      validated.teamId !== existing.teamId &&
+      !actorHasCapability(actor, CAPABILITIES.ADMIN_MANAGE)
+    ) {
+      throw new AppError({
+        code: 'AUTHORIZATION_DENIED',
+        userMessage: 'Only administrators can move a service between teams.',
+      });
+    }
 
     if (validated.teamId) {
       const team = await prisma.team.findUnique({
@@ -256,6 +271,10 @@ export const DELETE = withV2Observability(async function DELETE(
     await prisma.$transaction(async tx => {
       // MCP approval recheck inside the deletion's own transaction; a no-op for REST callers.
       await internalV2MutationGuard()?.(tx);
+      // Subscribers who only followed it are revoked, not widened to every service by the cascade.
+      const unsubscribedSubscribers = await revokeSubscriptionsLosingLastSelection(tx, {
+        serviceId: id,
+      });
       await tx.service.delete({ where: { id } });
       await logV2Audit({
         action: 'service.deleted',
@@ -263,7 +282,7 @@ export const DELETE = withV2Observability(async function DELETE(
         entityId: id,
         actorId: actor.id,
         apiKeyId: apiKey.id,
-        details: { name: service.name, teamId: service.teamId },
+        details: { name: service.name, teamId: service.teamId, unsubscribedSubscribers },
         tx,
       });
     });

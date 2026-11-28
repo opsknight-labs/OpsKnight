@@ -15,6 +15,8 @@ const REVOKED_PLATFORM_PREFIX = 'session:REVOKED:';
 const MAX_SESSION_RECORD_AGE_MS = 100 * 24 * 60 * 60 * 1000;
 const MAX_POSSIBLE_TOKEN_LIFETIME_MS = 90 * 24 * 60 * 60 * 1000;
 const TOMBSTONE_SAFETY_BUFFER_MS = 24 * 60 * 60 * 1000;
+/** Rows read and deleted per step of one cleanupExpiredSessions call. */
+export const SESSION_CLEANUP_BATCH = 1000;
 
 /** Activity touch throttle — configurable, default 2 minutes. */
 function activityThrottleMs(): number {
@@ -609,16 +611,25 @@ export async function cleanupExpiredSessions(userId?: string): Promise<number> {
   const now = Date.now();
   let deletedCount = 0;
 
-  // 1. Clean up active sessions older than the absolute maximum session record lifetime (100 days)
-  const activeCleanup = await prisma.userDevice.deleteMany({
+  // 1. Clean up active sessions older than the absolute maximum session record lifetime (100 days),
+  // one bounded batch at a time.
+  const staleActive = await prisma.userDevice.findMany({
     where: {
       ...(userId ? { userId } : {}),
       platform: { startsWith: SESSION_PLATFORM_PREFIX },
       NOT: { platform: { startsWith: REVOKED_PLATFORM_PREFIX } },
       createdAt: { lt: new Date(now - MAX_SESSION_RECORD_AGE_MS) },
     },
+    select: { id: true },
+    orderBy: { createdAt: 'asc' },
+    take: SESSION_CLEANUP_BATCH,
   });
-  deletedCount += activeCleanup.count;
+  if (staleActive.length > 0) {
+    const activeCleanup = await prisma.userDevice.deleteMany({
+      where: { id: { in: staleActive.map(row => row.id) } },
+    });
+    deletedCount += activeCleanup.count;
+  }
 
   // 2. Clean up revoked tombstones:
   // ONLY delete tombstones where the token is guaranteed to be cryptographically expired.
@@ -628,7 +639,10 @@ export async function cleanupExpiredSessions(userId?: string): Promise<number> {
       platform: { startsWith: REVOKED_PLATFORM_PREFIX },
     },
     select: { id: true, createdAt: true, token: true },
-    take: 1000,
+    // Oldest first, so tombstones that are safe to delete are reached instead of the same
+    // still-needed ones being read every time.
+    orderBy: { createdAt: 'asc' },
+    take: SESSION_CLEANUP_BATCH,
   });
 
   const safeTombstoneIds: string[] = [];

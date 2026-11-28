@@ -79,6 +79,39 @@ describe('purgeBrowserAuthCaches', () => {
     expect(mockPostMessage).toHaveBeenCalledWith({ type: 'PURGE_AUTH_CACHES' });
   });
 
+  it('releases this browser push subscription on sign-out, server first, but not on sign-in', async () => {
+    const unsubscribe = vi.fn().mockResolvedValue(true);
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    global.window = {} as unknown as Window & typeof globalThis;
+    global.navigator = {
+      serviceWorker: {
+        getRegistration: vi.fn().mockResolvedValue({
+          pushManager: {
+            getSubscription: vi
+              .fn()
+              .mockResolvedValue({ endpoint: 'https://push.example.com/abc', unsubscribe }),
+          },
+        }),
+      } as unknown as ServiceWorkerContainer,
+    } as unknown as Navigator;
+
+    await purgeBrowserAuthCaches();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(unsubscribe).not.toHaveBeenCalled();
+
+    await purgeBrowserAuthCaches({ releasePush: true });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/user/push-subscription',
+      expect.objectContaining({
+        method: 'DELETE',
+        body: JSON.stringify({ endpoint: 'https://push.example.com/abc' }),
+      })
+    );
+    expect(unsubscribe).toHaveBeenCalledOnce();
+    vi.unstubAllGlobals();
+  });
+
   it('verifies DYNAMIC_AUTH_CACHE_PATTERNS contains critical keys', () => {
     expect(DYNAMIC_AUTH_CACHE_PATTERNS).toContain('pages');
     expect(DYNAMIC_AUTH_CACHE_PATTERNS).toContain('pages-rsc');

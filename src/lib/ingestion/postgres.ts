@@ -529,10 +529,12 @@ export async function lockProcessingReceipt(
 export async function completeProcessingReceipt(
   tx: Prisma.TransactionClient,
   lease: ProcessingLease,
-  result: { action: string; incident?: { id: string; createdAt?: Date } }
+  result: { action: string; reason?: string; incident?: { id: string; createdAt?: Date } }
 ): Promise<void> {
   const persisted = JSON.stringify({
     action: result.action,
+    // Why an event was ignored (for example a stale delivery), visible on the receipt.
+    ...(result.reason ? { reason: result.reason.slice(0, 500) } : {}),
     incidentId: result.incident?.id ?? null,
     operationalActivatedAt: result.incident?.createdAt?.toISOString() ?? null,
   });

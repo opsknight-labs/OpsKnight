@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { createTemplate } from './template-actions';
+import { createTemplate, getAllTemplates } from './template-actions';
 import prisma from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
@@ -126,6 +126,29 @@ describe('createTemplate Action', () => {
           isPublic: false,
         }),
       })
+    );
+  });
+});
+
+describe('getAllTemplates', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(prisma.incidentTemplate.findMany).mockResolvedValue([]);
+  });
+
+  it('limits a non-admin to public templates and their own', async () => {
+    await getAllTemplates('user-1');
+
+    expect(prisma.incidentTemplate.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { OR: [{ isPublic: true }, { createdById: 'user-1' }] } })
+    );
+  });
+
+  it('shows an admin every template, including other users\' private ones', async () => {
+    await getAllTemplates('admin-1', true);
+
+    expect(prisma.incidentTemplate.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: {} })
     );
   });
 });

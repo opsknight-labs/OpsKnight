@@ -37,6 +37,12 @@ Open **Schedules → select schedule** and inspect the effective on-call preview
 
 Schedule computation changes effective ownership at the configured boundary; it does not confirm the incoming human read a handoff message or that their provider endpoint works.
 
+Within 60 minutes before a shift starts, the incoming responder (when not already on call on that schedule) gets an **Upcoming On-Call Shift** reminder. A responder gets at most one reminder per schedule in any 45 minutes. Only an earlier reminder suppresses the next one: other schedule notices, such as an override being set or being added to a layer, do not.
+
+The **on call until** time shown on mobile, in the dashboard on-call widget and in reminder emails is the real handoff: where the rotation or the next override takes over, even when that is days away (a weekly rotation with five days left shows the end of those five days). OpsKnight looks up to a year ahead to find it.
+
+Taking a responder out of a layer, or deactivating a user who is in one, moves later handoffs to other people because the layer picks responders by position. The console previews that for the next 4 weeks before it asks you to confirm; see [Build a schedule](./build-schedule).
+
 ## Verify it worked
 
 At/after the boundary, confirm current on-call is the expected responder and run a controlled [on-call test](./test-on-call). Check timeline/delivery evidence rather than only preview.

@@ -31,7 +31,8 @@ export default async function MobilePostmortemDetailPage({ params }: PageProps) 
   const pm = await prisma.postmortem.findFirst({
     where: {
       AND: [
-        { id },
+        // Desktop links use the incident id (`/postmortems/<incidentId>`); in-app mobile links use this id.
+        { OR: [{ id }, { incidentId: id }] },
         postmortemAccess,
         ...(permissions.isResponderOrAbove ? [] : [{ status: 'PUBLISHED' as const }]),
       ],

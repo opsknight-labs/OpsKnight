@@ -6,6 +6,9 @@ import prisma from '@/lib/prisma';
 import { logAudit, type AuditEventSource } from '@/lib/audit';
 import { runReadCommittedTransaction } from '@/lib/db-utils';
 import { AppError } from '@/lib/errors/app-error';
+import { CAPABILITIES } from '@/lib/authorization';
+import { resolveUserActor } from '@/lib/authorization-actors';
+import { actorHasCapability } from '@/lib/authorization-policy';
 import { applyIncidentLifecycleCommand } from '@/lib/incidents/lifecycle';
 import { logger } from '@/lib/logger';
 import {
@@ -113,6 +116,22 @@ export function maintenanceWindowPhase(
 
 function invalid(message: string): AppError {
   return new AppError({ code: 'VALIDATION_FAILED', userMessage: message });
+}
+
+/**
+ * Publishing creates a public MAINTENANCE announcement and emails its subscribers, so it needs what
+ * the status-page announcement routes need (administrator). Operators may still schedule windows.
+ * System actors only replay a setting a person already published.
+ */
+export async function assertCanPublishMaintenance(actor: MaintenanceActor): Promise<void> {
+  if (actor.id === null) return;
+  const resolved = await resolveUserActor(actor.id);
+  if (resolved && actorHasCapability(resolved, CAPABILITIES.ADMIN_MANAGE)) return;
+  throw new AppError({
+    code: 'AUTHORIZATION_DENIED',
+    userMessage:
+      'Publishing a maintenance window to the status page requires administrator access.',
+  });
 }
 
 function conflict(message: string): AppError {
@@ -383,6 +402,7 @@ export async function createMaintenanceWindow(
     throw invalid('Start cannot be in the past.');
   }
   assertMaintenanceBounds(data.startsAt, data.endsAt, now);
+  if (data.publishToStatusPage) await assertCanPublishMaintenance(actor);
 
   return inTransaction(options.tx, async tx => {
     await assertServicesExist(tx, data.serviceIds);
@@ -473,6 +493,15 @@ export async function updateMaintenanceWindow(
     const description =
       patch.description === undefined ? existing.description : patch.description || null;
     const publishToStatusPage = patch.publishToStatusPage ?? existing.publishToStatusPage;
+    // Turning publishing on, or rewording an already published notice, edits public text.
+    if (
+      publishToStatusPage &&
+      (!existing.publishToStatusPage ||
+        title !== existing.title ||
+        description !== existing.description)
+    ) {
+      await assertCanPublishMaintenance(actor);
+    }
 
     await tx.maintenanceWindow.update({
       where: { id },
@@ -627,7 +656,15 @@ async function releaseHeldIncident(
       where: { incidentId, endedAt: null, reason: 'maintenance-window' },
       select: { id: true },
     });
-    if (!hold) return false;
+    if (!hold) {
+      // Not held any more (e.g. an integration acknowledged it, then a person suppressed it):
+      // drop the stale link so it neither blocks the window from finishing nor counts as held.
+      await tx.incident.update({
+        where: { id: incidentId },
+        data: { maintenanceWindow: { disconnect: true } },
+      });
+      return false;
+    }
     // Overlapping maintenance: the service is still under another window, so hand
     // the hold to it instead of paging; that window's own end releases it.
     const at = new Date(Math.max(now.getTime(), Date.now()));

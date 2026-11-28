@@ -3,6 +3,7 @@
  * Transforms Grafana alert webhooks to standard event format
  */
 
+import { createHash } from 'crypto';
 import { normalizeSeverity } from './normalization';
 
 export type GrafanaAlert = {
@@ -84,6 +85,15 @@ export function parseGrafanaMessage(message: string | undefined): {
     }
   }
   return { value, labels, annotations };
+}
+
+/** Short stable hash of a whole label set: the alert's identity when Grafana sends no fingerprint. */
+function labelSetHash(labels: Record<string, string> | undefined): string | null {
+  const canonical = Object.entries(labels ?? {})
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([key, value]) => `${key}=${value}`)
+    .join('\n');
+  return canonical ? createHash('sha256').update(canonical).digest('hex').slice(0, 16) : null;
 }
 
 export function transformGrafanaToEvent(
@@ -187,11 +197,14 @@ export function transformGrafanaToEvent(
       const alertName = alert.labels?.alertname || 'alert';
       const instance = alert.labels?.instance;
       // The fingerprint identifies the full label set, so alerts sharing an alertname stay apart.
+      // Without one, the hash of the whole label set does the same (same alertname and instance
+      // but a different job or rule UID label must not collapse into one incident).
+      const labelHash = labelSetHash(alert.labels);
       const dedupKey = alert.fingerprint
         ? `grafana-${alert.fingerprint}`.slice(0, 512)
-        : instance
-          ? `grafana-${alertName}-${instance}`.slice(0, 512)
-          : `grafana-${alertName}`.slice(0, 512);
+        : `grafana-${`${alertName}${instance ? `-${instance}` : ''}`.slice(0, 400)}${
+            labelHash ? `-${labelHash}` : ''
+          }`;
 
       return {
         event_action: isResolved ? ('resolve' as const) : ('trigger' as const),

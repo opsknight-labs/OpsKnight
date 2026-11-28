@@ -14,7 +14,7 @@ import { getAuthOptions } from '@/lib/auth';
 import { Prisma } from '@prisma/client';
 import { isValidTimeZone } from '@/lib/timezone';
 import { hashSubscriptionToken } from './subscription-tokens';
-import { subscriptionRequestAction } from './subscription-policy';
+import { sameSubscriptionPicks, subscriptionRequestAction } from './subscription-policy';
 import { pageSubscriberChannels } from './subscriber-channel-policy';
 import {
   getStatusPageLogoUrl,
@@ -27,6 +27,31 @@ import {
   hasStatusPageAccess,
   isRequestToAppHost,
 } from '@/lib/status-pages/status-auth';
+
+/** Verification mails per address per page, and per page overall. Windows are fixed, so they advance. */
+const VERIFICATION_MAILS_PER_ADDRESS = 5;
+const VERIFICATION_MAILS_PER_ADDRESS_WINDOW_MS = 24 * 60 * 60 * 1000;
+const VERIFICATION_MAILS_PER_PAGE = 1000;
+const VERIFICATION_MAILS_PER_PAGE_WINDOW_MS = 60 * 60 * 1000;
+
+/**
+ * Whether one more verification mail may go to this address. A refused request is answered like an
+ * accepted one and changes nothing, so it neither mails nor invalidates the link already sent.
+ */
+async function verificationMailAllowed(statusPageId: string, email: string) {
+  const address = await checkRateLimit(
+    `api:status-page:verification-mail:address:${statusPageId}:${email}`,
+    VERIFICATION_MAILS_PER_ADDRESS,
+    VERIFICATION_MAILS_PER_ADDRESS_WINDOW_MS
+  );
+  if (!address.allowed) return false;
+  const page = await checkRateLimit(
+    `api:status-page:verification-mail:page:${statusPageId}`,
+    VERIFICATION_MAILS_PER_PAGE,
+    VERIFICATION_MAILS_PER_PAGE_WINDOW_MS
+  );
+  return page.allowed;
+}
 
 function rateLimitError(retryAfter: number) {
   return jsonError(new AppError({ code: 'RATE_LIMIT_EXCEEDED' }), undefined, { retryAfter });
@@ -184,39 +209,48 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
           const alreadyPending =
             existingPrefs !== null &&
             (existingPrefs as Record<string, unknown>)._pendingPreferences !== undefined;
-          // Avoid redundant writes when pending already matches
           const pendingJson = JSON.stringify(pendingValue);
           const currentPendingJson = alreadyPending
             ? JSON.stringify((existingPrefs as Record<string, unknown>)._pendingPreferences)
             : '__none__';
-          if (pendingJson !== currentPendingJson) {
-            await prisma.statusPageSubscription.update({
-              where: { id: existing.id },
-              data: {
-                verificationToken: pendingVerif,
-                verificationTokenExpiresAt: verificationExpiresAt,
-                preferences: {
-                  ...(existingPrefs ?? {}),
-                  _pendingPreferences: pendingValue,
-                  _pendingServiceIds: normalizedServiceIds,
-                } as unknown as Prisma.InputJsonValue,
-              },
-            });
-          } else {
-            await prisma.statusPageSubscription.update({
-              where: { id: existing.id },
-              data: {
-                verificationToken: pendingVerif,
-                verificationTokenExpiresAt: verificationExpiresAt,
-              },
-            });
+          // Nothing to confirm: the picks are what the subscriber already has, or the same change is
+          // already waiting for their confirmation. Do not mail or replace the link they hold.
+          if (
+            alreadyPending
+              ? pendingJson === currentPendingJson
+              : sameSubscriptionPicks(existingPrefs, normalizedPreferences)
+          ) {
+            return subscriptionAccepted();
           }
+          if (!(await verificationMailAllowed(statusPageId, normalizedEmail))) {
+            return subscriptionAccepted();
+          }
+          await prisma.statusPageSubscription.update({
+            where: { id: existing.id },
+            data: {
+              verificationToken: pendingVerif,
+              verificationTokenExpiresAt: verificationExpiresAt,
+              preferences: {
+                ...(existingPrefs ?? {}),
+                _pendingPreferences: pendingValue,
+                _pendingServiceIds: normalizedServiceIds,
+              } as unknown as Prisma.InputJsonValue,
+            },
+          });
           // Do NOT sync join table — stays as-is until verification confirms.
           isActivePendingChange = true;
         } else {
           // No preference change for ACTIVE, or suppressed/bounced/complained — generic, no email
           return subscriptionAccepted();
         }
+      }
+
+      if (
+        !isActivePendingChange &&
+        action !== 'ACCEPT' &&
+        !(await verificationMailAllowed(statusPageId, normalizedEmail))
+      ) {
+        return subscriptionAccepted();
       }
 
       if (!isActivePendingChange && action === 'REACTIVATE') {
@@ -254,21 +288,35 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
         if (preferencesProvided) await syncSubscriptionServices(existing.id);
       }
     } else {
-      const created = await prisma.statusPageSubscription.create({
-        data: {
-          statusPageId,
-          email: normalizedEmail,
-          token: hashSubscriptionToken(token),
-          verificationToken: hashSubscriptionToken(verificationToken),
-          verificationTokenExpiresAt: verificationExpiresAt,
-          verified: false,
-          state: 'PENDING',
-          timezone: subscriberTimezone,
-          ...(preferencesProvided ? { preferences: normalizedPreferences ?? Prisma.DbNull } : {}),
-        },
-        select: { id: true },
-      });
+      let created: { id: string };
+      try {
+        created = await prisma.statusPageSubscription.create({
+          data: {
+            statusPageId,
+            email: normalizedEmail,
+            token: hashSubscriptionToken(token),
+            verificationToken: hashSubscriptionToken(verificationToken),
+            verificationTokenExpiresAt: verificationExpiresAt,
+            verified: false,
+            state: 'PENDING',
+            timezone: subscriberTimezone,
+            ...(preferencesProvided ? { preferences: normalizedPreferences ?? Prisma.DbNull } : {}),
+          },
+          select: { id: true },
+        });
+      } catch (error) {
+        // A concurrent first subscribe for this address won the race and sends the verification
+        // email; answer exactly as the non-racing path does so the form cannot reveal the race.
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          return subscriptionAccepted();
+        }
+        throw error;
+      }
       if (preferencesProvided) await syncSubscriptionServices(created.id);
+      // The row exists; past the mail limits the address simply does not get a mail now.
+      if (!(await verificationMailAllowed(statusPageId, normalizedEmail))) {
+        return subscriptionAccepted();
+      }
     }
 
     const subscription = existing

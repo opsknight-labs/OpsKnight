@@ -45,7 +45,9 @@ const statementBudgets = new Map([
   // (two before E4), so revocation stays immediate across slow uploads at half the reads.
   ['tools/list', 3],
   ['incident_search', 8],
-  ['incident_get_context', 20],
+  // 22: includes the trace and decision reads that decide whether the incident's automation source
+  // is restricted for this caller (the timeline redacts it).
+  ['incident_get_context', 22],
   ['execute_plan:3', 20],
   ['incident_search:4-concurrent-same-grant', 32],
 ]);

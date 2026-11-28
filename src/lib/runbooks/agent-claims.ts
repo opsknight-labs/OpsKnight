@@ -1085,7 +1085,13 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
     if (attempt.leaseToken !== leaseHash(input.leaseToken)) {
       throw new RunbookAgentLeaseTokenMismatchError(input.attemptId);
     }
-    if (!attempt.leaseExpiresAt || attempt.leaseExpiresAt <= new Date()) {
+    // A result produced before the lease lapsed (or within the late-result window after it) is still
+    // credible while the reconciler has not marked the attempt UNKNOWN; refusing it would dead-letter it.
+    if (
+      !attempt.leaseExpiresAt ||
+      (attempt.leaseExpiresAt <= new Date() &&
+        resultProducedAt.getTime() > attempt.leaseExpiresAt.getTime() + 60_000)
+    ) {
       throw new RunbookAgentLeaseExpiredError(input.attemptId, agentId);
     }
     if (input.outputArtifactId) {

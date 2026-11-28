@@ -47,3 +47,21 @@ export function normalizeValue(raw: unknown, field: Field): FieldState {
   }
   return { state: 'RECOGNIZED', value };
 }
+
+/**
+ * Event-derived values only: one oversized, object-valued or credential-bearing value must not
+ * discard every rule for the incident, so that field alone is treated as missing (rules reading it
+ * evaluate UNKNOWN). `rejected` tells callers not to record the raw value anywhere.
+ */
+export function normalizeEventValue(
+  raw: unknown,
+  field: Field
+): { canonical: FieldState; rejected: boolean } {
+  try {
+    return { canonical: normalizeValue(raw, field), rejected: false };
+  } catch (error) {
+    if (error instanceof Error && error.message === 'EXTRACTION_LIMIT')
+      return { canonical: { state: 'MISSING' }, rejected: true };
+    throw error;
+  }
+}

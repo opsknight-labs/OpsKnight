@@ -5,7 +5,13 @@ import { z } from 'zod/v3';
 import type { RunbookInput } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
-import { assertCanViewIncident, assertCapability, getUserPermissions } from '@/lib/rbac';
+import {
+  assertCanViewIncident,
+  assertCapability,
+  getCurrentAuthorizationActor,
+  getUserPermissions,
+} from '@/lib/rbac';
+import { requireExecutionControl } from '@/lib/api-v2/runbook-intervention';
 import {
   approveExecutionStep,
   cancelExecution,
@@ -37,12 +43,16 @@ export async function dismissIncidentRunbookSuggestionAction(
   revalidatePath(`/incidents/${incidentId}`);
 }
 
-async function assertExecutionBelongsToIncident(executionId: string, incidentId: string) {
-  const execution = await prisma.runbookExecution.findFirst({
-    where: { id: executionId, incidentId },
-    select: { id: true },
-  });
-  if (!execution) throw new Error('Runbook execution does not belong to this incident.');
+// Same rule as API v2 and the execution detail page: the triggerer, an admin or a member of the
+// service's team may intervene, and the run must belong to the incident being viewed.
+async function assertCanControlIncidentExecution(executionId: string, incidentId: string) {
+  const execution = await requireExecutionControl(
+    prisma,
+    await getCurrentAuthorizationActor(),
+    executionId
+  );
+  if (execution.incidentId !== incidentId)
+    throw new Error('Runbook execution does not belong to this incident.');
 }
 
 export async function approveIncidentRunbookStepAction(
@@ -55,7 +65,7 @@ export async function approveIncidentRunbookStepAction(
     assertCapability(CAPABILITIES.RUNBOOK_APPROVE),
     assertCanViewIncident(idSchema.parse(incidentId)),
   ]);
-  await assertExecutionBelongsToIncident(idSchema.parse(executionId), incidentId);
+  await assertCanControlIncidentExecution(idSchema.parse(executionId), incidentId);
   await approveExecutionStep({
     executionId: idSchema.parse(executionId),
     stepId: idSchema.parse(stepId),
@@ -70,7 +80,7 @@ export async function cancelIncidentRunbookAction(incidentId: string, executionI
     assertCapability(CAPABILITIES.RUNBOOK_EXECUTE),
     assertCanViewIncident(idSchema.parse(incidentId)),
   ]);
-  await assertExecutionBelongsToIncident(idSchema.parse(executionId), incidentId);
+  await assertCanControlIncidentExecution(idSchema.parse(executionId), incidentId);
   await cancelExecution(idSchema.parse(executionId), actor.id, 'Cancelled by incident responder.');
   revalidatePath(`/incidents/${incidentId}`);
 }

@@ -65,6 +65,8 @@ the same command returns the original result and adds
 ```
 
 Status is `OPEN`, `ACKNOWLEDGED`, `RESOLVED`, `SNOOZED`, or `SUPPRESSED`.
+Setting `RESOLVED` on an unresolved incident also requires `resolutionNote`
+(10 to 1,000 characters), the same note the web resolve dialog asks for.
 Set `assigneeId` to `null` to unassign. Updates also support
 `Idempotency-Key`. Success returns HTTP `200` with `data.incident`.
 

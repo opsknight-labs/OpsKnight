@@ -1,7 +1,11 @@
 import { z } from 'zod/v3';
 import { jsonOk } from '@/lib/api-response';
 import { consumeEnrollmentToken } from '@/lib/runbooks/agent-auth';
-import { agentApiError, readBoundedRequestBody } from '@/lib/runbooks/agent-api';
+import {
+  agentApiError,
+  enforceAgentEnrollRateLimit,
+  readBoundedRequestBody,
+} from '@/lib/runbooks/agent-api';
 
 const schema = z
   .object({
@@ -15,6 +19,7 @@ const schema = z
 
 export async function POST(request: Request) {
   try {
+    await enforceAgentEnrollRateLimit(request);
     const rawBody = await readBoundedRequestBody(request, 16 * 1024);
     let json: unknown;
     try {

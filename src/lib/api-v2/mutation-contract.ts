@@ -77,7 +77,7 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     preconditionRequired: true,
     responseEtag: false,
     rationale:
-      'Exact revision fences deletion; populated fields cannot be deleted and audit commits with the replay receipt.',
+      'Exact revision fences deletion; a field that holds incident values is refused unless cascade=true deletes the values with it, and audit commits with the replay receipt.',
   },
   'POST /api/v2/audit-exports': {
     idempotency: 'required',
@@ -1087,7 +1087,7 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     idempotency: 'required',
     concurrency: 'none',
     rationale:
-      'A credential-scoped replay returns the original cancellation. The override delete, attributed audit and receipt commit together; a new key after deletion receives 404.',
+      'A credential-scoped replay returns the original cancellation. The override removal (or, for an override in progress, ending it now), attributed audit and receipt commit together; a new key after removal receives 404, and a finished override is refused with 409.',
   },
   'POST /api/v2/escalation-policies': natural('Policy names are unique; a repeat returns 409.'),
   'PATCH /api/v2/escalation-policies/[id]': natural(
@@ -1126,6 +1126,9 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
   'PATCH /api/v2/status-pages/[id]': natural('Sets configuration to the requested values.'),
   'POST /api/v2/status-pages/[id]/announcements': supported(
     'Announcements can notify subscribers.'
+  ),
+  'POST /api/v2/status-pages/[id]/announcements/[announcementId]/end': supported(
+    'Ending sets the announcement inactive, so a repeat, with or without a key, answers the same success.'
   ),
   'POST /api/v2/service-accounts': supported('Creation without secret material in the response.'),
   'DELETE /api/v2/service-accounts/[id]': natural('A repeat returns 404.'),

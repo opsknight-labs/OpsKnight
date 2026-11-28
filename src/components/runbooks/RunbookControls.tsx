@@ -42,6 +42,10 @@ import {
 } from '@/components/ui/shadcn/select';
 
 import { notify } from '@/lib/toast';
+import {
+  getRunbookBuilderDirty,
+  subscribeRunbookBuilderDirty,
+} from '@/lib/runbooks/builder-dirty';
 import { RunbookModuleNav } from './RunbookModuleNav';
 import { RunbookStatusBadge } from './RunbookStatusBadge';
 
@@ -213,6 +217,7 @@ export function ConfirmAction({
   variant = 'destructive',
   successMessage = 'Changes applied',
   className,
+  blockWhileBuilderDirty = false,
 }: {
   action: RunbookFormAction;
   title: string;
@@ -221,8 +226,16 @@ export function ConfirmAction({
   variant?: ComponentProps<typeof Button>['variant'];
   successMessage?: string;
   className?: string;
+  /** Refuse while the builder holds unsaved edits: the action would discard them. */
+  blockWhileBuilderDirty?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const builderDirty = useSyncExternalStore(
+    subscribeRunbookBuilderDirty,
+    getRunbookBuilderDirty,
+    serverHydrated
+  );
+  const blocked = blockWhileBuilderDirty && builderDirty;
   const destructive = variant === 'destructive';
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
@@ -247,7 +260,9 @@ export function ConfirmAction({
           <div className="space-y-1.5">
             <AlertDialogTitle className="text-base">{title}</AlertDialogTitle>
             <AlertDialogDescription className="leading-relaxed">
-              {description}
+              {blocked
+                ? 'The builder has changes that are not saved to this draft. Save the draft first, because publishing now would discard them.'
+                : description}
             </AlertDialogDescription>
           </div>
         </AlertDialogHeader>
@@ -259,7 +274,7 @@ export function ConfirmAction({
         >
           <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
             <AlertDialogCancel className="mt-0">Keep unchanged</AlertDialogCancel>
-            <SubmitButton variant={variant} pendingLabel="Applying…">
+            <SubmitButton variant={variant} pendingLabel="Applying…" disabled={blocked}>
               {label}
             </SubmitButton>
           </div>

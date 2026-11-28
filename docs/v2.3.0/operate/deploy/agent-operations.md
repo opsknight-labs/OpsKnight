@@ -59,7 +59,13 @@ Confirm the actual HTTPS endpoint reachable from the Agent, independently of the
 
 Do not share an identity volume between running replicas. A token is single-use. Create a distinct enrollment for every independent Agent.
 
+Before the Agent spends the token it checks that the identity location is writable, so a read-only or unwritable `/var/lib/opsknight-agent` fails the start without consuming the token. If saving the identity still fails after the server has accepted the enrollment, the Agent keeps the issued identity in memory and retries the save rather than enrolling again: fix the volume permissions and the running Agent saves it, and you do not need a new token. A temporary file left by an earlier run does not block the save.
+
 Keep bootstrap Secrets while deployment manifests reference them. Once enrolled, the Agent uses its persisted identity and does not read the consumed token again. Removing a still-referenced Kubernetes/Swarm Secret can prevent redeployment. A native environment token can be removed after enrollment; always keep the pinned execution public key.
+
+## Request checks and limits
+
+The server rejects an Agent request before it reads the body when headers are missing, the Agent's clock is stale, or the Agent is unknown, revoked or not enrolled. Only then is the size-capped body read and its signature, which covers the body, verified. Each Agent may send 1,200 requests a minute from one client address; above that the server answers `429` with `Retry-After`. The unauthenticated enrollment endpoint allows 20 requests a minute per client address. A real Agent sends far fewer. If the shared rate-limit counters (PostgreSQL) cannot be read, the request is refused with a retryable `503` and `Retry-After: 5`, not `429`, because no quota was exceeded; the Agent retries with backoff.
 
 ## Local policy
 
@@ -229,7 +235,7 @@ Because `opsknight-agent.service` runs unprivileged under `NoNewPrivileges=true`
 
 ## Monitoring and recovery
 
-Set `OPSKNIGHT_RUNBOOK_EXPECTED_WORKERS` to the intended number of independently running Runbook workers (for example `2`). Shared evidence reports healthy versus expected instances; losing one of two workers is degraded even when the survivor continues processing. Without this setting, worker progress can be healthy while redundancy remains explicitly unverified. The scheduler watchdog uses a PostgreSQL advisory lock per recovery sweep. Recovery jobs have a stable execution-specific identity so concurrent sweeps cannot accumulate duplicate pending jobs.
+Set `OPSKNIGHT_RUNBOOK_EXPECTED_WORKERS` to the intended number of independently running Runbook workers (for example `2`). Shared evidence reports healthy versus expected instances; losing one of two workers is degraded even when the survivor continues processing, and losing every worker is degraded too (never milder than losing one). Without this setting, worker progress can be healthy while redundancy remains explicitly unverified. The scheduler watchdog uses a PostgreSQL advisory lock per recovery sweep. Recovery jobs have a stable execution-specific identity so concurrent sweeps cannot accumulate duplicate pending jobs.
 
 Use **Runbooks → Health** and Prometheus metrics to watch Agent status, active attempts, total spool depth, attempt states, and oldest pending age. Alert on stale heartbeats, non-zero spool depth that continues growing, repeated local-policy denial, and queue age above the execution SLO.
 

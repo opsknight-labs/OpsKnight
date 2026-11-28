@@ -36,7 +36,7 @@ Sign in as an `ADMIN` or `AUDITOR`. Collect the action name, entity identifier, 
 
 1. Open **Audit Log** (`/audit`).
 2. Use **Search** to match action, entity ID, stored actor name/email, or the current actor relation's name/email.
-3. Select an **Entity type** to limit results to that resource category.
+3. Select an **Entity type** to limit results to that resource category. The list offers every entity type OpsKnight records, including incidents, privacy requests, access requests and reviews, runbooks and compliance evaluations.
 4. Select an **Action** when the filter offers the relevant action.
 5. Open a row to inspect its full details and old/new values.
 6. Move through results with **Previous** and **Next**. The page loads 50 newest-first records at a time.
@@ -79,6 +79,8 @@ A missing row does not prove the action never occurred. Confirm the entity/actio
 ## Security and retention
 
 Audit data can contain user and resource identifiers plus operational metadata. Restrict access, store CSV exports in an approved evidence location, and apply the organization's retention and legal-hold policy. Never paste credentials into investigation notes or enrich audit records with secrets.
+
+Entry details are redacted for credentials only, so you can still see who and what changed. Values under keys that name a password, token, secret, API/private/signing key, authorization header, cookie, signature, connection string, webhook URL or phone number are replaced with `[REDACTED]`, and Bearer, Basic and API-key patterns in text are redacted too. Email addresses, names and session IDs stay readable, for example the email of a deleted service account or the session that was revoked. System Logs apply a broader filter that also hides email addresses and session identifiers, so the same value can be readable here and hidden there.
 
 ## Troubleshooting
 

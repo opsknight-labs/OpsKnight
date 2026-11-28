@@ -432,7 +432,8 @@ const scenarios: Scenario[] = [
         args: {
           path: { id: s.serviceId },
           body: {
-            serviceNotificationChannels: ['EMAIL', 'WEBHOOK'],
+            // Service-level channels support Slack, Teams and webhooks only (email is refused).
+            serviceNotificationChannels: ['SLACK', 'WEBHOOK'],
             serviceNotifyOnSlaBreach: !service.serviceNotifyOnSlaBreach,
           },
           ifMatch: `"${service.revision}"`,

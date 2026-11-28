@@ -21,6 +21,7 @@ type Definition = {
   version: number;
   name: string;
   description: string | null;
+  metricType: string;
   target: number;
   comparator: string;
   windowType: string;
@@ -84,6 +85,18 @@ export function ServiceObjectiveForm({
   const formRef = useRef<HTMLFormElement>(null);
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [windowType, setWindowType] = useState(objective?.windowType ?? 'THIRTY_DAYS');
+  const [metric, setMetric] = useState(
+    objective?.metricType ?? SERVICE_OBJECTIVE_CONTRACT.metrics[0].id
+  );
+  // Percent measurements must stay at least the target and time measurements at most it, so the
+  // direction follows the measurement instead of being a second choice that can contradict it.
+  const metricUnit = SERVICE_OBJECTIVE_CONTRACT.metrics.find(m => m.id === metric)?.unit;
+  const comparator =
+    metricUnit === 'percent'
+      ? 'GREATER_THAN_OR_EQUAL'
+      : metricUnit === 'minutes'
+        ? 'LESS_THAN_OR_EQUAL'
+        : (objective?.comparator ?? 'GREATER_THAN_OR_EQUAL');
   const [errors, setErrors] = useState<ReadonlyMap<string, string>>(new Map());
   const lastState = useRef(state);
   useEffect(() => {
@@ -154,6 +167,8 @@ export function ServiceObjectiveForm({
                   className={selectClass}
                   id={id('metric')}
                   name="metricType"
+                  value={metric}
+                  onChange={event => setMetric(event.target.value)}
                   {...describe('metric')}
                 >
                   {SERVICE_OBJECTIVE_CONTRACT.metrics.map(metric => (
@@ -197,16 +212,18 @@ export function ServiceObjectiveForm({
               {...describe('description')}
             />
           </Field>
-          <Field id={id('comparator')} label="Comparison">
-            <select
-              className={selectClass}
+          <Field
+            id={id('comparator')}
+            label="Comparison"
+            hint="Percent measurements must be at least the target; MTTA and MTTR at most."
+          >
+            <input type="hidden" name="comparator" value={comparator} />
+            <Input
               id={id('comparator')}
-              name="comparator"
-              defaultValue={objective?.comparator ?? 'GREATER_THAN_OR_EQUAL'}
-            >
-              <option value="GREATER_THAN_OR_EQUAL">At least</option>
-              <option value="LESS_THAN_OR_EQUAL">At most</option>
-            </select>
+              readOnly
+              value={comparator === 'GREATER_THAN_OR_EQUAL' ? 'At least' : 'At most'}
+              {...describe('comparator')}
+            />
           </Field>
           <Field
             id={id('target')}
@@ -215,6 +232,7 @@ export function ServiceObjectiveForm({
             error={errors.get('target')}
           >
             <Input
+              key={metric}
               id={id('target')}
               name="target"
               type="number"
@@ -222,7 +240,7 @@ export function ServiceObjectiveForm({
               step="any"
               required
               inputMode="decimal"
-              defaultValue={objective?.target ?? 99.9}
+              defaultValue={objective?.target ?? (metricUnit === 'percent' ? 99.9 : undefined)}
               {...describe('target')}
             />
           </Field>

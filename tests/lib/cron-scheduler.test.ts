@@ -10,6 +10,7 @@ const tasks = vi.hoisted(() => ({
   processCentralNotificationQueue: vi.fn(),
   processAutoUnsnoozeInternal: vi.fn(),
   checkSLABreaches: vi.fn(),
+  materializeMaintenanceSchedules: vi.fn().mockResolvedValue({ created: 0, failed: 0 }),
   reconcileEscalations: vi.fn(),
   reconcileIntegrationControlPlane: vi.fn(),
   reconcileStatusPageSnapshots: vi.fn(),
@@ -21,6 +22,14 @@ const tasks = vi.hoisted(() => ({
   processEndedMaintenanceWindows: vi.fn().mockResolvedValue({ windows: 0, released: 0 }),
   releaseStableFlappingHolds: vi.fn().mockResolvedValue(0),
   enqueueBusinessServiceImpactReconcile: vi.fn().mockResolvedValue(undefined),
+  reconcileStalledMeetingProvisions: vi.fn().mockResolvedValue(0),
+  reconcileMeetingCleanupDebt: vi.fn().mockResolvedValue(0),
+  cleanupUserTokens: vi.fn().mockResolvedValue(0),
+  processAuthenticationAlerts: vi.fn().mockResolvedValue(undefined),
+  processEndedAccessGrants: vi.fn().mockResolvedValue({ reverted: 0 }),
+  expireStaleAccessRequests: vi.fn().mockResolvedValue({ expired: 0 }),
+  maybeStartScheduledAccessReview: vi.fn().mockResolvedValue(null),
+  cleanupExpiredSessions: vi.fn(),
 }));
 
 vi.mock('@/lib/ingestion/maintenance', () => ({
@@ -53,12 +62,28 @@ vi.mock('@/lib/flapping', () => ({
   releaseStableFlappingHolds: tasks.releaseStableFlappingHolds,
 }));
 vi.mock('@/lib/service-maintenance/schedules', () => ({
-  materializeMaintenanceSchedules: vi.fn().mockResolvedValue({ created: 0, failed: 0 }),
+  materializeMaintenanceSchedules: tasks.materializeMaintenanceSchedules,
 }));
 vi.mock('@/lib/unsnooze', () => ({
   processAutoUnsnoozeInternal: tasks.processAutoUnsnoozeInternal,
 }));
-vi.mock('@/lib/user-tokens', () => ({ cleanupUserTokens: vi.fn().mockResolvedValue(0) }));
+vi.mock('@/lib/user-tokens', () => ({ cleanupUserTokens: tasks.cleanupUserTokens }));
+vi.mock('@/lib/auth-control/security-events', () => ({
+  processAuthenticationAlerts: tasks.processAuthenticationAlerts,
+}));
+vi.mock('@/lib/session-registry', () => ({
+  cleanupExpiredSessions: tasks.cleanupExpiredSessions,
+  SESSION_CLEANUP_BATCH: 1000,
+}));
+vi.mock('@/lib/access/grants', () => ({
+  processEndedAccessGrants: tasks.processEndedAccessGrants,
+}));
+vi.mock('@/lib/access/requests', () => ({
+  expireStaleAccessRequests: tasks.expireStaleAccessRequests,
+}));
+vi.mock('@/lib/access/admin', () => ({
+  maybeStartScheduledAccessReview: tasks.maybeStartScheduledAccessReview,
+}));
 vi.mock('@/lib/rate-limit', () => ({ cleanupExpiredRateLimits: vi.fn().mockResolvedValue(0) }));
 vi.mock('@/lib/sla-breach-monitor', () => ({ checkSLABreaches: tasks.checkSLABreaches }));
 vi.mock('@/lib/incident-sla/next-transition', () => ({
@@ -83,6 +108,10 @@ vi.mock('@/lib/war-room/terminal-cleanup', () => ({
   reconcileTerminalWarRoomDrift: vi
     .fn()
     .mockResolvedValue({ checked: 0, cleaned: 0, stillPending: 0, satisfied: 0 }),
+}));
+vi.mock('@/lib/incident-collaboration/meeting-reconciliation', () => ({
+  reconcileStalledMeetingProvisions: tasks.reconcileStalledMeetingProvisions,
+  reconcileMeetingCleanupDebt: tasks.reconcileMeetingCleanupDebt,
 }));
 vi.mock('@/lib/war-room/engine', () => ({
   repairOrphanedClosingWarRooms: vi.fn().mockResolvedValue({ checked: 0, repaired: 0 }),
@@ -153,6 +182,9 @@ describe('cron-scheduler lifecycle', () => {
     tasks.reconcileWarRoomHealth.mockResolvedValue({});
     tasks.processShiftRotations.mockResolvedValue({});
     tasks.processUpcomingShiftReminders.mockResolvedValue(0);
+    tasks.cleanupUserTokens.mockResolvedValue(0);
+    tasks.cleanupExpiredSessions.mockResolvedValue(0);
+    tasks.processAuthenticationAlerts.mockResolvedValue(undefined);
     tasks.schedulerQueryRaw.mockImplementation((strings: TemplateStringsArray) => {
       const sql = strings.join(' ');
       if (sql.includes('RETURNING "leaseEpoch"')) return Promise.resolve([{ leaseEpoch: 1 }]);
@@ -224,6 +256,56 @@ describe('cron-scheduler lifecycle', () => {
     expect(tasks.reconcileIntegrationControlPlane).toHaveBeenCalledTimes(1);
     expect(tasks.reconcileStatusPageRouteOperations).toHaveBeenCalledTimes(1);
     expect(tasks.reconcileWarRoomHealth).toHaveBeenCalledTimes(1);
+    // Lost MEETING_PROVISION jobs and Teams cleanup debt are only recovered if the tick runs these.
+    expect(tasks.reconcileStalledMeetingProvisions).toHaveBeenCalledTimes(1);
+    expect(tasks.reconcileMeetingCleanupDebt).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps running the tick when the SLA breach check throws', async () => {
+    tasks.checkSLABreaches.mockRejectedValue(new Error('slack enqueue failed'));
+
+    startCronScheduler({ profile: 'maintenance' });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(tasks.checkSLABreaches).toHaveBeenCalledTimes(1);
+    // Steps after the secondary group (maintenance materialization) still ran.
+    expect(tasks.materializeMaintenanceSchedules).toHaveBeenCalledTimes(1);
+    expect(tasks.processShiftRotations).toHaveBeenCalledTimes(1);
+  });
+
+  it('still expires team grants when earlier maintenance steps keep throwing', async () => {
+    tasks.processAuthenticationAlerts.mockRejectedValue(new Error('alert store down'));
+    tasks.cleanupUserTokens.mockRejectedValue(new Error('token table locked'));
+    tasks.expireStaleAccessRequests.mockRejectedValue(new Error('requests down'));
+
+    startCronScheduler({ profile: 'maintenance' });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(tasks.processAuthenticationAlerts).toHaveBeenCalledTimes(1);
+    expect(tasks.cleanupUserTokens).toHaveBeenCalledTimes(1);
+    expect(tasks.processEndedAccessGrants).toHaveBeenCalledTimes(1);
+    // The access steps are isolated from each other too.
+    expect(tasks.expireStaleAccessRequests).toHaveBeenCalledTimes(1);
+    expect(tasks.maybeStartScheduledAccessReview).toHaveBeenCalledTimes(1);
+  });
+
+  it('prunes the session registry in bounded batches, at most once an hour', async () => {
+    // A day later than any other test in this file, so the hourly gate is open.
+    vi.setSystemTime(new Date('2026-09-26T00:30:00.000Z'));
+    tasks.cleanupExpiredSessions.mockResolvedValueOnce(1000).mockResolvedValueOnce(12);
+
+    startCronScheduler({ profile: 'maintenance' });
+    await vi.advanceTimersByTimeAsync(0);
+
+    // A full batch means more may be waiting; a short one ends the run.
+    expect(tasks.cleanupExpiredSessions).toHaveBeenCalledTimes(2);
+
+    await stopCronScheduler();
+    startCronScheduler({ profile: 'maintenance' });
+    await vi.advanceTimersByTimeAsync(0);
+    // The second tick ran (it checked SLA breaches again) but did not prune again.
+    expect(tasks.checkSLABreaches).toHaveBeenCalledTimes(2);
+    expect(tasks.cleanupExpiredSessions).toHaveBeenCalledTimes(2);
   });
 
   it('fences a stale scheduler before it enters the next operation group', async () => {

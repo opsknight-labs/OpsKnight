@@ -70,6 +70,10 @@ Three commands work in **any** channel; the rest work in an incident war room:
 
 When Squire is enabled for chat, `ask <question>` and `investigate [focus]` answer privately about the channel's incident, under your linked account's access. Provide required text and avoid sensitive information in notes/summaries.
 
+A `note` is saved in full on the incident's notes. The timeline entry for it shows at most the first 1,500 bytes of the text, ending in an ellipsis when it was cut.
+
+`postmortem` creates a draft postmortem from the incident's timeline and notes, or returns the existing one. It works only for a resolved incident: for an open incident the channel gets "Postmortems can only be created for resolved incidents." The draft records the affected service and the downtime in minutes, keeps the first 100 `todo:`, `action item:`, `fix:` or `followup:` notes as action items, and does not put your name into the public resolution text. Creating it is written to the audit log as `postmortem.created`.
+
 ## Complete the action
 
 1. Enter `/incident <command>` with its argument.
@@ -118,7 +122,7 @@ Each change is announced in the channel with who made it:
 
 ## Action items
 
-`/incident action Add a canary to the deploy [@person] [due:2026-12-05]` adds a follow-up to the incident's postmortem, creating a draft postmortem if there isn't one. The title is at most 200 characters, a due date must be a real date (up to a day in the past is accepted), and an identical open title is refused as a duplicate. The owner must have an OpsKnight account. `/incident actions` lists the open, in-progress, and blocked items privately (ten at most). You need permission to manage the incident to add items. Items created this way are marked manual.
+`/incident action Add a canary to the deploy [@person] [due:2026-12-05]` adds a follow-up to the incident's postmortem, creating a draft postmortem if there isn't one. The title is at most 200 characters, a due date must be a real date (up to a day in the past is accepted), and an identical open title is refused as a duplicate. The owner must have an OpsKnight account. `/incident actions` lists the open, in-progress, and blocked items privately (ten at most); items of a draft or archived postmortem are listed only if you have the `postmortem.draft.read` permission. You need permission to manage the incident to add items. Items created this way are marked manual.
 
 ## How a command answers
 

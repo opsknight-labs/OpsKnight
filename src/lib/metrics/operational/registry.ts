@@ -1152,6 +1152,14 @@ export const OPERATIONAL_METRICS = [
     estimatedMaxSeries: 3,
   },
   {
+    name: 'opsknight_log_ingest_rejections_total',
+    help: 'Browser log entries refused by the unauthenticated /api/logs/ingest route, by reason (global_quota, cross_site, origin_mismatch)',
+    kind: 'counter',
+    labels: ['reason'],
+    scope: 'counter',
+    estimatedMaxSeries: 3,
+  },
+  {
     name: 'opsknight_api_v2_auth_lookup_duration_seconds',
     help: 'Database time to verify a REST v2 credential',
     kind: 'histogram',
@@ -1218,7 +1226,7 @@ export const OPERATIONAL_METRICS = [
   },
   {
     name: 'opsknight_notifications_undelivered',
-    help: 'Pending or retryable failed notification deliveries',
+    help: 'Pending, unreconciled UNKNOWN or retryable failed notification deliveries',
     kind: 'gauge',
     labels: [],
     scope: 'cluster_snapshot',
@@ -1226,7 +1234,7 @@ export const OPERATIONAL_METRICS = [
   },
   {
     name: 'opsknight_notifications_oldest_undelivered_age_seconds',
-    help: 'Age of the oldest pending or retryable failed notification',
+    help: 'Age of the oldest pending, unreconciled UNKNOWN or retryable failed notification',
     kind: 'gauge',
     labels: [],
     scope: 'cluster_snapshot',

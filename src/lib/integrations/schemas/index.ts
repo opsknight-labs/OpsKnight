@@ -95,6 +95,7 @@ export const AzureAlertSchema = z
             monitorCondition: z.string().optional(),
             monitorService: z.string().optional(),
             firedDateTime: z.string().optional(),
+            resolvedDateTime: z.string().optional(),
             description: z.string().optional(),
           })
           .optional(),

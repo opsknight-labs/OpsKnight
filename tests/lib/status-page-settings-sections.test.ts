@@ -113,4 +113,58 @@ describe('status page section mutation boundaries', () => {
       statusApiRequireToken: true,
     });
   });
+
+  it("keeps another section's unsaved branding out of a content save", () => {
+    expect(
+      statusPageSectionPatch('content', {
+        id: 'page',
+        footerText: 'Footer',
+        contactEmail: 'edited-in-general@example.com',
+        contactUrl: 'https://example.com/edited-in-general',
+        branding: {
+          version: 1,
+          primaryColor: '#ff0000',
+          customCss: 'body { display: none }',
+          autoRefresh: false,
+          metaTitle: 'Status',
+          showSlaMetrics: true,
+        },
+      })
+    ).toEqual({
+      id: 'page',
+      footerText: 'Footer',
+      branding: { version: 1, metaTitle: 'Status', showSlaMetrics: true },
+    });
+  });
+
+  it('sends only appearance branding from an appearance save and only feed branding from advanced', () => {
+    const branding = {
+      version: 1,
+      primaryColor: '#111111',
+      themeId: 'midnight',
+      metaTitle: 'unsaved title',
+      autoRefresh: false,
+    };
+    expect(statusPageSectionPatch('appearance', { id: 'page', branding })).toEqual({
+      id: 'page',
+      branding: { version: 1, primaryColor: '#111111', themeId: 'midnight' },
+    });
+    expect(
+      statusPageSectionPatch('advanced', {
+        id: 'page',
+        uptimeGoodThreshold: 95,
+        uptimeExcellentThreshold: 99,
+        branding,
+      })
+    ).toEqual({ id: 'page', branding: { version: 1, autoRefresh: false } });
+  });
+
+  it('leaves settings that another page owns out of the privacy and services saves', () => {
+    expect(
+      statusPageSectionPatch('privacy', { id: 'page', requireAuth: true, authProvider: 'OIDC' })
+    ).toEqual({ id: 'page', authProvider: 'OIDC' });
+    expect(
+      statusPageSectionPatch('services', { id: 'page', serviceIds: ['a'], showServices: false })
+    ).toEqual({ id: 'page', serviceIds: ['a'] });
+  });
 });

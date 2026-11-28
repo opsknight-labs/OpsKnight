@@ -32,6 +32,8 @@ Open **Settings → Status Pages**, select the page, then use its announcements,
 ## Configure delivery and access
 
 1. Create announcements with type, schedule, message, and affected services; preview before publishing.
+
+   An announcement created through the API (`POST /api/v2/status-pages/{id}/announcements`) or an MCP assistant notifies subscribers when it is published, the same as one created in the console. Create it with `isActive: false` to hold it back without notifying. End one now with `POST /api/v2/status-pages/{id}/announcements/{announcementId}/end` (`endStatusPageAnnouncement`, scope `status-pages:write`, administrators only, like creating one): the page stops showing it and subscriber notices that have not been sent are cancelled. Ending an announcement that is already ended answers the same success, and an unknown page or announcement is a `404`. An MCP assistant ends one through the same operation once a person approves it.
 2. Review verified active subscribers separately from unverified/unsubscribed records.
 3. Configure webhook endpoints and use the built-in test before relying on them.
 4. Create a page-scoped API token, copy it once to the approved secret manager, and record its owner/purpose.
@@ -61,6 +63,18 @@ each subscriber's channel, for example an SMS number or "Slack webhook".
 ## What OpsKnight does
 
 Subscriptions require verification and support unsubscribe. Page tokens and webhooks are scoped to the status-page surface; they do not replace application API keys. Announcements may be scheduled and associated with services.
+
+A subscriber who picked services or business services receives only incidents on those picks; a subscriber with no picks receives the whole page. Deleting a service (in the console or through API v2) or a business service therefore revokes, in the same transaction, every subscriber whose only pick it was. Their subscription becomes `UNSUBSCRIBED` and queued messages are skipped, so they are not widened to every incident on the page. Bounced, complained and suppressed subscribers keep that state, subscribers with other picks keep those, and the audit entry for a deleted service records `unsubscribedSubscribers`, the number revoked.
+
+Verification mail is limited so a public form cannot be used to flood an inbox: at most 5 verification mails per address per page per day, and 1,000 per page per hour. A request over a limit gets the same generic answer as any other, sends nothing, and leaves the link already sent valid. An already active subscriber who submits the same service picks they already have, or a change that is already waiting for their confirmation, is not mailed again.
+
+`POST /api/status/[slug]/subscribe` (and the older `POST /api/status/subscribe`) accept `email`, `timezone` and `preferences` and apply the same checks and rate limits as the page's own form. An unknown slug returns 404; a page id in the body never replaces it.
+
+An invalid or expired confirm or unsubscribe link shows the page's own "invalid or has expired" message, on a custom domain as well as on the application host, rather than a Not Found error.
+
+The verification link confirms only a pending subscription (or one that is already active). A subscriber suppressed after a complaint or repeated bounces stays suppressed when the original email's link is opened again.
+
+Administrator changes to the page's tokens, webhooks and announcements are recorded in the [audit log](../administration/audit-logs) with the acting administrator. Each record is written in the same transaction as the change. The actions are `status_page.api_token.created` and `status_page.api_token.revoked`; `status_page.webhook.created`, `.updated`, `.deleted` and `.tested`; and `status_page.announcement.created`, `.updated`, `.deleted` and `.ended`. The entries never contain the token, the webhook secret or the webhook URL.
 
 ## Verify the setup
 

@@ -15,6 +15,7 @@ import type { BusinessServiceHealth, ImpactSource } from './contract';
 import { invalidateBusinessServiceHealth } from './health';
 import { wouldCreateSupportCycle } from './stats';
 import { reconcileBusinessServicePublication } from '@/lib/status-pages/business-publication';
+import { revokeSubscriptionsLosingLastSelection } from '@/lib/status-pages/subscriber-administration';
 import { CustomAttributesSchema } from './attributes';
 import { BusinessServiceLinkSchema, parseBusinessServiceLinks } from './links';
 import { CurrencySchema, CustomersTotalSchema, RevenuePerHourCentsSchema } from './impact-cost';
@@ -647,6 +648,8 @@ export async function deleteBusinessService(
   const run = async (tx: Prisma.TransactionClient) => {
     // Unpublish its members from every page that maps it before the cascade drops the mapping.
     await reconcileBusinessServicePublication(tx, id, { deleting: true });
+    // Subscribers who only followed it are revoked, not widened to every service by the cascade.
+    await revokeSubscriptionsLosingLastSelection(tx, { businessServiceId: id });
     const removed = await tx.businessService.deleteMany({
       where: { AND: [{ id }, businessServiceWriteWhere(context.actor)] },
     });

@@ -99,8 +99,12 @@ approval to continue.
 
 ## Remediation budgets
 
-Administrators configure per-incident limits under **Runbooks → Agents →
-Automatic remediation budgets**:
+Only administrators (`admin.manage`) configure per-incident limits under
+**Runbooks → Agents → Automatic remediation budgets**. These are global
+ceilings, so a runbook author with `runbook.manage` cannot raise them: the form
+is read-only for them and the save is refused, the same as the runbook settings
+API. Each change is written to the audit log with the previous and the new
+values.
 
 | Budget                              | Default | Maximum | Description                                            |
 | ----------------------------------- | ------- | ------- | ------------------------------------------------------ |

@@ -99,8 +99,7 @@ export default async function StatusPagesControlCenter() {
           {pages.map(page => {
             const publicHref = getStatusPagePublicUrl(page);
             const domainDisplay =
-              page.customDomain ||
-              (page.subdomain ? `${page.subdomain}.opsknight.com` : publicHref);
+              page.customDomain || (page.subdomain ? new URL(publicHref).host : publicHref);
             const manageHref = `/settings/status-pages/${encodeURIComponent(page.id)}`;
 
             return (

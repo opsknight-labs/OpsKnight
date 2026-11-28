@@ -67,7 +67,16 @@ least three.
 
 An open incident page updates itself when someone else acknowledges, resolves, reassigns or otherwise
 changes the incident — at most every 10 seconds, and only while the tab is visible; coming back to the tab
-after a minute away also refreshes it. A note you are writing is kept.
+after a minute away also refreshes it. A note you are writing is kept. Older notes and timeline rows you
+loaded with **Load older notes** or **Load older activity** stay on the page when it refreshes; only the newest page is replaced, and a row
+that was removed on the server disappears.
+
+On a long incident the timeline merges events, notes and notifications by time. It shows only the span all three are complete for, and **Load older activity** continues from there, so no row is skipped or appears out of order.
+
+A note can contain a Markdown image. Uploads on this site and `data:` images show inline. An image on
+another host (`http` or `https`) does not load by itself, because its host could log the address, browser
+and time of everyone who opens the incident. The note shows `External image from <host> is not loaded
+automatically` with **Load image** and **Open** links; **Load image** fetches it for you only.
 
 Under **Priority** in **Details**, a line says why the incident has its priority (for example **Set by rule
 "payments-high"**) and which SLA rule its targets come from, when that was recorded at creation. Beside the
@@ -200,6 +209,10 @@ Confirm:
 **Action is unavailable:** verify incident current state, user permission/scope, required fields, and concurrent changes.
 
 **Provider message differs from OpsKnight:** treat OpsKnight as authoritative, inspect delivery/projection operation, and reconcile rather than manually fabricating a second message.
+
+**War room or meeting controls are missing:** if the incident's collaboration view cannot load, for example because of a Teams destination or policy error, the page still opens, the war-room and meeting controls stay hidden, and the cause is written to the server log. Check System Logs and the chat destination settings.
+
+**A meeting stays on Provisioning:** the scheduler checks every tick. A meeting that has been provisioning or closing for more than 15 minutes with no live background job is settled: a provision is marked failed so you can retry it, and a close is marked closed with its external cleanup retried automatically. A provisioning job that runs out of attempts fails its meeting immediately instead of leaving it on Provisioning.
 
 **Escalation or notification is delayed:** inspect lane/provider delivery state and oldest queue age; do not resolve only to stop paging.
 

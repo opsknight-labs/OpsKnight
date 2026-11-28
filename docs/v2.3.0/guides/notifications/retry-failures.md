@@ -41,12 +41,22 @@ Correct permanent credential/endpoint/routing failures before any new attempt.
 1. Inspect existing automatic retry schedule/count.
 2. Remove the underlying transient/capacity/configuration problem.
 3. Use supported retry/requeue only if current state still warrants delivery.
+   **Retry All Failed** on **Settings → Notifications → Operations** (shown for administrators
+   when the **Failed** status filter is selected) first asks "Retry all failed notifications?" and names how many it will requeue, because
+   recipients may receive them straight away. Afterwards the list reloads and
+   reports how many could not be requeued and why (for example a row that has
+   expired or is no longer eligible answers `409`); the rest are requeued and the
+   failed ones stay `FAILED`. It sends at most five requests at a time. A row whose
+   message content was removed after the retention period cannot be retried, and
+   **Requeue** says so instead of doing nothing.
 4. Avoid creating a new manual notification that bypasses stable identity.
 5. Observe the next attempt and provider feedback.
 
 ## What OpsKnight does
 
 Stable identity makes one logical intent retry-safe. Before retry, OpsKnight checks whether incident state or escalation generation superseded it. Provider rate-limit hints defer rather than convert immediately to permanent failure.
+
+Automatic retries back off from 10 seconds up to 5 minutes between attempts. Most notifications get three attempts. Critical pages (a triggered incident, a security alert) get eight, which keeps retrying for about 15 minutes before giving up, so a provider or network problem of a few minutes does not lose the page.
 
 ## Verify it worked
 

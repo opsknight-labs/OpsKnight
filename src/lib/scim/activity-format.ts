@@ -14,6 +14,7 @@ const LABELS: Record<string, string> = {
   'user.disabled': 'Person deactivated',
   'user.reactivated': 'Person reactivated',
   'user.deleted': 'Person removed by the directory',
+  'user.update_refused': 'Change refused: administrator email',
   'user.binding.approved': 'Existing account connected',
   'user.restoration.approved': 'Rehire restoration approved',
   'user.role.synced': 'System role synchronized',

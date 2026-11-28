@@ -27,7 +27,8 @@ vi.mock('@/lib/auth-control/actor', async importOriginal => ({
 }));
 vi.mock('@/lib/rbac', async importOriginal => ({
   ...(await importOriginal<typeof import('@/lib/rbac')>()),
-  assertAdmin: async () => ({ id: identity.id, role: 'ADMIN' }),
+  // baseRole is the assigned role; without it the actor reads as a temporary admin and needs a recent sign-in.
+  assertAdmin: async () => ({ id: identity.id, role: 'ADMIN', baseRole: 'ADMIN' }),
 }));
 vi.mock('@/lib/email', () => ({ sendEmail: transport }));
 import { GET as getPolicy } from '@/app/api/v2/users/invitation-policy/route';

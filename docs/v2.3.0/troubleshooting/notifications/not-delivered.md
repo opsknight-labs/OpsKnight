@@ -38,10 +38,11 @@ Use this decision table for one notification ID:
 | --- | --- | --- |
 | no intent | routing or eligibility rejected it before enqueue | inspect service event settings, escalation target, preferences |
 | pending with no claim | notification worker/lane is unavailable | follow worker runbook |
-| deferred | quiet hours, policy delay, or provider capacity admission | verify scheduled next-attempt time |
+| deferred | quiet hours, policy delay, provider capacity admission, or a sign-in security email whose recipient policy could not be read (retried shortly, nothing sent) | verify scheduled next-attempt time |
+| skipped, "held by the recipient's quiet hours" | a low-urgency page whose push, SMS, voice or WhatsApp channel the recipient's quiet hours held back (email is not held); the row is in the delivery history with that reason | none, unless the incident should have paged outside quiet hours; urgency Medium and High are never held |
 | retrying | transient provider/network response | inspect status code and backoff; do not create another intent |
 | permanent failure | invalid endpoint, credentials, template, or provider rejection | repair endpoint/configuration, then use supported retry |
-| unknown | ambiguous provider outcome (timeout, reset, HTTP 5xx) | check the provider; requeue only if a duplicate is acceptable. Unconfirmed rows settle as failed when they expire |
+| unknown | ambiguous provider outcome (timeout, reset, HTTP 5xx) | check the provider; requeue only if a duplicate is acceptable. Unconfirmed rows settle as failed when they expire. If the sending worker lost its claim while the provider call was running, the row shows unknown until the call returns; a definite answer that arrives afterwards (accepted, or refused such as an invalid number) still settles the row as sent or failed. A configuration error such as an unknown provider is a permanent failure, and a connection that was never made (host not found, refused, network unreachable) is retried, because nothing was sent |
 | provider accepted, user did not receive | downstream provider/device/destination issue | use provider message ID and feedback receipt |
 
 Channel-specific checks:

@@ -77,9 +77,15 @@ Use the statuses consistently:
 - **Blocked** — progress cannot continue; record the blocker in the linked work or postmortem context.
 - **Completed** — the expected outcome has been verified, not merely implemented.
 
-Selecting **Completed** records a completion time. Moving the item back to another state clears that completion time. The application keeps normalized action-item records and compatible postmortem data aligned during the migration boundary.
+Selecting **Completed** records a completion time. Moving the item back to another state clears that completion time. The application keeps normalized action-item records and compatible postmortem data aligned during the migration boundary. Every status change, whether made on the board or synced from a linked Jira issue, also advances the postmortem's revision, so an open editor or an API client that read the postmortem before the change gets `412` on its next `If-Match` write instead of silently reverting it.
+
+A due date is a calendar date, shown as entered whatever your time zone. An item is **Due today** all through its due date and becomes overdue when the next UTC day begins (the due-date badge, the global board count, the `overdue` filter in API v2, the daily reminders, Analytics and handoff summaries all use this rule).
 
 Review unassigned, overdue, blocked, and high-priority items on a regular operational cadence. Closing or deleting a parent incident does not make remediation unnecessary.
+
+### Overdue reminders
+
+A daily job sends an in-app notice, **Overdue postmortem action item**, to the owner of each item that is past its due date and still **Open**, **In progress** or **Blocked**. An owner is told at most once per 24 hours for each item, and the notice opens **Action Items**. Every overdue item is covered, however many there are, up to 20,000 per run; a larger backlog continues on the next day's run. Administrators are not notified per item. Overdue items with no owner produce one in-app notice per active administrator, **Overdue action items have no owner**, with the count, once per 24 hours. A failure of this job is logged and does not stop the scheduler's other daily work.
 
 ## Link Jira work
 
@@ -118,6 +124,8 @@ Clear search and status, owner, and priority filters. Confirm the postmortem was
 ### A status change fails
 
 Refresh, verify the item still exists, and confirm responder access. If the parent or item changed concurrently, use its current state before retrying.
+
+On the board a failed status change puts back only that item, shows the reason in a message, and leaves earlier successful changes to other items in place; several items can be saving at once. If the item was deleted meanwhile (for example through the API), the change is refused with `Action item not found` instead of appearing to succeed. Status changes and the Jira actions (create, link, sync, unlink) apply only to action items of postmortems you can read; an item outside that scope, such as one on another team's private incident, is reported as not found even for a person holding a temporary operations grant.
 
 ### Jira controls are unavailable
 

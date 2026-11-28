@@ -23,7 +23,7 @@ it('updates revision-fenced notification policy once and disables Slack destinat
   const before = await invokeV2(GET, admin.token, 'GET', path, params);
   expect(before.status).toBe(200);
   const etag = before.headers.get('etag')!;
-  const payload = { serviceNotificationChannels: ['EMAIL'], serviceNotifyOnSlaBreach: true };
+  const payload = { serviceNotificationChannels: ['WEBHOOK'], serviceNotifyOnSlaBreach: true };
   const mutate = (key: string, tag: string) => invokeV2(PATCH, admin.token, 'PATCH', path, params, payload, {
     'If-Match': tag, 'Idempotency-Key': key,
   });
@@ -49,4 +49,10 @@ it('rejects unprivileged writers and malformed channel configuration', async () 
   const headers = { 'If-Match': etag, 'Idempotency-Key': 'invalid-policy' };
   expect((await invokeV2(PATCH, reader.token, 'PATCH', path, params, { serviceNotifyOnAck: false }, headers)).status).toBe(403);
   expect((await invokeV2(PATCH, admin.token, 'PATCH', path, params, { serviceNotificationChannels: ['VOICE'] }, headers)).status).toBe(400);
+  // EMAIL, SMS, PUSH and WHATSAPP are never dispatched at service level, so a write is refused.
+  for (const channel of ['EMAIL', 'SMS', 'PUSH', 'WHATSAPP']) {
+    const refused = await invokeV2(PATCH, admin.token, 'PATCH', path, params, { serviceNotificationChannels: [channel] }, headers);
+    expect(refused.status).toBe(400);
+    expect(JSON.stringify(await refused.json())).toContain('Slack, Teams and webhooks only');
+  }
 });

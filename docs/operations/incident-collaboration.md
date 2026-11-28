@@ -51,9 +51,9 @@ The platform adheres to strict operational guarantees:
 
 ### Reconciliation Tasks
 
-- **`reconcileStalledMeetingProvisions(thresholdMs = 5m)`**: Identifies meetings stuck in `PROVISIONING` longer than the threshold and re-enqueues `MEETING_PROVISION` with an incremented attempt count.
-- **`reconcileMeetingCleanupDebt()`**: Sweeps meetings with `externalCleanupPending = true` and invokes `retryIncidentMeetingCleanup(meetingId)` to settle external orphaned resources.
-- **`reconcileMeetingProjectionDrift()`**: Ensures war-room card projections match the canonical meeting generation and join URL.
+- **`reconcileStalledMeetingProvisions()`**: Runs on every scheduler tick. Fails meetings stuck in `PROVISIONING` (or `CLOSING`) for over 15 minutes with no live background job, so the operator can retry. A `MEETING_PROVISION` job that exhausts its attempts also fails its meeting immediately.
+- **`reconcileMeetingCleanupDebt()`**: Runs on every scheduler tick (up to three automatic attempts with backoff). Sweeps meetings with `externalCleanupPending = true` and invokes `retryIncidentMeetingCleanup(meetingId)` to settle external orphaned resources.
+- **`reconcileMeetingProjectionDrift()`** (on demand, not scheduled): Ensures war-room card projections match the canonical meeting generation and join URL.
 
 ---
 
