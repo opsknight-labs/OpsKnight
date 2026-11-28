@@ -18,6 +18,11 @@ import {
 import type { AiGenerateRequest, AiStreamEvent } from '@/lib/intelligence/ai/port';
 import { startFakeModel, type FakeServer } from '../../helpers/fake-model-server';
 import { trace } from '@opentelemetry/api';
+import { z } from 'zod/v4';
+import {
+  clearRuntimeOperationalMetrics,
+  runtimeOperationalMetrics,
+} from '@/lib/metrics/operational/registry';
 import { installFakeTracer } from '../../helpers/fake-tracer';
 import { createTestUser, resetDatabase, testPrisma as db } from '../../helpers/test-db';
 
@@ -85,7 +90,10 @@ const provider = (name: string, url: string, overrides: Record<string, unknown> 
 
 const request = (actorId: string, extra: Partial<AiGenerateRequest> = {}): AiGenerateRequest => ({
   context: { actorId, capability: 'SQUIRE_CHAT', callSite: 'interactive', dataClass: 'INTERNAL' },
-  messages: [{ role: 'user', content: 'hello' }],
+  messages: [
+    { role: 'system', content: 'You are the OpsKnight assistant.' },
+    { role: 'user', content: 'hello' },
+  ],
   ...extra,
 });
 
@@ -320,6 +328,49 @@ describe('gateway', () => {
     expect(JSON.stringify(audit)).not.toContain('bad deploy');
   });
 
+  // A small model that thinks first spent a 1,024-token summary cap on thinking, was cut off mid-JSON and the
+  // page showed "The AI response was not in the expected format".
+  const structuredRequest = (userId: string, maxOutputTokens: number) => ({
+    ...request(userId, { maxOutputTokens }),
+    schemaName: 'document',
+    schema: z.object({ ok: z.boolean() }).strict(),
+  });
+  it('gives a structured document room to think on top of its own length', async () => {
+    const { admin, actor } = await configure();
+    await saveAiProvider(null, provider('Local', primary.url), actor);
+    invalidateGatewayCache();
+    primary.script.push({ content: '{"ok":true}', usage: [20, 9] });
+    const port = (await resolveGatewayPort('INTERNAL'))!;
+    const result = await port.generateStructured(structuredRequest(admin.id, 1_024));
+    expect(result.object).toEqual({ ok: true });
+    const sent = primary.requests.at(-1)!.body;
+    expect(sent.max_tokens ?? sent.max_completion_tokens).toBe(1_024 + REASONING_ROOM_TOKENS);
+  });
+  it('sends a structured document without the thinking room when the budget cannot hold it', async () => {
+    const { admin, actor } = await configure({ budget: 1_000 });
+    await saveAiProvider(null, provider('Local', primary.url), actor);
+    invalidateGatewayCache();
+    primary.script.push({ content: '{"ok":true}', usage: [20, 9] });
+    const port = (await resolveGatewayPort('INTERNAL'))!;
+    clearRuntimeOperationalMetrics();
+    await port.generateStructured(structuredRequest(admin.id, 256));
+    const sent = primary.requests.at(-1)!.body;
+    expect(sent.max_tokens ?? sent.max_completion_tokens).toBe(256);
+    // The refused full-room attempt was a probe: the call ran, so it is not a budget rejection.
+    expect(
+      runtimeOperationalMetrics().get('opsknight_intelligence_ai_budget_rejections_total')
+    ).toBeUndefined();
+  });
+  it('sends exactly the asked cap when the caller counts its own tokens (thinkingRoom: false)', async () => {
+    const { admin, actor } = await configure();
+    await saveAiProvider(null, provider('Local', primary.url), actor);
+    invalidateGatewayCache();
+    primary.script.push({ content: '{"ok":true}', usage: [20, 9] });
+    const port = (await resolveGatewayPort('INTERNAL'))!;
+    await port.generateStructured({ ...structuredRequest(admin.id, 600), thinkingRoom: false });
+    const sent = primary.requests.at(-1)!.body;
+    expect(sent.max_tokens ?? sent.max_completion_tokens).toBe(600);
+  });
   it('traces calls with bounded attributes and never puts prompts or answers in a span', async () => {
     const { admin, actor } = await configure();
     await saveAiProvider(null, provider('Local', primary.url), actor);
@@ -484,6 +535,44 @@ describe('gateway', () => {
       result: { usage: { inputTokens: 30, outputTokens: 5 } },
     });
     expect(await getTodayUsage()).toMatchObject({ requests: 1, inputTokens: 30 });
+  });
+
+  it('keeps every read result when a tool loop ends without text', async () => {
+    const { admin, actor } = await configure();
+    await saveAiProvider(null, provider('Local', primary.url), actor);
+    invalidateGatewayCache();
+    primary.script.push(
+      { toolCall: { name: 'lookup', args: '{"q":"first"}' } },
+      { toolCall: { id: 'call_2', name: 'lookup', args: '{"q":"second"}' } },
+      { content: '' },
+      { content: 'Both results were found.' }
+    );
+    const port = (await resolveGatewayPort('INTERNAL'))!;
+    const events: AiStreamEvent[] = [];
+    for await (const event of port.stream(
+      request(admin.id, {
+        maxSteps: 3,
+        tools: [
+          {
+            name: 'lookup',
+            description: 'Read evidence',
+            kind: 'READ',
+            inputSchema: { type: 'object', properties: { q: { type: 'string' } }, required: ['q'] },
+            execute: async input => ({ evidence: 'result-' + (input as { q: string }).q }),
+          },
+        ],
+      })
+    ))
+      events.push(event);
+
+    expect(primary.requests, JSON.stringify(events)).toHaveLength(4);
+    const fallback = JSON.stringify(primary.requests[3].body);
+    expect(fallback).toContain('result-first');
+    expect(fallback).toContain('result-second');
+    expect(events.at(-1)).toMatchObject({
+      type: 'finish',
+      result: { text: 'Both results were found.' },
+    });
   });
 
   it('reports a clean stream error when every provider fails, without splicing partial answers', async () => {

@@ -81,6 +81,10 @@ A `note` is saved in full on the incident's notes. The timeline entry for it sho
 3. Complete identity linking if prompted.
 4. Open OpsKnight when the response says the action was queued or cannot confirm final state.
 
+`/incident help` lists every command available in the channel you are in:
+
+![The /incident help reply listing the commands available anywhere and in a war-room channel](/docs/v2.3.0/assets/slack-incident-help.png)
+
 ## Declare an incident from Slack
 
 `/incident declare` opens a form with the same choices as the web create page:
@@ -103,6 +107,10 @@ These work in a war-room channel and run as you, with your normal permissions.
 - **`page`** pages the target for this incident. A person is assigned the incident; a schedule resolves to whoever is on call now; a team becomes the owning team and the assignee is cleared. A name that isn't `@person`, `team:` or `schedule:` is tried as a team first, then as a schedule. The result is posted in the channel ("Paged …"); a refusal, an unknown target, an unlinked person, or an empty schedule is a private message. It needs permission to manage the incident, and the person needs an active OpsKnight account. Add a responder without changing the assignee from the [More actions menu](./incident-actions).
 - **`assign`** and the person picker take a person or `me`. You can type `@name`; OpsKnight finds that person in the workspace.
 - **`priority`, `urgency`, `title`, `describe`** change one field and need permission to manage the incident. The card is refreshed and a thread reply says what changed ("Priority P2 → P1"). A value that is already set answers "Nothing changed".
+
+Each change is announced in the channel with who made it:
+
+![Channel replies to the update, action item, page, assign, and reassign commands](/docs/v2.3.0/assets/slack-page-assign-action-replies.png)
 
 ## Post a status-page update
 

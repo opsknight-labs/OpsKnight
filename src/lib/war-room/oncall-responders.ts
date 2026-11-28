@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma';
+import { SERVICE_ACCOUNT_DOMAIN } from '@/lib/service-account-identity';
 import { resolveEscalationTarget } from '@/lib/escalation/target-resolution';
 
 const MAX_ON_CALL_RESPONDERS = 10;
@@ -60,7 +61,11 @@ export async function resolveServiceWarRoomResponders(serviceId: string): Promis
   const ids = new Set([...named, ...members.map(member => member.userId)]);
   if (ids.size === 0) return [];
   const active = await prisma.user.findMany({
-    where: { id: { in: [...ids] }, status: 'ACTIVE' },
+    where: {
+      id: { in: [...ids] },
+      status: 'ACTIVE',
+      NOT: { email: { endsWith: `@${SERVICE_ACCOUNT_DOMAIN}`, mode: 'insensitive' } },
+    },
     select: { id: true },
   });
   return active.map(user => user.id);

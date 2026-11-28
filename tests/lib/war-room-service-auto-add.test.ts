@@ -61,6 +61,9 @@ describe('resolveServiceWarRoomResponders', () => {
     h.users.mockResolvedValue([{ id: 'a' }]);
     expect(await resolveServiceWarRoomResponders('s1')).toEqual(['a']);
     expect(h.users.mock.calls[0][0].where.status).toBe('ACTIVE');
+    expect(h.users.mock.calls[0][0].where.NOT.email.endsWith).toBe(
+      '@serviceaccount.opsknight.local'
+    );
     expect(h.members.mock.calls[0][0].where).toEqual({ teamId: 't1' });
   });
 

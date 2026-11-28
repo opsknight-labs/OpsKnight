@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Button } from '@/components/ui/shadcn/button';
@@ -32,13 +32,11 @@ export default function WarRoomAutoAddCard({
   people,
   canManage,
 }: WarRoomAutoAddCardProps) {
-  const [state, formAction, pending] = useActionState(updateServiceWarRoomAutoAdd, undefined);
+  const [pending, startTransition] = useTransition();
+  const [state, setState] = useState<{ error?: string | null } | undefined>();
   const [team, setTeam] = useState(initialTeam);
   const [chosen, setChosen] = useState(() => new Set(initialUserIds));
   const [filter, setFilter] = useState('');
-  useEffect(() => {
-    if (state?.success) notify.success('War room people saved.');
-  }, [state]);
 
   const [known, setKnown] = useState<Map<string, Person>>(
     () => new Map(people.map(person => [person.id, person]))
@@ -78,7 +76,23 @@ export default function WarRoomAutoAddCard({
     });
 
   return (
-    <form action={formAction} className="space-y-3 rounded-lg border bg-card p-4">
+    <form
+      // Not `action=`: React resets a form after an action, which blanked the fields until a reload.
+      onSubmit={event => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        startTransition(async () => {
+          const result = await updateServiceWarRoomAutoAdd(undefined, data);
+          setState(result);
+          if (result.success) {
+            notify.success('War room people saved.');
+            // Show exactly what was saved, dropping anyone the server refused.
+            if (result.userIds) setChosen(new Set(result.userIds));
+          }
+        });
+      }}
+      className="space-y-3 rounded-lg border bg-card p-4"
+    >
       <input type="hidden" name="serviceId" value={serviceId} />
       {[...chosen].map(id => (
         <input key={id} type="hidden" name="userIds" value={id} />

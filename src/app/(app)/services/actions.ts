@@ -1,6 +1,7 @@
 'use server';
 
 import { z } from 'zod';
+import { SERVICE_ACCOUNT_DOMAIN } from '@/lib/service-account-identity';
 import prisma from '@/lib/prisma';
 import { updateServiceWithAutomationPolicyGuard } from '@/lib/automation/service-policy';
 import type { Prisma } from '@prisma/client';
@@ -478,9 +479,9 @@ const peopleSearchSchema = z
 
 /** Who a service always adds to its war rooms: owning-team members (all or managers) plus named people. */
 export async function updateServiceWarRoomAutoAdd(
-  _prevState: { success?: boolean; error?: string | null } | undefined,
+  _prevState: { success?: boolean; error?: string | null; userIds?: string[] } | undefined,
   formData: FormData
-): Promise<{ success?: boolean; error?: string | null }> {
+): Promise<{ success?: boolean; error?: string | null; userIds?: string[] }> {
   try {
     const parsed = warRoomAutoAddSchema.safeParse({
       serviceId: formData.get('serviceId'),
@@ -494,7 +495,11 @@ export async function updateServiceWarRoomAutoAdd(
     const currentUser = await assertCanModifyService(serviceId);
     const active = requested.length
       ? await prisma.user.findMany({
-          where: { id: { in: requested }, status: 'ACTIVE' },
+          where: {
+            id: { in: requested },
+            status: 'ACTIVE',
+            NOT: { email: { endsWith: `@${SERVICE_ACCOUNT_DOMAIN}`, mode: 'insensitive' } },
+          },
           select: { id: true },
         })
       : [];
@@ -512,7 +517,8 @@ export async function updateServiceWarRoomAutoAdd(
     });
     revalidatePath(`/services/${serviceId}/settings`);
     revalidatePath(`/services/${serviceId}`);
-    return { success: true, error: null };
+    // The ids actually saved, so the form can drop any that were refused (inactive or machine accounts).
+    return { success: true, error: null, userIds };
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Failed to save.' };
   }
@@ -530,6 +536,7 @@ export async function searchWarRoomAutoAddPeople(
   return prisma.user.findMany({
     where: {
       status: 'ACTIVE',
+      NOT: { email: { endsWith: `@${SERVICE_ACCOUNT_DOMAIN}`, mode: 'insensitive' } },
       ...(needle
         ? {
             OR: [

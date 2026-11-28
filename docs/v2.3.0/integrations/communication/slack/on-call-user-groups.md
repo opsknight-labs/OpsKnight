@@ -33,6 +33,8 @@ User groups are a paid Slack feature. Create the user group in Slack first (for 
 2. Choose an on-call schedule and a Slack user group. If OpsKnight can't list user groups, type the group's id.
 3. Save. Use **Pause** and **Resume** to stop and restart a mapping, or remove it.
 
+![The On-call user groups card with a schedule picker, a Slack user group picker, and a Link button](/docs/v2.3.0/assets/slack-on-call-user-groups-card.png)
+
 ## What OpsKnight does
 
 About once a minute OpsKnight works out who is on call for each mapped schedule, finds each person's Slack account by email, and sets the user group's members to those people. Slack replaces a group's whole membership, so OpsKnight never sends an empty list: if nobody is on call, or none of the on-call people matches a Slack account, the group keeps its previous members and the mapping shows the reason. At most 50 people are synced, people without a Slack match are skipped, and a Slack rate limit is retried on the next pass.

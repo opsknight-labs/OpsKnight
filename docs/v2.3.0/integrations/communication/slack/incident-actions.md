@@ -57,6 +57,14 @@ The **More actions** menu (⋯) on the card and on the war-room status card, sho
 | **Update details** | Opens a form with the title, priority, urgency, and description filled in. Only what you change is applied, and the card and thread show it ("Priority P2 → P1"). The form can't clear the description. |
 | **Post status update** | Opens a form to publish a customer-facing status-page update. See [status updates](./commands#post-a-status-page-update). |
 
+![The More actions menu on an incident card, listing Add responder, Reassign, Update details, and Post status update](/docs/v2.3.0/assets/slack-more-actions-menu.png)
+
+![The Add responder form with a person picker and an optional note](/docs/v2.3.0/assets/slack-add-responder-modal.png)
+
+![The Reassign form with a person picker](/docs/v2.3.0/assets/slack-reassign-modal.png)
+
+![The Update details form with the title, priority, urgency, and description filled in](/docs/v2.3.0/assets/slack-update-details-modal.png)
+
 If the card also has a meeting bridge, it shows a **Join Teams / Zoom / Google Meet / Jitsi** button after the action row. The button appears only for an https link and not once the incident is resolved.
 
 Slash commands are listed in [Slack incident commands](./commands): `declare`, `list`, `oncall`, `ack`, `resolve`, `note`, `who`, `role`, `page`, `assign`, `priority`, `urgency`, `title`, `describe`, `status`, `runbook`, `action`, `actions`, `postmortem`, `ask`, `investigate`, and `help`.

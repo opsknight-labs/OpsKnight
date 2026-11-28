@@ -35,10 +35,14 @@ describe('rolling cache breakpoint', () => {
   });
 
   it('moves with the conversation: earlier steps lose nothing, only the last gains a marker', () => {
-    const first = withRollingCacheBreakpoint(step.slice(0, 2), 'ANTHROPIC');
+    const initial = step.slice(0, 2);
+    const responses = step.slice(2);
+    const first = withRollingCacheBreakpoint(initial, 'ANTHROPIC');
     expect(marked(first)).toEqual([true, true]);
-    // The SDK hands each step the original messages plus responses, so at most two markers are ever live.
-    expect(marked(withRollingCacheBreakpoint(step, 'ANTHROPIC')).filter(Boolean)).toHaveLength(2);
+    const second = withRollingCacheBreakpoint(initial, 'ANTHROPIC', responses);
+    expect(marked(second)).toEqual([true, false, false, true]);
+    expect(marked(initial)).toEqual([true, false]);
+    expect(marked(responses)).toEqual([false, false]);
   });
 
   it('uses a cache point on Bedrock', () => {

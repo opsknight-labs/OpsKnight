@@ -6511,6 +6511,10 @@
           "text": "- Connect and configure Slack ChatOps - Configure service channels - Send and verify a test - Understand incident notifications - Acknowledge and resolve incidents - Use incident actions and commands - Create and operate war rooms - Declare from a message and use the Home tab - Sync on-call to a Slack user group - Link responder identities - Review permissions and scopes - Review rate limits - Dis"
         },
         {
+          "heading": "Ask Squire in a direct message",
+          "text": "Once Squire is turned on for chat, send OpsKnight a direct message ( Apps → OpsKnight → Messages ) and it answers in a thread, with your own permissions. You don't need an @ or an incident for this. It needs the im:history scope and the message.im event, which the current app manifest includes: an app created before this was added must have its manifest updated and be reconnected, and the Setup an"
+        },
+        {
           "heading": "Check setup and health",
           "text": "Settings → Integrations → Slack has a Setup and health panel with live checks against Slack: the bot token, the workspace, required scopes, optional feature scopes, the signing secret, recent requests from Slack, and whether Squire is on. A guided checklist ticks as OpsKnight sees each step work, and shows the events, interactivity, and slash-command URLs to paste into the Slack app. Select Run ch"
         },
@@ -6581,7 +6585,7 @@
         },
         {
           "heading": "Complete the action",
-          "text": "1. Enter /incident with its argument. 2. Submit once and read the response. 3. Complete identity linking if prompted. 4. Open OpsKnight when the response says the action was queued or cannot confirm final state."
+          "text": "1. Enter /incident with its argument. 2. Submit once and read the response. 3. Complete identity linking if prompted. 4. Open OpsKnight when the response says the action was queued or cannot confirm final state. /incident help lists every command available in the channel you are in:"
         },
         {
           "heading": "Declare an incident from Slack",
@@ -6945,7 +6949,7 @@
         },
         {
           "heading": "Declare an incident from a message",
-          "text": "1. Hover a message, select More actions , and choose Declare incident . 2. The declare form opens with the title set to the first line of the message (200 characters at most) and the description set to the message text, followed by a link to the message when Slack provides one. 3. Choose the service, adjust the priority, visibility, and assignee, and submit. The incident is created as with /incide"
+          "text": "1. Hover a message, select More actions , then Connect to apps , and choose Declare incident . (Slack may also list it under More message shortcuts .) 2. The declare form opens with the title set to the first line of the message (200 characters at most) and the description set to the message text, followed by a link to the message when Slack provides one. 3. Choose the service, adjust the priority"
         },
         {
           "heading": "Declare an incident from the shortcuts menu",

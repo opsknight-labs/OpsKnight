@@ -53,6 +53,12 @@ which covers Slack app creation through production acceptance.
 - [Disconnect or reconnect](./disconnect-reconnect)
 - [Troubleshoot Slack](./troubleshooting)
 
+## Ask Squire in a direct message
+
+Once Squire is turned on for chat, send OpsKnight a direct message (**Apps → OpsKnight → Messages**) and it answers in a thread, with your own permissions. You don't need an `@` or an incident for this. It needs the `im:history` scope and the `message.im` event, which the current app manifest includes: an app created before this was added must have its manifest updated and be reconnected, and the **Setup and health** panel shows **Reconnect Slack** until then.
+
+![A direct message to OpsKnight with Squire's answer in the thread](/docs/v2.3.0/assets/slack-squire-direct-message.png)
+
 ## Check setup and health
 
 **Settings → Integrations → Slack** has a **Setup and health** panel with live checks against Slack: the bot token, the workspace, required scopes, optional feature scopes, the signing secret, recent requests from Slack, and whether Squire is on. A guided checklist ticks as OpsKnight sees each step work, and shows the events, interactivity, and slash-command URLs to paste into the Slack app. Select **Run checks** to refresh. A missing scope shows a **Reconnect Slack** button; an app installed from an older manifest shows a notice listing what is missing (see [permissions and scopes](./permissions-and-scopes)).
