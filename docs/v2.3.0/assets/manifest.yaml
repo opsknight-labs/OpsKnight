@@ -228,3 +228,51 @@ manualAssets:
     sha256: 15d87e5b88276470ac1d137234d0a33507bb1947aaf1023d49d82a2c34d5e41d
     provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop 5f87675 (#1072) on 2026-11-27, with a demo incident and demo users.
     classification: manual-product-example
+  slack-app-home.png:
+    sha256: 47886c79e56939998ce275501c2b07dce5e199a880f1fffb5ed596f1f1c9433c
+    provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop b561f33 (#1078, #1082) on 2026-11-28, with a demo incident; names, emails and direct-message contacts are blurred.
+    classification: manual-product-example
+  slack-squire-direct-message.png:
+    sha256: 36f69de767f965e2712b0ca9c94f212612a0fcb66b06a995a02609a349a13020
+    provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop b561f33 (#1078, #1082) on 2026-11-28, with a demo incident; names, emails and direct-message contacts are blurred.
+    classification: manual-product-example
+  slack-more-actions-menu.png:
+    sha256: 79f506c80879c02469c171c1a0f9bd1438bee3c4a60c1e230fb0624d9dc07ce1
+    provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop b561f33 (#1078, #1082) on 2026-11-28, with a demo incident; names, emails and direct-message contacts are blurred.
+    classification: manual-product-example
+  slack-add-responder-modal.png:
+    sha256: 9d75c54d0e61f4289750e1cd1e396daae12e6d01dbf9ef904f401e4770b23579
+    provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop b561f33 (#1078, #1082) on 2026-11-28, with a demo incident; names, emails and direct-message contacts are blurred.
+    classification: manual-product-example
+  slack-update-details-modal.png:
+    sha256: 0669cae944ae50bdbfd50c73b903f9407d2c8ee59c8f861ea01d50e077f0d04e
+    provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop b561f33 (#1078, #1082) on 2026-11-28, with a demo incident; names, emails and direct-message contacts are blurred.
+    classification: manual-product-example
+  slack-reassign-modal.png:
+    sha256: f3563bc76829eb6a17a72713772673b3aa41f7da9a378d08a93dc353ad1d3e81
+    provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop b561f33 (#1078, #1082) on 2026-11-28, with a demo incident; names, emails and direct-message contacts are blurred.
+    classification: manual-product-example
+  slack-declare-from-message.png:
+    sha256: f125f7444c4ef16c7f6d367753750b063e8d47309529c39ead5c2e62e30a2cae
+    provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop b561f33 (#1078, #1082) on 2026-11-28, with a demo incident; names, emails and direct-message contacts are blurred.
+    classification: manual-product-example
+  slack-declare-from-message-description.png:
+    sha256: be6892025571b79b0aa85ddea307748dd4c0e48f3eb36be57807b4b986eff5c9
+    provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop b561f33 (#1078, #1082) on 2026-11-28, with a demo incident; names, emails and direct-message contacts are blurred.
+    classification: manual-product-example
+  slack-page-assign-action-replies.png:
+    sha256: b4784e1b1602f297ab0c8d939992e115393e63f08e4848b68ea5e13ff247963e
+    provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop b561f33 (#1078, #1082) on 2026-11-28, with a demo incident; names, emails and direct-message contacts are blurred.
+    classification: manual-product-example
+  slack-incident-help.png:
+    sha256: d13851536620e0f61bc7a2918c5ffe6f1cf307c3c9ee97a917dd5c2ff4a466dc
+    provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop b561f33 (#1078, #1082) on 2026-11-28, with a demo incident; names, emails and direct-message contacts are blurred.
+    classification: manual-product-example
+  slack-on-call-user-groups-card.png:
+    sha256: 122c9fdb08ef1c745d2ba0ffd699c7efb49bfde462c80211fd722064c35c5732
+    provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop b561f33 (#1078, #1082) on 2026-11-28, with a demo incident; names, emails and direct-message contacts are blurred.
+    classification: manual-product-example
+  slack-chatops-war-room-options.png:
+    sha256: 06d21f3d6892f5db9b2d9efdafe2dd31bf61986536bbe556a0af90d74f7ca355
+    provenance: Slack ChatOps captured on the OpsKnight staging workspace running develop b561f33 (#1078, #1082) on 2026-11-28, with a demo incident; names, emails and direct-message contacts are blurred.
+    classification: manual-product-example
