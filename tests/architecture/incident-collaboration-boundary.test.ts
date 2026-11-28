@@ -29,6 +29,7 @@ describe('Incident Collaboration Architectural Boundaries', () => {
     const violations: Array<{ file: string; match: string }> = [];
 
     for (const file of WAR_ROOM_UI_FILES) {
+      // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed repository file list
       const content = readFileSync(file, 'utf8');
       for (const pattern of forbiddenPatterns) {
         const match = content.match(pattern);

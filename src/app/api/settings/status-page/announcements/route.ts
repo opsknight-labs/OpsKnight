@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { assertAdmin } from '@/lib/rbac';
-import { logAudit } from '@/lib/audit';
+import { emitAuditEvent, logAudit } from '@/lib/audit';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import {
   StatusAnnouncementCreateSchema,
@@ -24,7 +24,6 @@ import {
   lockAnnouncementMutation,
   suppressUndeliveredAnnouncementIntents,
 } from '@/lib/status-pages/announcement-commands';
-import { emitAuditEvent } from '@/lib/audit';
 import { AUTO_DRAFT_ID_PREFIX } from '@/lib/business-services/status-page-drafts';
 
 class InvalidDateError extends Error {

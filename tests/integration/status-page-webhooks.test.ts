@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- loosely typed route-handler and session mocks */
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { POST, GET, PATCH, DELETE } from '@/app/api/status-page/webhooks/route';
 import { triggerStatusPageWebhooks } from '@/lib/status-page-webhooks';

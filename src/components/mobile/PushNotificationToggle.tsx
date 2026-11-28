@@ -403,6 +403,7 @@ export default function PushNotificationToggle() {
   }, [preparePush]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the capability probe must run once on mount, and again on install and online events
     void checkSupportAndState();
     const installed = () => void checkSupportAndState();
     const online = () => void checkSupportAndState();

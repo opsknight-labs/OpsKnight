@@ -3229,7 +3229,7 @@
           },
           "dataState": {
             "type": "string",
-            "enum": ["AVAILABLE", "NO_DATA", "UNAVAILABLE"]
+            "enum": ["AVAILABLE", "NO_DATA", "UNAVAILABLE", "PARTIAL"]
           },
           "definitionVersion": {
             "type": "integer",
@@ -13851,6 +13851,7 @@
           },
           "serviceNotificationChannels": {
             "type": "array",
+            "description": "Stored channels. Only SLACK, WEBHOOK and MICROSOFT_TEAMS are delivered; a legacy EMAIL, SMS, PUSH or WHATSAPP value is ignored and cannot be written back.",
             "items": {
               "type": "string",
               "enum": ["SLACK", "WEBHOOK", "EMAIL", "SMS", "PUSH", "WHATSAPP", "MICROSOFT_TEAMS"]
@@ -16350,18 +16351,11 @@
                   "serviceNotificationChannels": {
                     "type": "array",
                     "uniqueItems": true,
-                    "maxItems": 7,
+                    "maxItems": 3,
+                    "description": "Service-level channels support Slack, Teams and webhooks only; use escalation policies or user preferences for email, SMS, push and WhatsApp. A legacy EMAIL, SMS, PUSH or WHATSAPP value read from the service must be removed from the list before it is sent back.",
                     "items": {
                       "type": "string",
-                      "enum": [
-                        "SLACK",
-                        "WEBHOOK",
-                        "EMAIL",
-                        "SMS",
-                        "PUSH",
-                        "WHATSAPP",
-                        "MICROSOFT_TEAMS"
-                      ]
+                      "enum": ["SLACK", "WEBHOOK", "MICROSOFT_TEAMS"]
                     }
                   },
                   "serviceNotifyOnTriggered": {

@@ -707,7 +707,7 @@ export type ServiceObjectiveSnapshot = {
   sampleCount: string | null;
   target: number;
   breached: boolean | null;
-  dataState: 'AVAILABLE' | 'NO_DATA' | 'UNAVAILABLE';
+  dataState: 'AVAILABLE' | 'NO_DATA' | 'UNAVAILABLE' | 'PARTIAL';
   definitionVersion: number;
   createdAt: string;
 };
@@ -4944,9 +4944,7 @@ export interface OperationRequests {
     params: { id: string };
     headers: { 'Idempotency-Key': string; 'If-Match': string };
     body: {
-      serviceNotificationChannels?: Array<
-        'SLACK' | 'WEBHOOK' | 'EMAIL' | 'SMS' | 'PUSH' | 'WHATSAPP' | 'MICROSOFT_TEAMS'
-      >;
+      serviceNotificationChannels?: Array<'SLACK' | 'WEBHOOK' | 'MICROSOFT_TEAMS'>;
       serviceNotifyOnTriggered?: boolean;
       serviceNotifyOnAck?: boolean;
       serviceNotifyOnResolved?: boolean;
