@@ -216,17 +216,15 @@ export async function groups(request: NextRequest, id?: string) {
       if (duplicate)
         throw new ScimFailure(409, 'A group with this displayName already exists.', 'uniqueness');
     }
-    const requestedIds = [...new Set((document.members ?? []).map(m => m.value))];
-    const provisioned = await tx.scimIdentity.findMany({
-      where: { connectorId: principal.connectorId, userId: { in: requestedIds }, deletedAt: null },
-      select: { userId: true },
+    const ids = [...new Set((document.members ?? []).map(m => m.value))];
+    const found = await tx.scimIdentity.count({
+      where: { connectorId: principal.connectorId, userId: { in: ids }, deletedAt: null },
     });
-    const provisionedIds = new Set(provisioned.map(identity => identity.userId));
-    // A member the connector does not know (for example one whose create failed earlier) is skipped
-    // and reported, so the IdP's retry of the same batch is not rejected forever. It is added when
-    // the IdP sends the group again after the user exists.
-    const ids = requestedIds.filter(userId => provisionedIds.has(userId));
-    const skippedMembers = requestedIds.filter(userId => !provisionedIds.has(userId));
+    if (found !== ids.length)
+      throw new ScimFailure(
+        400,
+        'One or more members are unknown to this connector. Provision the users first.'
+      );
     const group = existing
       ? await tx.scimGroup.update({
           where: { id: existing.id },
@@ -269,12 +267,6 @@ export async function groups(request: NextRequest, id?: string) {
     }
     await event(tx, principal, existing ? 'group.updated' : 'group.created', group.id, {
       members: ids.length,
-      ...(skippedMembers.length
-        ? {
-            skippedUnprovisionedMembers: skippedMembers.length,
-            skippedUnprovisionedMemberIds: skippedMembers.slice(0, 100),
-          }
-        : {}),
     });
     const saved = await tx.scimGroup.findUniqueOrThrow({ where: { id: group.id }, include });
     // Serialization and its byte budget must succeed before any mutation commits.

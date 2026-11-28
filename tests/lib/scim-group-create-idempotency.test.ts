@@ -8,7 +8,7 @@ const m = vi.hoisted(() => {
       create: vi.fn(),
       findUniqueOrThrow: vi.fn(),
     },
-    scimIdentity: { findMany: vi.fn() },
+    scimIdentity: { count: vi.fn() },
     scimGroupMembership: { deleteMany: vi.fn(), createMany: vi.fn() },
   };
   return { tx };
@@ -47,7 +47,7 @@ const post = (body: object) =>
 describe('SCIM POST /Groups without an externalId', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    m.tx.scimIdentity.findMany.mockResolvedValue([]);
+    m.tx.scimIdentity.count.mockResolvedValue(0);
     m.tx.scimGroup.create.mockResolvedValue({ id: 'g-new' });
     m.tx.scimGroup.findUniqueOrThrow.mockResolvedValue({
       id: 'g-new',
