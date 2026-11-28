@@ -378,6 +378,7 @@ const CACHE_HINTS: Partial<
   BEDROCK: { bedrock: { cachePoint: { type: 'default' } } },
 };
 
+// Callers build trusted system messages and attach provider-specific cache metadata to them.
 export const toMessages = (
   request: AiGenerateRequest,
   kind?: GatewayProvider['kind']
@@ -756,7 +757,10 @@ class GatewayPort implements LanguageModelPort {
     const maxSteps = clampSteps(request.maxSteps);
     return async ({ steps }) => {
       if (steps.length >= maxSteps || loop.budgetLimited) return true;
-      const sent = JSON.stringify([request.messages, steps.at(-1)?.response.messages ?? []]);
+      const sent = JSON.stringify([
+        request.messages,
+        steps.flatMap(step => step.response.messages),
+      ]);
       const funded = await this.hold(
         request,
         provider,
@@ -821,6 +825,7 @@ class GatewayPort implements LanguageModelPort {
       const run = streamText({
         onError: () => undefined,
         model: await buildModel(provider),
+        allowSystemInMessages: true,
         messages: withRollingCacheBreakpoint(messages, provider.kind),
         tools,
         toolChoice: 'none',
@@ -969,6 +974,7 @@ class GatewayPort implements LanguageModelPort {
           async span => {
             const generated = await generateText({
               model: await buildModel(provider),
+              allowSystemInMessages: true,
               messages: toMessages(request, provider.kind),
               output: Output.object({
                 schema: zodSchema(request.schema as unknown as Parameters<typeof zodSchema>[0]),
@@ -1073,6 +1079,7 @@ class GatewayPort implements LanguageModelPort {
           async span => {
             const generated = await generateText({
               model: await buildModel(provider),
+              allowSystemInMessages: true,
               messages: toMessages(request, provider.kind),
               tools: toToolSet(request.tools, provider.kind),
               stopWhen: this.stopper(request, provider, reservation, loop),
@@ -1191,6 +1198,7 @@ class GatewayPort implements LanguageModelPort {
           // handler below records bounded error categories and preserves fallback/cancellation instead.
           onError: () => undefined,
           model: await buildModel(provider),
+          allowSystemInMessages: true,
           messages: toMessages(request, provider.kind),
           tools: toToolSet(request.tools, provider.kind),
           stopWhen: this.stopper(request, provider, reservation, loop),
@@ -1245,7 +1253,7 @@ class GatewayPort implements LanguageModelPort {
           if (loop.toolsRan && toolCalls.length === 0) {
             const extra = yield* this.answerFromReads(request, provider, reservation, loop, [
               ...toMessages(request, provider.kind),
-              ...(await run.response).messages,
+              ...(await run.responseMessages),
             ]);
             if (extra) {
               text += extra.text;

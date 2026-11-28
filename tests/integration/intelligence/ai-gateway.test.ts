@@ -90,7 +90,10 @@ const provider = (name: string, url: string, overrides: Record<string, unknown> 
 
 const request = (actorId: string, extra: Partial<AiGenerateRequest> = {}): AiGenerateRequest => ({
   context: { actorId, capability: 'SQUIRE_CHAT', callSite: 'interactive', dataClass: 'INTERNAL' },
-  messages: [{ role: 'user', content: 'hello' }],
+  messages: [
+    { role: 'system', content: 'You are the OpsKnight assistant.' },
+    { role: 'user', content: 'hello' },
+  ],
   ...extra,
 });
 
@@ -532,6 +535,44 @@ describe('gateway', () => {
       result: { usage: { inputTokens: 30, outputTokens: 5 } },
     });
     expect(await getTodayUsage()).toMatchObject({ requests: 1, inputTokens: 30 });
+  });
+
+  it('keeps every read result when a tool loop ends without text', async () => {
+    const { admin, actor } = await configure();
+    await saveAiProvider(null, provider('Local', primary.url), actor);
+    invalidateGatewayCache();
+    primary.script.push(
+      { toolCall: { name: 'lookup', args: '{"q":"first"}' } },
+      { toolCall: { id: 'call_2', name: 'lookup', args: '{"q":"second"}' } },
+      { content: '' },
+      { content: 'Both results were found.' }
+    );
+    const port = (await resolveGatewayPort('INTERNAL'))!;
+    const events: AiStreamEvent[] = [];
+    for await (const event of port.stream(
+      request(admin.id, {
+        maxSteps: 3,
+        tools: [
+          {
+            name: 'lookup',
+            description: 'Read evidence',
+            kind: 'READ',
+            inputSchema: { type: 'object', properties: { q: { type: 'string' } }, required: ['q'] },
+            execute: async input => ({ evidence: 'result-' + (input as { q: string }).q }),
+          },
+        ],
+      })
+    ))
+      events.push(event);
+
+    expect(primary.requests, JSON.stringify(events)).toHaveLength(4);
+    const fallback = JSON.stringify(primary.requests[3].body);
+    expect(fallback).toContain('result-first');
+    expect(fallback).toContain('result-second');
+    expect(events.at(-1)).toMatchObject({
+      type: 'finish',
+      result: { text: 'Both results were found.' },
+    });
   });
 
   it('reports a clean stream error when every provider fails, without splicing partial answers', async () => {
