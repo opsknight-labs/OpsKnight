@@ -362,6 +362,29 @@ describe('incident lifecycle command engine', () => {
     );
   });
 
+  it('does not bill the time an incident sat RESOLVED to the SLA clock after a reopen', async () => {
+    tx.incident.findUnique.mockResolvedValue(
+      snapshot({
+        status: 'RESOLVED',
+        resolvedAt: new Date(NOW.getTime() - 45 * 60_000),
+        slaPausedMs: BigInt(5 * 60_000),
+        slaResolveElapsedMs: BigInt(30 * 60_000),
+      })
+    );
+
+    await applyIncidentLifecycleCommand(asTransactionClient(tx), {
+      incidentId: 'inc-reopen-gap',
+      command: 'REOPEN',
+      source: 'WEB',
+      now: NOW,
+    });
+
+    const data = tx.incident.update.mock.calls[0][0].data;
+    // Only the resolved gap is added; the 5 minutes already paused stay as they were.
+    expect(data.slaPausedMs).toEqual({ increment: BigInt(45 * 60_000) });
+    expect(data.slaResolveElapsedMs).toBeNull();
+  });
+
   it('re-acknowledges operationally without replacing the lifetime first-ACK capture', async () => {
     tx.incident.findUnique.mockResolvedValue(
       snapshot({ status: 'OPEN', slaAckElapsedMs: BigInt(5 * 60_000) })

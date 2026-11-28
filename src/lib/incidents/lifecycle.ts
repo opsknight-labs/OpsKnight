@@ -432,10 +432,18 @@ export function updateDataForCommand(
     input.command === 'ACKNOWLEDGE' ||
     input.command === 'RESOLVE' ||
     input.command === 'REOPEN';
+  let pausedIncrementMs = BigInt(0);
   if (closesPause && incident.slaPauseStartedAt) {
-    const elapsed = BigInt(Math.max(0, now.getTime() - incident.slaPauseStartedAt.getTime()));
-    data.slaPausedMs = { increment: elapsed };
+    pausedIncrementMs += BigInt(Math.max(0, now.getTime() - incident.slaPauseStartedAt.getTime()));
     data.slaPauseStartedAt = null;
+  }
+  // The time an incident sat RESOLVED is not response time: a reopen must not bill it to the
+  // SLA clock. RESOLVE already closed any open pause, so this never overlaps the one above.
+  if (input.command === 'REOPEN' && incident.resolvedAt) {
+    pausedIncrementMs += BigInt(Math.max(0, now.getTime() - incident.resolvedAt.getTime()));
+  }
+  if (pausedIncrementMs > BigInt(0)) {
+    data.slaPausedMs = { increment: pausedIncrementMs };
   }
   if ((input.command === 'SNOOZE' || input.command === 'SUPPRESS') && !incident.slaPauseStartedAt) {
     data.slaPauseStartedAt = now;
@@ -730,6 +738,20 @@ export async function applyIncidentLifecycleCommand(
       incidentSlaPause?: Prisma.TransactionClient['incidentSlaPause'];
     }
   ).incidentSlaPause;
+  if (pauseStore && input.command === 'REOPEN' && incident.resolvedAt) {
+    // Durable twin of the slaPausedMs bump above, so the pause-union SQL used by analytics
+    // and the monitor excludes the resolved gap too.
+    await pauseStore.create({
+      data: {
+        incidentId: input.incidentId,
+        reason: 'resolved',
+        startedAt: incident.resolvedAt,
+        endedAt: now,
+        lifecycleGeneration: incident.escalationGeneration,
+        actorId: input.actor?.id ?? null,
+      },
+    });
+  }
   if (pauseStore && (input.command === 'SNOOZE' || input.command === 'SUPPRESS')) {
     const activePause = await pauseStore.findFirst({
       where: { incidentId: input.incidentId, endedAt: null },
