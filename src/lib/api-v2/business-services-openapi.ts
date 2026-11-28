@@ -1024,17 +1024,11 @@ export const BUSINESS_SERVICE_OPERATIONS: {
   {
     method: 'get',
     path: '/business-services/{id}/sla-report',
-    summary: 'Monthly SLA report of a business service, as JSON or CSV (format=csv)',
+    summary: 'Monthly SLA report of a business service',
     description:
       'Uptime, severity-weighted uptime against the SLO target (met or missed), downtime minutes and incidents for one UTC month (default: this month, to date). estimatedCostCents and currency only for Responders and Admins.',
     query: {
       month: { type: 'string', pattern: '^\\d{4}-(0[1-9]|1[0-2])$', description: 'YYYY-MM.' },
-      format: {
-        type: 'string',
-        enum: ['json', 'csv'],
-        default: 'json',
-        description: 'csv returns the report as a text/csv attachment.',
-      },
     },
   },
 ];

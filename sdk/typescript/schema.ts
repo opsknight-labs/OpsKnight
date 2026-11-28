@@ -3913,10 +3913,7 @@ export interface OperationRequests {
     params: { id: string };
     query?: { from?: string; to?: string; limit?: number };
   };
-  getBusinessServiceSlaReport: {
-    params: { id: string };
-    query?: { month?: string; format?: 'json' | 'csv' };
-  };
+  getBusinessServiceSlaReport: { params: { id: string }; query?: { month?: string } };
   listStatusPageServices: { params: { id: string }; query?: { limit?: number; cursor?: string } };
   setStatusPageServices: {
     params: { id: string };

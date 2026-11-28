@@ -4541,10 +4541,10 @@
     "risk": "R0",
     "reason": "Read-only monthly SLA figures of one business service; cost fields only for financial readers, enforced by the REST route.",
     "tool": null,
-    "routeSha256": "b2c6c193323d03b5afd25ddd6dc97ec117d17bac447b47600c32e4ea3aea4d9a",
+    "routeSha256": "a7d20f3bc44580fe2309d82b84cfb482718c8790ec918099b66dbf6af89aca0a",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/mcp/business-services-tools.test.ts",
-    "contractSha256": "e0509ae0b493c5c464db2ead264fc30bd76b0f380886bb8105b1669b3e1326fb",
+    "contractSha256": "3094f92289b7ebf556309a6726211a78b5f09fd4ea8a69da37456fb07e4ab2a0",
     "actions": ["service.read"]
   }
 }

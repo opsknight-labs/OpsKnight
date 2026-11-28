@@ -2310,9 +2310,6 @@ export function finalizeOpenApiSpec(base: Json): Json {
           'application/json': { schema: successEnvelope(definition, paginated) },
         };
       }
-      if (definition.operationId === 'getBusinessServiceSlaReport') {
-        ok.content['text/csv'] = { schema: { type: 'string' } };
-      }
       ok.headers = {
         ...(ok.headers ?? {}),
         ...rateLimitHeaders,
