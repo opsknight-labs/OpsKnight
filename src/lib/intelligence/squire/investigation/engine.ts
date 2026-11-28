@@ -491,6 +491,8 @@ export async function* runInvestigation(
           schema: planSchema,
           schemaName: 'investigation_step',
           maxOutputTokens: outputTokensFor('squire.plan'),
+          // The step loop counts its own tokens against the question ceiling from this cap.
+          thinkingRoom: false,
         });
         tokens += result.usage.inputTokens + result.usage.outputTokens;
         plan = result.object;
@@ -618,6 +620,7 @@ export async function* runInvestigation(
       schema: diagnosisSchema,
       schemaName: 'investigation_conclusion',
       maxOutputTokens: outputTokensFor('squire.diagnose'),
+      thinkingRoom: false,
     });
     tokens += result.usage.inputTokens + result.usage.outputTokens;
     const rendered = renderDiagnosis(result.object, ledger, meta);

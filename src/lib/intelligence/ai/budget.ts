@@ -175,13 +175,13 @@ export async function reserveAiTokens(
               ? 'user'
               : null;
     if (rejected) {
-      countRejection(rejected);
+      if (!scope?.probe) countRejection(rejected);
       return null;
     }
     // Optional team and capability budgets, under the same day lock as the global budget.
     const scoped = await exceededScopedBudget(tx, day, now, tokens, scope);
     if (scoped) {
-      countRejection(scoped === 'TEAM' ? 'team' : 'capability');
+      if (!scope?.probe) countRejection(scoped === 'TEAM' ? 'team' : 'capability');
       return null;
     }
     const estimatedCost =
