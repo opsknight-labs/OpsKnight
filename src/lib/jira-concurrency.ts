@@ -2,11 +2,7 @@ import crypto from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
-import {
-  acquireAdvisoryLock,
-  acquireSharedAdvisoryLock,
-  LOCK_KEYS,
-} from '@/lib/db-locks';
+import { acquireAdvisoryLock, acquireSharedAdvisoryLock, LOCK_KEYS } from '@/lib/db-locks';
 
 /**
  * Jira HTTP calls are individually bounded to 8 seconds. A create workflow can
@@ -113,14 +109,66 @@ export async function withJiraIssueMutationFence<T>(
  * the cluster-wide advisory lock and to re-check enabled state after waiting.
  */
 export async function withJiraWorkspaceProviderFence<T>(work: () => Promise<T>): Promise<T> {
-  return prisma.$transaction(
-    async tx => {
-      await acquireJiraWorkspaceProviderFence(tx);
-      return work();
-    },
-    {
+  return runJiraProviderTransaction(async tx => {
+    await acquireJiraWorkspaceProviderFence(tx);
+    return work();
+  });
+}
+
+/**
+ * Bulkhead for Jira workflows that hold a database connection across provider HTTP. When Atlassian
+ * slows down, at most this many such workflows run per process, so they cannot pin the whole pool
+ * and starve unrelated incident traffic. The rest wait here, holding no connection.
+ */
+export const JIRA_MAX_CONCURRENT_PROVIDER_WORKFLOWS = Math.max(
+  1,
+  Number(process.env.JIRA_MAX_CONCURRENT_PROVIDER_WORKFLOWS) || 4
+);
+let active = 0;
+const waiting: Array<() => void> = [];
+
+async function acquireJiraBulkhead(): Promise<void> {
+  if (active < JIRA_MAX_CONCURRENT_PROVIDER_WORKFLOWS) {
+    active++;
+    return;
+  }
+  await new Promise<void>((resolve, reject) => {
+    const turn = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      waiting.splice(waiting.indexOf(turn), 1);
+      reject(
+        new AppError({
+          code: 'RATE_LIMIT_EXCEEDED',
+          userMessage: 'Jira is busy right now.',
+          action: 'Try again in a moment.',
+          details: { provider: 'jira', reason: 'bulkhead_full' },
+        })
+      );
+    }, JIRA_PROVIDER_FENCE_MAX_WAIT_MS);
+    waiting.push(turn);
+  });
+}
+
+function releaseJiraBulkhead(): void {
+  const next = waiting.shift();
+  if (next) next();
+  else active--;
+}
+
+/** The one way to open a transaction that spans Jira provider I/O: bulkheaded, fenced timeouts. */
+export async function runJiraProviderTransaction<T>(
+  work: (tx: Prisma.TransactionClient) => Promise<T>
+): Promise<T> {
+  await acquireJiraBulkhead();
+  try {
+    return await prisma.$transaction(work, {
       maxWait: JIRA_PROVIDER_FENCE_MAX_WAIT_MS,
       timeout: JIRA_PROVIDER_FENCE_TIMEOUT_MS,
-    }
-  );
+    });
+  } finally {
+    releaseJiraBulkhead();
+  }
 }

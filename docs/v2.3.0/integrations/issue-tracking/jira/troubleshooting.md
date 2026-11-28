@@ -56,6 +56,10 @@ When both directions are enabled, verify origin markers prevent the same update
 from bouncing repeatedly. Do not fix a loop by disabling all synchronization
 without preserving the failing event and link evidence.
 
+## Jira is slow or "Jira is busy"
+
+Linking, creating, syncing and commenting hold a database connection while they wait for Jira. So a slow Jira cannot starve the rest of OpsKnight, each process runs at most four of these at once (`JIRA_MAX_CONCURRENT_PROVIDER_WORKFLOWS`, default 4). Others wait up to five seconds and then fail with "Jira is busy right now" (HTTP 429, retryable). Queued operations retry on their own schedule, so nothing is lost. If this appears while Jira is healthy, check Atlassian status and the provider breaker before raising the limit; keep it well below your database connection pool size.
+
 ## Verify and escalate
 
 Create a test issue from a non-production incident, change one supported field in

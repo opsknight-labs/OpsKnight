@@ -17,8 +17,7 @@ import {
 import {
   acquireJiraActionItemLinkFence,
   acquireJiraWorkspaceProviderFence,
-  JIRA_PROVIDER_FENCE_MAX_WAIT_MS,
-  JIRA_PROVIDER_FENCE_TIMEOUT_MS,
+  runJiraProviderTransaction,
 } from '@/lib/jira-concurrency';
 import type { ActionItemExternalIssue } from '@/lib/action-items';
 import { revalidatePath } from 'next/cache';
@@ -63,11 +62,6 @@ const OwnedActionItemJiraSchema = z
     linkId: EntityIdSchema,
   })
   .strict();
-
-const fencedTransactionOptions = {
-  maxWait: JIRA_PROVIDER_FENCE_MAX_WAIT_MS,
-  timeout: JIRA_PROVIDER_FENCE_TIMEOUT_MS,
-};
 
 class ActionItemJiraLinkChangedError extends Error {
   constructor(message: string) {
@@ -276,7 +270,7 @@ export async function linkJiraIssueToActionItem(
     if (!capability.canLink) return capabilityFailure(capability, 'link');
 
     try {
-      const result = await prisma.$transaction(async tx => {
+      const result = await runJiraProviderTransaction(async tx => {
         // Re-check workspace state after waiting for lifecycle changes, then
         // serialize every own-ticket mutation for this action item.
         await acquireJiraWorkspaceProviderFence(tx);
@@ -291,7 +285,7 @@ export async function linkJiraIssueToActionItem(
         }
 
         return linkExistingJiraIssue({ actionItemId, jiraKey });
-      }, fencedTransactionOptions);
+      });
 
       revalidateActionItemPaths(actionItem.incidentId);
       return {
@@ -360,7 +354,7 @@ export async function unlinkJiraIssueFromActionItem(
     if (!capability.canUnlink) return capabilityFailure(capability, 'unlink');
 
     try {
-      await prisma.$transaction(async tx => {
+      await runJiraProviderTransaction(async tx => {
         await acquireJiraWorkspaceProviderFence(tx);
         await acquireJiraActionItemLinkFence(tx, actionItemId);
 
@@ -378,7 +372,7 @@ export async function unlinkJiraIssueFromActionItem(
         if (deleted.count !== 1) {
           throw new ActionItemJiraLinkChangedError('Jira link changed before unlink.');
         }
-      }, fencedTransactionOptions);
+      });
     } catch (error) {
       if (error instanceof ActionItemJiraLinkChangedError) {
         return { success: false, error: 'Jira link changed before it could be unlinked. Retry.' };
@@ -442,7 +436,7 @@ export async function syncActionItemJiraIssue(
 
     let syncedIssue: ActionItemExternalIssue;
     try {
-      const result = await prisma.$transaction(async tx => {
+      const result = await runJiraProviderTransaction(async tx => {
         await acquireJiraWorkspaceProviderFence(tx);
         await acquireJiraActionItemLinkFence(tx, actionItemId);
 
@@ -455,7 +449,7 @@ export async function syncActionItemJiraIssue(
         }
 
         return syncExternalIssueLink(current.id);
-      }, fencedTransactionOptions);
+      });
 
       if (!result) {
         return { success: false, error: 'Jira sync failed. Check integration health in Settings.' };

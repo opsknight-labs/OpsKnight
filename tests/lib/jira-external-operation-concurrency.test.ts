@@ -51,6 +51,8 @@ vi.mock('@/lib/jira', () => ({
 vi.mock('@/lib/jira-concurrency', () => ({
   JIRA_PROVIDER_FENCE_MAX_WAIT_MS: 5_000,
   JIRA_PROVIDER_FENCE_TIMEOUT_MS: 40_000,
+  runJiraProviderTransaction: (work: (tx: unknown) => Promise<unknown>) =>
+    mocks.transaction(work),
   acquireJiraWorkspaceProviderFence: mocks.acquireJiraWorkspaceProviderFence,
   acquireJiraActionItemLinkFence: mocks.acquireJiraActionItemLinkFence,
   acquireJiraExternalIssueLinkFence: mocks.acquireJiraExternalIssueLinkFence,

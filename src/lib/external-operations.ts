@@ -13,8 +13,7 @@ import {
   acquireJiraActionItemLinkFence,
   acquireJiraExternalIssueLinkFence,
   acquireJiraWorkspaceProviderFence,
-  JIRA_PROVIDER_FENCE_MAX_WAIT_MS,
-  JIRA_PROVIDER_FENCE_TIMEOUT_MS,
+  runJiraProviderTransaction,
 } from '@/lib/jira-concurrency';
 import {
   assertProviderAdmitted,
@@ -276,11 +275,6 @@ function operationFailureMessage(error: unknown): string {
   return (error instanceof Error ? error.message : String(error)).slice(0, 1000);
 }
 
-const providerFenceTransactionOptions = {
-  maxWait: JIRA_PROVIDER_FENCE_MAX_WAIT_MS,
-  timeout: JIRA_PROVIDER_FENCE_TIMEOUT_MS,
-};
-
 async function releaseFailedOperation(
   id: string,
   leaseToken: string,
@@ -325,7 +319,9 @@ export async function processExternalOperation(id: string): Promise<JiraIssueSum
   });
   if ((providerProbe?.provider as string) === 'MICROSOFT_TEAMS') {
     const { processMicrosoftTeamsOperation } = await import('./microsoft-teams/delivery');
-    const teamsResult = (await processMicrosoftTeamsOperation(id)) as unknown as JiraIssueSummary | null;
+    const teamsResult = (await processMicrosoftTeamsOperation(
+      id
+    )) as unknown as JiraIssueSummary | null;
     return teamsResult;
   }
 
@@ -357,7 +353,7 @@ export async function processExternalOperation(id: string): Promise<JiraIssueSum
       // is shared by all issues in the configured Jira workspace.
       await assertProviderAdmitted(JIRA_PROVIDER_KEY);
 
-      const outcome = await prisma.$transaction(async tx => {
+      const outcome = await runJiraProviderTransaction(async tx => {
         await acquireJiraWorkspaceProviderFence(tx);
 
         try {
@@ -393,7 +389,7 @@ export async function processExternalOperation(id: string): Promise<JiraIssueSum
 
         await recordProviderSuccess(JIRA_PROVIDER_KEY);
         return { ok: true as const };
-      }, providerFenceTransactionOptions);
+      });
 
       if (!outcome.ok) throw outcome.error;
       return null;
@@ -411,7 +407,7 @@ export async function processExternalOperation(id: string): Promise<JiraIssueSum
   try {
     await assertProviderAdmitted(JIRA_PROVIDER_KEY);
 
-    const outcome = await prisma.$transaction(async tx => {
+    const outcome = await runJiraProviderTransaction(async tx => {
       await acquireJiraWorkspaceProviderFence(tx);
 
       if (input.actionItemId) {
@@ -526,7 +522,7 @@ export async function processExternalOperation(id: string): Promise<JiraIssueSum
 
       await recordProviderSuccess(JIRA_PROVIDER_KEY);
       return { kind: 'completed' as const, issue };
-    }, providerFenceTransactionOptions);
+    });
 
     if (outcome.kind === 'already-linked') {
       throw new TerminalJiraOperationError(
