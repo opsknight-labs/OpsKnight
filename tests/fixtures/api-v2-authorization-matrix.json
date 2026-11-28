@@ -77,6 +77,12 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /business-services/{id}/error-budget [services:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
   "GET /business-services/{id}/graph [services:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",

@@ -100,7 +100,7 @@ Operation columns count catalog operations that need the permission: plain reads
 | `service-objectives:evaluate` | Evaluate service level objectives | Services | Change | ✓ | ✓ | ✓ | ✓ |  | 0 | 0 | 0 | 1 |
 | `service-objectives:read` | View service level objectives | Services | View | ✓ | ✓ | ✓ | ✓ |  | 3 | 7 | 0 | 0 |
 | `service-objectives:write` | Change service level objectives (higher-risk changes wait for approval) | Services | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 4 |
-| `services:read` | View services | Services | View | ✓ | ✓ | ✓ | ✓ | ✓ | 23 | 4 | 0 | 3 |
+| `services:read` | View services | Services | View | ✓ | ✓ | ✓ | ✓ | ✓ | 24 | 4 | 0 | 3 |
 | `services:write` | Change services (higher-risk changes wait for approval) | Services | Change | ✓ | ✓ |  |  |  | 1 | 1 | 0 | 23 |
 | `status-page-subscribers:read` | View status page subscribers | Status pages | View | ✓ |  |  |  |  | 0 | 1 | 0 | 0 |
 | `status-pages:read` | View status pages | Status pages | View | ✓ | ✓ | ✓ |  |  | 5 | 9 | 0 | 2 |
@@ -125,7 +125,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | audit-exports | 3 | 0 | 0 | 3 |
 | audit-logs | 1 | 1 | 0 | 0 |
 | business-service-templates | 5 | 1 | 4 | 0 |
-| business-services | 16 | 9 | 6 | 1 |
+| business-services | 17 | 10 | 6 | 1 |
 | custom-fields | 5 | 2 | 3 | 0 |
 | dashboards | 10 | 4 | 5 | 1 |
 | dependency-graph | 13 | 7 | 0 | 6 |
@@ -149,7 +149,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | status-pages | 34 | 15 | 12 | 7 |
 | teams | 14 | 7 | 7 | 0 |
 | users | 13 | 4 | 0 | 9 |
-| **All** | 394 | 179 | 131 | 84 |
+| **All** | 395 | 180 | 131 | 84 |
 
 <details>
 <summary>Operations by area</summary>
@@ -193,6 +193,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `createBusinessServiceCustomerReport` | `operation_prepare`, then approval |
 | `deleteBusinessService` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 | `getBusinessService` | `business_service_get` |
+| `getBusinessServiceErrorBudget` | `business_service_error_budget` |
 | `getBusinessServiceGraph` | `business_service_graph` |
 | `getBusinessServiceImpactTimeline` | `business_service_health` |
 | `getBusinessServiceScorecard` | `read_operation` |

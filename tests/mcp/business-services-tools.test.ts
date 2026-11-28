@@ -17,6 +17,7 @@ describe('business service MCP tools', () => {
       'getStatusPageBusinessServices',
       'listBusinessServiceIncidents',
       'getBusinessServiceImpactTimeline',
+      'getBusinessServiceErrorBudget',
       'getBusinessServiceGraph',
     ])
       expect(MCP_HANDLERS.has(id), id).toBe(true);
@@ -26,6 +27,7 @@ describe('business service MCP tools', () => {
     for (const [id, tool] of [
       ['getBusinessService', 'business_service_get'],
       ['getBusinessServiceImpactTimeline', 'business_service_health'],
+      ['getBusinessServiceErrorBudget', 'business_service_error_budget'],
       ['listBusinessServiceIncidents', 'business_service_incidents'],
       ['getBusinessServiceGraph', 'business_service_graph'],
     ] as const) {

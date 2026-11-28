@@ -256,13 +256,13 @@ describe('TQ-11: tools/list stays small', () => {
     // dependency_single_points_of_failure and dependency_failure_blast_radius (at/since/threshold
     // and a bounded serviceIds list with depth): about 1.1 KB. business_service_changes (id, from,
     // to, limit): about 0.35 KB. business_services_list gains the attribute=key=value filter:
-    // about 0.4 KB.
+    // about 0.4 KB. business_service_error_budget (id): about 0.2 KB.
     const named = tools.filter(tool => MCP_CATALOG.some(operation => operation.tool === tool.name));
     const namedBytes = named.reduce(
       (total, tool) => total + Buffer.byteLength(JSON.stringify(tool.inputSchema)),
       0
     );
-    expect(namedBytes).toBeLessThanOrEqual(22800);
+    expect(namedBytes).toBeLessThanOrEqual(23100);
     expect(bytes).toBeGreaterThan(namedBytes);
   });
 });

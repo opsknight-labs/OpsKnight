@@ -84,6 +84,7 @@ const decisions: readonly ApiCapability[] = [
       'setStatusPageBusinessServices',
       'listBusinessServiceIncidents',
       'getBusinessServiceImpactTimeline',
+      'getBusinessServiceErrorBudget',
       'getBusinessServiceGraph',
       'getDependencyGraphAt',
       'getDependencyGraphDiff',

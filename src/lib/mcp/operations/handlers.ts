@@ -182,6 +182,10 @@ export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
     async () => (await import('@/app/api/v2/business-services/[id]/incidents/route')).GET,
   ],
   [
+    'getBusinessServiceErrorBudget',
+    async () => (await import('@/app/api/v2/business-services/[id]/error-budget/route')).GET,
+  ],
+  [
     'getBusinessServiceImpactTimeline',
     async () => (await import('@/app/api/v2/business-services/[id]/impact-timeline/route')).GET,
   ],

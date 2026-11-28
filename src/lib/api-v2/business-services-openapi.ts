@@ -574,6 +574,23 @@ export const BUSINESS_SERVICE_SCHEMAS: Record<string, Schema> = {
     occurredAt: date,
     riskScore: { type: ['number', 'null'], minimum: 0, maximum: 1 },
   }),
+  BusinessServiceErrorBudget: object({
+    businessServiceId: id,
+    sloTarget: { type: ['number', 'null'] },
+    sloWindowDays: { type: 'integer', minimum: 1 },
+    errorBudget: {
+      type: ['object', 'null'],
+      description: 'Null when the business service has no SLO target.',
+      properties: {
+        allowedMinutes: { type: 'number', minimum: 0 },
+        consumedMinutes: { type: 'number', minimum: 0 },
+        remainingPercent: { type: 'number', description: 'Negative once breached.' },
+        burnState: { type: 'string', enum: ['OK', 'AT_RISK', 'BREACHED'] },
+      },
+      required: ['allowedMinutes', 'consumedMinutes', 'remainingPercent', 'burnState'],
+      additionalProperties: false,
+    },
+  }),
   BusinessServiceSlaReport: withoutRequired(
     object({
       businessServiceId: id,
@@ -787,6 +804,13 @@ export const BUSINESS_SERVICE_OPERATIONS: {
     description:
       'Uptime is over the union of impact intervals, so overlapping incidents count once, and covers every interval in the window; the listed entries are the newest 500. Unmarked impacts are listed but excluded from the numbers. Incident id, title and urgency are null for incidents the caller cannot read.',
     query: windowQuery,
+  },
+  {
+    method: 'get',
+    path: '/business-services/{id}/error-budget',
+    summary: 'Read the error budget and burn state of a business service',
+    description:
+      'Allowed and consumed minutes over the SLO window (planned maintenance excluded, severity-weighted), the share left and the burn state: OK, AT_RISK below 25% left, BREACHED at 0%. errorBudget is null without an SLO target.',
   },
   {
     method: 'get',

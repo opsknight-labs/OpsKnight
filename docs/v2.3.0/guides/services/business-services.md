@@ -278,6 +278,7 @@ See [Status page layouts](../status-pages/business-service-layouts).
 | Read, update, delete               | `GET/PATCH/DELETE /api/v2/business-services/{id}`                                |
 | Incidents that impacted it         | `GET /api/v2/business-services/{id}/incidents`                                   |
 | Impact timeline, uptime, MTTA/MTTR | `GET /api/v2/business-services/{id}/impact-timeline`                             |
+| Error budget and burn state        | `GET /api/v2/business-services/{id}/error-budget`                                |
 | Changes on member services         | `GET /api/v2/business-services/{id}/changes`                                     |
 | Monthly SLA report                 | `GET /api/v2/business-services/{id}/sla-report`                                  |
 | Scorecard                          | `GET /api/v2/business-services/{id}/scorecard`                                   |

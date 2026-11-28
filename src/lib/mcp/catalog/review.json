@@ -4114,6 +4114,19 @@
     "routeSha256": "0e86a4de7c623c578de73e4965fc45d4a78e9c473dea72b7b4c2e3b81446c892",
     "contractSha256": "67ff1ab5ddaf91b4e30dc2f473f139ed2dd208da772975a6e46b25975bbc8604"
   },
+  "getBusinessServiceErrorBudget": {
+    "status": "CURATED",
+    "risk": "R0",
+    "reason": "Read-only error budget and burn state of one business service through the existing REST route authorization and scoped projection.",
+    "tool": "business_service_error_budget",
+    "title": "Business service error budget",
+    "agentDescription": "Error budget of a business service over its SLO window: allowed and consumed minutes, share left and burn state (OK, AT_RISK, BREACHED). Null budget when no SLO is set. Use for 'how much error budget does Checkout have left'.",
+    "evidence": "tests/mcp/business-services-tools.test.ts",
+    "actions": ["service.read"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "b6194fc07b490d379cf2b3292554cf927c351ffc7c0ec198f1a87615bfdd9602",
+    "contractSha256": "1a293bf06e5ba02e28d8db482afb5c04aadcb1bc029f8b7dd64da15db54d2675"
+  },
   "getBusinessServiceGraph": {
     "status": "CURATED",
     "risk": "R0",

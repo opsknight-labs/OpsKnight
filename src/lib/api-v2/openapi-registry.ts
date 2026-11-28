@@ -836,6 +836,14 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   ),
   op(
     'get',
+    '/business-services/{id}/error-budget',
+    'getBusinessServiceErrorBudget',
+    'services:read',
+    'item',
+    'BusinessServiceErrorBudget'
+  ),
+  op(
+    'get',
     '/business-services/{id}/customer-reports',
     'listBusinessServiceCustomerReports',
     'services:read',
