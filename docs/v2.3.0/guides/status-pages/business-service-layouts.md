@@ -47,7 +47,9 @@ Every row shows its service count, for example "3 services", or how many are aff
 "1 of 3 services affected". On the expandable layout a full-width **Show services** bar under the history opens the row, and
 flips to **Hide services**. A row with active incidents shows a chip such as "1 active incident" that jumps to
 the incidents section. Technical services that are in no business service on the page appear under
-**Other services**.
+**Other services**. On the expandable layout that is one more card, closed unless one of its
+services is affected, so ungrouped services look like part of the page rather than an afterthought.
+To keep a service out of that card, add it to a business service or hide it from the page.
 
 Only **Active incidents** appear above the services, so an outage is the first thing a visitor
 reads. **Past incidents** (resolved ones from the last 14 days, with older ones behind **View
