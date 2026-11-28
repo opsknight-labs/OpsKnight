@@ -19,6 +19,7 @@ import {
   useFormatAt,
   type Option,
 } from './shared';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 
 export interface HeartbeatRow {
   id: string;
@@ -150,22 +151,14 @@ export default function HeartbeatPanel({
             <label htmlFor={`${id}-service`} className={labelClass}>
               Service
             </label>
-            <select
+            <SearchableSelect
               id={`${id}-service`}
               name="serviceId"
-              required
-              className={fieldClass}
-              defaultValue=""
-            >
-              <option value="" disabled>
-                Select a service
-              </option>
-              {services.map(service => (
-                <option key={service.id} value={service.id}>
-                  {service.name}
-                </option>
-              ))}
-            </select>
+              options={services.map(service => ({ value: service.id, label: service.name }))}
+              placeholder="Select a service"
+              searchPlaceholder="Search services…"
+              noun="services"
+            />
           </div>
           <div className="space-y-1">
             <label htmlFor={`${id}-int`} className={labelClass}>

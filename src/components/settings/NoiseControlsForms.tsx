@@ -20,6 +20,7 @@ import {
 } from '@/app/(app)/settings/intelligence/noise-controls/actions';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 import OrchestrationRulesBuilder from '@/components/settings/noise-controls/OrchestrationRulesBuilder';
 import { highUrgencyNote } from '@/components/settings/noise-controls/shared';
 import type { NoiseControlKpis } from '@/lib/intelligence/noise-controls/kpis';
@@ -91,26 +92,17 @@ function ServiceSelect({
   onChange?: (value: string) => void;
 }) {
   return (
-    <select
+    <SearchableSelect
       id={id}
       name={name}
-      className={fieldClass}
+      options={services.map(service => ({ value: service.id, label: service.name }))}
       defaultValue={defaultValue ?? ''}
-      onChange={onChange ? event => onChange(event.target.value) : undefined}
-    >
-      {allowAll !== undefined ? (
-        <option value="">{allowAll}</option>
-      ) : (
-        <option value="" disabled>
-          Select a service
-        </option>
-      )}
-      {services.map(service => (
-        <option key={service.id} value={service.id}>
-          {service.name}
-        </option>
-      ))}
-    </select>
+      onChange={onChange}
+      clearLabel={allowAll}
+      placeholder="Select a service"
+      searchPlaceholder="Search services…"
+      noun="services"
+    />
   );
 }
 

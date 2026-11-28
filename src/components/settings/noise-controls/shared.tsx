@@ -97,7 +97,9 @@ const ACTION_LABEL = new Map<string, string>([
 ]);
 
 /** Why a replay changed nothing: its HIGH urgency incidents are exempt unless the policy allows them. */
-export function highUrgencyNote(outcome: Pick<SimulationOutcome, 'highUrgencyExempt' | 'incidentsEvaluated'>) {
+export function highUrgencyNote(
+  outcome: Pick<SimulationOutcome, 'highUrgencyExempt' | 'incidentsEvaluated'>
+) {
   if (!outcome.highUrgencyExempt) return null;
   return `${outcome.highUrgencyExempt} of ${outcome.incidentsEvaluated} incidents are HIGH urgency and exempt; enable "Let dedup, flapping and storms touch HIGH urgency" to include them.`;
 }
@@ -129,8 +131,8 @@ export function ReplaySummary({
       {outcome.guardedCritical > 0 && (
         <p className="text-xs text-muted-foreground" role="note">
           {outcome.guardedCritical} critical or HIGH-urgency incident
-          {outcome.guardedCritical === 1 ? '' : 's'} matched but would still page, because this control
-          does not cover critical alerts.
+          {outcome.guardedCritical === 1 ? '' : 's'} matched but would still page, because this
+          control does not cover critical alerts.
         </p>
       )}
       {highUrgencyNote(outcome) && (
@@ -196,8 +198,8 @@ export function CoversCriticalField({
         <span>Also hide critical and HIGH-urgency alerts</span>
       </label>
       <p id={`${id}-help`} className="text-xs text-muted-foreground">
-        Off by default: a critical alert always pages. Turn this on only when nobody should be paged for
-        anything this matches, even a real outage.
+        Off by default: a critical alert always pages. Turn this on only when nobody should be paged
+        for anything this matches, even a real outage.
       </p>
     </div>
   );

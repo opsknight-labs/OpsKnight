@@ -22,6 +22,7 @@ import type { SimulationOutcome } from '@/lib/intelligence/noise-controls/simula
 import { cn } from '@/lib/utils';
 import MatcherRows from './MatcherRows';
 import { fieldClass, ReplaySummary, touchButton, type Option } from './shared';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 
 export const ACTION_TYPES = [
   { type: 'DROP', label: 'Drop (store nothing, never page)' },
@@ -206,19 +207,20 @@ function ActionRow({
             </select>
           ) : action.type === 'REROUTE_SERVICE' ||
             (action.type === 'ATTACH_RUNBOOK' && runbooks.length > 0) ? (
-            <select
+            <SearchableSelect
               id={`${id}-value`}
+              options={(action.type === 'REROUTE_SERVICE' ? services : runbooks).map(option => ({
+                value: option.id,
+                label: option.name,
+              }))}
               value={action.value}
-              onChange={event => onChange({ ...action, value: event.target.value })}
-              className={fieldClass}
-            >
-              <option value="">Select</option>
-              {(action.type === 'REROUTE_SERVICE' ? services : runbooks).map(option => (
-                <option key={option.id} value={option.id}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
+              onChange={value => onChange({ ...action, value })}
+              placeholder="Select"
+              searchPlaceholder={
+                action.type === 'REROUTE_SERVICE' ? 'Search services…' : 'Search runbooks…'
+              }
+              noun={action.type === 'REROUTE_SERVICE' ? 'services' : 'runbooks'}
+            />
           ) : (
             <input
               id={`${id}-value`}

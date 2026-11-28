@@ -38,6 +38,7 @@ import {
   useFormatAt,
   type Option,
 } from './shared';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 
 type Scope = 'SERVICE' | 'TEAM' | 'LABEL' | 'ALL';
 type Effect = 'SUPPRESS' | 'DOWNGRADE';
@@ -346,20 +347,16 @@ export function MaintenanceWindowBuilder({
             <label htmlFor={`${id}-service`} className={labelClass}>
               Service
             </label>
-            <select
+            <SearchableSelect
               id={`${id}-service`}
+              options={services.map(option => ({ value: option.id, label: option.name }))}
               value={draft.serviceId}
-              onChange={event => set('serviceId', event.target.value)}
-              className={fieldClass}
-              {...invalid('serviceId')}
-            >
-              <option value="">Select a service</option>
-              {services.map(service => (
-                <option key={service.id} value={service.id}>
-                  {service.name}
-                </option>
-              ))}
-            </select>
+              onChange={value => set('serviceId', value)}
+              placeholder="Select a service"
+              searchPlaceholder="Search services…"
+              noun="services"
+              invalid={Boolean(errors.serviceId)}
+            />
             <FieldError id={`${id}-serviceId-error`} message={errors.serviceId} />
           </div>
         )}
@@ -368,20 +365,16 @@ export function MaintenanceWindowBuilder({
             <label htmlFor={`${id}-team`} className={labelClass}>
               Team
             </label>
-            <select
+            <SearchableSelect
               id={`${id}-team`}
+              options={teams.map(option => ({ value: option.id, label: option.name }))}
               value={draft.teamId}
-              onChange={event => set('teamId', event.target.value)}
-              className={fieldClass}
-              {...invalid('teamId')}
-            >
-              <option value="">Select a team</option>
-              {teams.map(team => (
-                <option key={team.id} value={team.id}>
-                  {team.name}
-                </option>
-              ))}
-            </select>
+              onChange={value => set('teamId', value)}
+              placeholder="Select a team"
+              searchPlaceholder="Search teams…"
+              noun="teams"
+              invalid={Boolean(errors.teamId)}
+            />
             <FieldError id={`${id}-teamId-error`} message={errors.teamId} />
           </div>
         )}
