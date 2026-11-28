@@ -6,6 +6,7 @@ import prisma from '@/lib/prisma';
 import { APP_VERSION } from '@/lib/version';
 import { getMetricsByIntegration, getMetricsSummary } from '@/lib/integrations/metrics';
 import { getJobWorkerStatus } from '@/lib/job-worker';
+import { collectIngestionQueueMetrics } from '@/lib/ingestion/metrics';
 import { getRealtimeControlPlaneStatus } from '@/lib/realtime-change-control-plane';
 import { isProductionAuthOriginSafe, resolveAuthPublicOrigin } from '@/lib/auth-public-origin';
 import { validateEncryptionKeyConfiguration } from '@/lib/encryption-key-validation';
@@ -176,6 +177,21 @@ export function notificationsStatus(input: {
   return input.stuck > 0 || input.failed24h > 0 ? 'degraded' : 'healthy';
 }
 
+/** Received events older than this and still waiting mean the ingestion consumer is not keeping up. */
+export const INGESTION_BACKLOG_DEGRADED_SECONDS = 5 * 60;
+
+/**
+ * A DEAD receipt is a dead letter: it also blocks every later event for the same alert identity
+ * until someone replays or archives it, so one is already an outage for that source.
+ */
+export function ingestionStatus(input: {
+  dead: number;
+  oldestWaitingSeconds: number;
+}): HealthLevel {
+  if (input.dead > 0) return 'unhealthy';
+  return input.oldestWaitingSeconds > INGESTION_BACKLOG_DEGRADED_SECONDS ? 'degraded' : 'healthy';
+}
+
 function ageLabel(date: Date | null): string {
   if (!date) return 'never';
   const ageMs = Math.max(0, Date.now() - date.getTime());
@@ -282,6 +298,7 @@ export const CHECK_WEIGHTS: Record<string, number> = {
   'worker-replica': 3,
   realtime: 3,
   notifications: 3,
+  ingestion: 5,
   integrations: 3,
   'public-url': 3,
   'sla-performance': 1,
@@ -1115,6 +1132,45 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
         status: 'unknown',
         summary: 'Integration health could not be measured.',
         details: ['Review integration test results and system logs.'],
+      });
+    }
+
+    try {
+      const rows = await collectIngestionQueueMetrics();
+      const dead = rows.find(row => row.status === 'DEAD')?.count ?? 0;
+      const waiting = rows.filter(row => row.status !== 'DEAD');
+      const oldestWaitingSeconds = Math.max(0, ...waiting.map(row => row.oldestAgeSeconds));
+      const backlog = waiting.reduce((sum, row) => sum + row.count, 0);
+      checks.push({
+        id: 'ingestion',
+        label: 'Event ingestion',
+        category: 'alerting',
+        status: ingestionStatus({ dead, oldestWaitingSeconds }),
+        summary:
+          dead > 0
+            ? `${dead} accepted event(s) failed permanently and are blocking later events for the same alert.`
+            : `${backlog} event(s) waiting; none failed permanently.`,
+        details: [
+          `Failed permanently (dead letters): ${dead}`,
+          `Oldest event still waiting: ${Math.round(oldestWaitingSeconds)}s`,
+          'Replay a dead letter once the cause is fixed, or archive it with a reason; later events for the same alert wait until you do.',
+        ],
+        impact:
+          dead > 0
+            ? 'Resolves and re-triggers for the affected alerts are not being applied.'
+            : undefined,
+        telemetry: { rawPayload: { dead, backlog, oldestWaitingSeconds } },
+        scope: 'cluster',
+        action: { label: 'Ingestion queue', href: '/settings/system/health' },
+      });
+    } catch {
+      checks.push({
+        id: 'ingestion',
+        label: 'Event ingestion',
+        category: 'alerting',
+        status: 'unknown',
+        summary: 'Ingestion queue health could not be measured.',
+        details: ['Open the ingestion panel on this page.'],
       });
     }
 

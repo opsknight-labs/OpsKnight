@@ -1,3 +1,4 @@
+import { IngestionPayloadError } from '@/lib/ingestion/contract';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { processEvent, type EventPayload } from '@/lib/events';
 import { claimPendingJobs } from '@/lib/jobs/queue';
@@ -219,9 +220,12 @@ describeIfRealDB('Event Transactional Outbox', { timeout: 30000 }, () => {
       },
     };
 
-    await expect(processEvent(payload, 'missing-service', 'outbox-integration')).rejects.toThrow(
-      /Service not found/
+    const failure = await processEvent(payload, 'missing-service', 'outbox-integration').catch(
+      error => error
     );
+    expect(failure.message).toMatch(/Service not found/);
+    // Permanent: the worker dead-letters it at once instead of retrying ten times.
+    expect(failure).toBeInstanceOf(IngestionPayloadError);
     expect(await testPrisma.backgroundJob.count({ where: { type: 'SCHEDULED_TASK' } })).toBe(0);
   });
 });

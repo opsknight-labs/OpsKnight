@@ -13,7 +13,7 @@ import {
   rerouteBlocker,
 } from './automation/pipeline';
 import { Prisma, IncidentUrgency } from '@prisma/client';
-import type { ProcessingLease } from './ingestion/contract';
+import { IngestionPayloadError, type ProcessingLease } from './ingestion/contract';
 import { ingestionConfig } from './ingestion/config';
 import { lockProcessingReceipt, completeProcessingReceipt } from './ingestion/postgres';
 import { findActiveMaintenanceWindow } from '@/lib/service-maintenance/active';
@@ -288,7 +288,10 @@ async function applyEvent(
         integrationId,
         dedupKey: dedup_key,
       });
-      throw new Error(`Service not found: ${serviceId}. Integration may be misconfigured.`);
+      // Permanent: retrying cannot create the service, so dead-letter it now instead of after 10 tries.
+      throw new IngestionPayloadError(
+        `Service not found: ${serviceId}. Integration may be misconfigured.`
+      );
     }
 
     // A late retry or out-of-order delivery (provider time older than the last accepted event for

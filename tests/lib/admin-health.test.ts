@@ -437,3 +437,13 @@ describe('generate24HourHistory', () => {
     expect(prisma.incident.findMany).not.toHaveBeenCalled();
   });
 });
+
+describe('ingestion health', () => {
+  it('treats any dead letter as unhealthy and a long wait as degraded', async () => {
+    const { ingestionStatus, CHECK_WEIGHTS } = await import('@/lib/admin-health');
+    expect(ingestionStatus({ dead: 1, oldestWaitingSeconds: 0 })).toBe('unhealthy');
+    expect(ingestionStatus({ dead: 0, oldestWaitingSeconds: 301 })).toBe('degraded');
+    expect(ingestionStatus({ dead: 0, oldestWaitingSeconds: 30 })).toBe('healthy');
+    expect(CHECK_WEIGHTS.ingestion).toBeGreaterThan(0);
+  });
+});

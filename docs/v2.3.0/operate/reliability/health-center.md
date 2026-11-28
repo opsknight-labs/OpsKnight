@@ -100,6 +100,12 @@ Score**, which is averaged only over the hours that were read.
   notifications degrade the check; ten or more, or an enabled provider without
   configuration, mark it unhealthy. Open Notification History for provider
   responses and retries.
+- **Event ingestion** reads the durable queue of accepted events. Any event that
+  failed permanently (a dead letter) marks the check unhealthy, because later
+  events for the same alert, such as its resolve, wait behind it until you
+  replay or archive it from the ingestion panel on this page. An event that has
+  waited more than five minutes degrades the check. An event for a service that
+  no longer exists is dead-lettered at once rather than retried ten times.
 - **Inbound integrations** uses process-local adapter metrics. Those counters
   reset on restart and are not cluster-aggregated; durable delivery state and
   logs remain authoritative.
