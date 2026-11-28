@@ -62,4 +62,23 @@ describe('WarRoomAutoAddCard', () => {
     expect(screen.getByText(/no team/i)).toBeTruthy();
     expect((screen.getByLabelText(/Bob/) as HTMLInputElement).checked).toBe(true);
   });
+
+  it('drops anyone the server refused, showing exactly what was saved', async () => {
+    h.save.mockResolvedValue({ success: true, error: null, userIds: ['u2'] });
+    render(
+      <WarRoomAutoAddCard
+        serviceId="s1"
+        teamName="Platform"
+        initialTeam="NONE"
+        initialUserIds={['u1', 'u2']}
+        people={people}
+        canManage
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect((screen.getByLabelText(/Ana/) as HTMLInputElement).checked).toBe(false)
+    );
+    expect((screen.getByLabelText(/Bob/) as HTMLInputElement).checked).toBe(true);
+  });
 });

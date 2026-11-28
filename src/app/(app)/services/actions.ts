@@ -424,9 +424,9 @@ const peopleSearchSchema = z
 
 /** Who a service always adds to its war rooms: owning-team members (all or managers) plus named people. */
 export async function updateServiceWarRoomAutoAdd(
-  _prevState: { success?: boolean; error?: string | null } | undefined,
+  _prevState: { success?: boolean; error?: string | null; userIds?: string[] } | undefined,
   formData: FormData
-): Promise<{ success?: boolean; error?: string | null }> {
+): Promise<{ success?: boolean; error?: string | null; userIds?: string[] }> {
   try {
     const parsed = warRoomAutoAddSchema.safeParse({
       serviceId: formData.get('serviceId'),
@@ -462,7 +462,8 @@ export async function updateServiceWarRoomAutoAdd(
     });
     revalidatePath(`/services/${serviceId}/settings`);
     revalidatePath(`/services/${serviceId}`);
-    return { success: true, error: null };
+    // The ids actually saved, so the form can drop any that were refused (inactive or machine accounts).
+    return { success: true, error: null, userIds };
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Failed to save.' };
   }
